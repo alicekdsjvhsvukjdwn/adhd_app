@@ -53,3 +53,13 @@ export async function toggleRoutine(id: number, fait: number) {
     id,
   );
 }
+
+export async function addRoutine(nom: string) {
+  const database = await getDb();
+  await database.runAsync('INSERT INTO routines (nom, fait) VALUES (?, ?)', nom, 0);
+}
+
+export async function deleteRoutine(id: number) {
+  const database = await getDb();
+  await database.runAsync('DELETE FROM routines WHERE id = ?', id);
+}
