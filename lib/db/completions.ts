@@ -53,6 +53,9 @@ export async function toggleCompletionAujourdhui(
   await initCompletions();
   const db = await getDatabase();
   const aujourdhui = getAujourdhui();
+  const heure = new Date().getHours();
+  const jourSemaine = new Date().getDay();
+
   if (estActuellementFaite) {
     await db.runAsync(
       "DELETE FROM completions WHERE routine_id = ? AND date = ?",
@@ -61,6 +64,8 @@ export async function toggleCompletionAujourdhui(
     );
     const { addPoints } = await import("./stats");
     await addPoints(-10);
+    const { logEvent } = await import("./events");
+    await logEvent("routine_decochee", routineId, { heure, jourSemaine });
   } else {
     await db.runAsync(
       "INSERT OR IGNORE INTO completions (routine_id, date, statut) VALUES (?, ?, ?)",
@@ -70,5 +75,7 @@ export async function toggleCompletionAujourdhui(
     );
     const { addPoints } = await import("./stats");
     await addPoints(10);
+    const { logEvent } = await import("./events");
+    await logEvent("routine_completee", routineId, { heure, jourSemaine });
   }
 }

@@ -1,4 +1,4 @@
-import { getDatabase } from './client';
+import { getDatabase } from "./client";
 
 export type Routine = {
   id: number;
@@ -15,30 +15,50 @@ export async function initRoutines() {
       fait INTEGER NOT NULL DEFAULT 0
     );
   `);
-  const existing = await db.getAllAsync<Routine>('SELECT * FROM routines');
+  const existing = await db.getAllAsync<Routine>("SELECT * FROM routines");
   if (existing.length === 0) {
-    await db.runAsync("INSERT INTO routines (nom, fait) VALUES (?, ?)", "Boire un verre d'eau", 0);
-    await db.runAsync("INSERT INTO routines (nom, fait) VALUES (?, ?)", "Faire le lit", 0);
-    await db.runAsync("INSERT INTO routines (nom, fait) VALUES (?, ?)", "Sortir 10 min", 0);
+    await db.runAsync(
+      "INSERT INTO routines (nom, fait) VALUES (?, ?)",
+      "Boire un verre d'eau",
+      0,
+    );
+    await db.runAsync(
+      "INSERT INTO routines (nom, fait) VALUES (?, ?)",
+      "Faire le lit",
+      0,
+    );
+    await db.runAsync(
+      "INSERT INTO routines (nom, fait) VALUES (?, ?)",
+      "Sortir 10 min",
+      0,
+    );
   }
 }
 
 export async function getRoutines(): Promise<Routine[]> {
   const db = await getDatabase();
-  return db.getAllAsync<Routine>('SELECT * FROM routines');
+  return db.getAllAsync<Routine>("SELECT * FROM routines");
 }
 
 export async function addRoutine(nom: string) {
   const db = await getDatabase();
-  await db.runAsync('INSERT INTO routines (nom, fait) VALUES (?, ?)', nom, 0);
+  const result = await db.runAsync(
+    "INSERT INTO routines (nom, fait) VALUES (?, ?)",
+    nom,
+    0,
+  );
+  const { logEvent } = await import("./events");
+  await logEvent("routine_ajoutee", result.lastInsertRowId, { nom });
 }
 
 export async function deleteRoutine(id: number) {
   const db = await getDatabase();
-  await db.runAsync('DELETE FROM routines WHERE id = ?', id);
+  await db.runAsync("DELETE FROM routines WHERE id = ?", id);
+  const { logEvent } = await import("./events");
+  await logEvent("routine_supprimee", id);
 }
 
 export async function toggleRoutine(id: number, fait: number) {
   const db = await getDatabase();
-  await db.runAsync('UPDATE routines SET fait = ? WHERE id = ?', fait, id);
+  await db.runAsync("UPDATE routines SET fait = ? WHERE id = ?", fait, id);
 }
