@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   FlatList,
@@ -14,6 +15,7 @@ import { useRoutines } from "../hooks/useRoutines";
 export default function Index() {
   const { routines, stats, toggle, ajouter, supprimer } = useRoutines();
   const [nouvelleRoutine, setNouvelleRoutine] = useState("");
+  const router = useRouter();
 
   const onAjouter = async () => {
     await ajouter(nouvelleRoutine);
@@ -23,6 +25,13 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.titre}>Mes routines du jour</Text>
+
+      <TouchableOpacity
+        style={styles.lienAncres}
+        onPress={() => router.push("/ancres")}
+      >
+        <Text style={styles.lienAncresTexte}>⚓ Gérer mes moments repères</Text>
+      </TouchableOpacity>
 
       {stats && (
         <View style={styles.bandeauStats}>
@@ -131,4 +140,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   texteSupprimer: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  lienAncres: {
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  lienAncresTexte: {
+    fontSize: 14,
+    color: "#4a90d9",
+    fontWeight: "500",
+  },
 });
