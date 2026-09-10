@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   FlatList,
   SafeAreaView,
@@ -9,54 +9,15 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import {
-  addRoutine,
-  deleteRoutine,
-  getRoutinesAvecStatutDuJour,
-  getStats,
-  RoutineAvecStatut,
-  Stats,
-  toggleCompletionAujourdhui,
-} from "../lib/db";
+import { useRoutines } from "../hooks/useRoutines";
 
 export default function Index() {
-  const [routines, setRoutines] = useState<RoutineAvecStatut[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const { routines, stats, toggle, ajouter, supprimer } = useRoutines();
   const [nouvelleRoutine, setNouvelleRoutine] = useState("");
 
-  const charger = useCallback(async () => {
-    const data = await getRoutinesAvecStatutDuJour();
-    setRoutines(data);
-    const statsData = await getStats();
-    setStats(statsData);
-  }, []);
-
-  useEffect(() => {
-    charger();
-  }, [charger]);
-
-  const onToggle = async (id: number, faitActuel: boolean) => {
-    await toggleCompletionAujourdhui(id, faitActuel);
-    setRoutines((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, faitAujourdhui: !faitActuel } : r,
-      ),
-    );
-    const statsData = await getStats();
-    setStats(statsData);
-  };
-
   const onAjouter = async () => {
-    const nomNettoye = nouvelleRoutine.trim();
-    if (nomNettoye.length === 0) return;
-    await addRoutine(nomNettoye);
+    await ajouter(nouvelleRoutine);
     setNouvelleRoutine("");
-    await charger();
-  };
-
-  const onSupprimer = async (id: number) => {
-    await deleteRoutine(id);
-    setRoutines((prev) => prev.filter((r) => r.id !== id));
   };
 
   return (
@@ -93,7 +54,7 @@ export default function Index() {
             renderRightActions={() => (
               <TouchableOpacity
                 style={styles.boutonSupprimer}
-                onPress={() => onSupprimer(item.id)}
+                onPress={() => supprimer(item.id)}
               >
                 <Text style={styles.texteSupprimer}>Supprimer</Text>
               </TouchableOpacity>
@@ -104,7 +65,7 @@ export default function Index() {
                 styles.item,
                 item.faitAujourdhui ? styles.itemFait : null,
               ]}
-              onPress={() => onToggle(item.id, item.faitAujourdhui)}
+              onPress={() => toggle(item.id, item.faitAujourdhui)}
             >
               <Text style={styles.texteItem}>
                 {item.faitAujourdhui ? "✓ " : "○ "}
