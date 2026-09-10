@@ -12,30 +12,38 @@ import { Swipeable } from "react-native-gesture-handler";
 import {
   addRoutine,
   deleteRoutine,
-  getRoutines,
-  Routine,
-  toggleRoutine,
+  getRoutinesAvecStatutDuJour,
+  getStats,
+  RoutineAvecStatut,
+  Stats,
+  toggleCompletionAujourdhui,
 } from "../lib/db";
 
 export default function Index() {
-  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [routines, setRoutines] = useState<RoutineAvecStatut[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [nouvelleRoutine, setNouvelleRoutine] = useState("");
 
   const charger = useCallback(async () => {
-    const data = await getRoutines();
+    const data = await getRoutinesAvecStatutDuJour();
     setRoutines(data);
+    const statsData = await getStats();
+    setStats(statsData);
   }, []);
 
   useEffect(() => {
     charger();
   }, [charger]);
 
-  const onToggle = async (id: number, faitActuel: number) => {
-    const nouveauStatut = faitActuel ? 0 : 1;
-    await toggleRoutine(id, nouveauStatut);
+  const onToggle = async (id: number, faitActuel: boolean) => {
+    await toggleCompletionAujourdhui(id, faitActuel);
     setRoutines((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, fait: nouveauStatut } : r)),
+      prev.map((r) =>
+        r.id === id ? { ...r, faitAujourdhui: !faitActuel } : r,
+      ),
     );
+    const statsData = await getStats();
+    setStats(statsData);
   };
 
   const onAjouter = async () => {
@@ -54,6 +62,14 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.titre}>Mes routines du jour</Text>
+
+      {stats && (
+        <View style={styles.bandeauStats}>
+          <Text style={styles.statTexte}>🔥 {stats.currentStreak} j</Text>
+          <Text style={styles.statTexte}>Niveau {stats.niveau}</Text>
+          <Text style={styles.statTexte}>{stats.points} pts</Text>
+        </View>
+      )}
 
       <View style={styles.formulaire}>
         <TextInput
@@ -84,11 +100,14 @@ export default function Index() {
             )}
           >
             <TouchableOpacity
-              style={[styles.item, item.fait ? styles.itemFait : null]}
-              onPress={() => onToggle(item.id, item.fait)}
+              style={[
+                styles.item,
+                item.faitAujourdhui ? styles.itemFait : null,
+              ]}
+              onPress={() => onToggle(item.id, item.faitAujourdhui)}
             >
               <Text style={styles.texteItem}>
-                {item.fait ? "✓ " : "○ "}
+                {item.faitAujourdhui ? "✓ " : "○ "}
                 {item.nom}
               </Text>
             </TouchableOpacity>
@@ -101,7 +120,16 @@ export default function Index() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
-  titre: { fontSize: 22, fontWeight: "600", marginBottom: 16 },
+  titre: { fontSize: 22, fontWeight: "600", marginBottom: 12 },
+  bandeauStats: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#fef3e0",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  statTexte: { fontSize: 14, fontWeight: "600", color: "#8a5a1a" },
   formulaire: {
     flexDirection: "row",
     marginBottom: 20,
