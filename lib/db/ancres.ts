@@ -10,14 +10,14 @@ export type Ancre = {
 };
 
 const ANCRES_PRE_REMPLIES: Omit<Ancre, "id" | "active">[] = [
-  { nom: "Après le réveil", moment: "matin" },
-  { nom: "Après le café du matin", moment: "matin" },
-  { nom: "Après le brossage de dents", moment: "matin" },
-  { nom: "Avant de partir de chez moi", moment: "matin" },
-  { nom: "Après le déjeuner", moment: "midi" },
-  { nom: "En rentrant chez moi", moment: "apres_midi" },
-  { nom: "Après le dîner", moment: "soir" },
-  { nom: "Avant de me coucher", moment: "soir" },
+  { nom: "Le réveil", moment: "matin" },
+  { nom: "Le café du matin", moment: "matin" },
+  { nom: "Le brossage de dents", moment: "matin" },
+  { nom: "Le départ de chez moi", moment: "matin" },
+  { nom: "Le déjeuner", moment: "midi" },
+  { nom: "Le retour chez moi", moment: "apres_midi" },
+  { nom: "Le dîner", moment: "soir" },
+  { nom: "Le coucher", moment: "soir" },
 ];
 
 export async function initAncres() {

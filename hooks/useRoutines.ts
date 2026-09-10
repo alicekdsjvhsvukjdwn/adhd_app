@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import {
     addRoutine,
+    Ancre,
     deleteRoutine,
+    getAncresActives,
     getRoutinesAvecStatutDuJour,
     getStats,
     RoutineAvecStatut,
     Stats,
     toggleCompletionAujourdhui,
+    updateRoutineAncre,
 } from "../lib/db";
 
 export function useRoutines() {
   const [routines, setRoutines] = useState<RoutineAvecStatut[]>([]);
+  const [ancresActives, setAncresActives] = useState<Ancre[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [chargement, setChargement] = useState(true);
 
@@ -22,8 +26,12 @@ export function useRoutines() {
   const charger = useCallback(async () => {
     setChargement(true);
     try {
-      const data = await getRoutinesAvecStatutDuJour();
-      setRoutines(data);
+      const [dataRoutines, dataAncres] = await Promise.all([
+        getRoutinesAvecStatutDuJour(),
+        getAncresActives(),
+      ]);
+      setRoutines(dataRoutines);
+      setAncresActives(dataAncres);
       await rafraichirStats();
     } finally {
       setChargement(false);
@@ -48,10 +56,10 @@ export function useRoutines() {
   );
 
   const ajouter = useCallback(
-    async (nom: string) => {
+    async (nom: string, ancreId: number | null = null) => {
       const nomNettoye = nom.trim();
       if (nomNettoye.length === 0) return;
-      await addRoutine(nomNettoye);
+      await addRoutine(nomNettoye, ancreId);
       await charger();
     },
     [charger],
@@ -62,5 +70,23 @@ export function useRoutines() {
     setRoutines((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
-  return { routines, stats, chargement, toggle, ajouter, supprimer };
+  const changerAncre = useCallback(
+    async (id: number, ancreId: number | null, position: "avant" | "apres") => {
+      await updateRoutineAncre(id, ancreId, position);
+      await charger();
+    },
+    [charger],
+  );
+
+  return {
+    routines,
+    ancresActives,
+    stats,
+    chargement,
+    toggle,
+    ajouter,
+    supprimer,
+    changerAncre,
+    recharger: charger,
+  };
 }
