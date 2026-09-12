@@ -29,6 +29,7 @@ export default function Index() {
     routines,
     ancresActives,
     stats,
+    preferences,
     toggle,
     ajouter,
     supprimer,
@@ -95,6 +96,8 @@ export default function Index() {
     nouvelleRoutine,
   });
 
+  console.log("PREFS:", preferences);
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.titre}>Mes routines du jour</Text>
@@ -120,11 +123,15 @@ export default function Index() {
         <Text style={styles.lienAncresTexte}>🎯 Refaire l'onboarding</Text>
       </TouchableOpacity>
 
-      {stats && (
+      {stats && preferences && preferences.gamification !== "aucune" && (
         <View style={styles.bandeauStats}>
           <Text style={styles.statTexte}>🔥 {stats.currentStreak} j</Text>
-          <Text style={styles.statTexte}>Niveau {stats.niveau}</Text>
-          <Text style={styles.statTexte}>{stats.points} pts</Text>
+          {preferences.gamification === "complete" && (
+            <>
+              <Text style={styles.statTexte}>Niveau {stats.niveau}</Text>
+              <Text style={styles.statTexte}>{stats.points} pts</Text>
+            </>
+          )}
         </View>
       )}
 

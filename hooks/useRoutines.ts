@@ -5,8 +5,10 @@ import {
   deleteRoutine,
   getAncresActives,
   getConfigRappel,
+  getPreferences,
   getRoutinesAvecStatutDuJour,
   getStats,
+  Preferences,
   RoutineAvecStatut,
   Stats,
   toggleCompletionAujourdhui,
@@ -18,11 +20,6 @@ import {
   programmerRappelQuotidien,
 } from "../lib/notifications";
 
-/**
- * Reprogramme le rappel quotidien avec le contenu à jour,
- * seulement si le rappel est actif ET la permission accordée.
- * Silencieux en cas d'erreur — ne bloque jamais l'UI.
- */
 async function reprogrammerRappelSiActif(routines: RoutineAvecStatut[]) {
   try {
     const config = await getConfigRappel();
@@ -35,7 +32,7 @@ async function reprogrammerRappelSiActif(routines: RoutineAvecStatut[]) {
     };
     await programmerRappelQuotidien(config.heure, config.minute, contenu);
   } catch {
-    // Silencieux : si la reprogrammation échoue, on ne casse pas l'UI
+    // silencieux
   }
 }
 
@@ -43,6 +40,7 @@ export function useRoutines() {
   const [routines, setRoutines] = useState<RoutineAvecStatut[]>([]);
   const [ancresActives, setAncresActives] = useState<Ancre[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [chargement, setChargement] = useState(true);
 
   const rafraichirStats = useCallback(async () => {
@@ -53,12 +51,14 @@ export function useRoutines() {
   const charger = useCallback(async () => {
     setChargement(true);
     try {
-      const [dataRoutines, dataAncres] = await Promise.all([
+      const [dataRoutines, dataAncres, dataPreferences] = await Promise.all([
         getRoutinesAvecStatutDuJour(),
         getAncresActives(),
+        getPreferences(),
       ]);
       setRoutines(dataRoutines);
       setAncresActives(dataAncres);
+      setPreferences(dataPreferences);
       await rafraichirStats();
     } finally {
       setChargement(false);
@@ -77,7 +77,6 @@ export function useRoutines() {
       );
       setRoutines(nouvellesRoutines);
       await rafraichirStats();
-      // On reprogramme le rappel en tâche de fond, sans bloquer
       reprogrammerRappelSiActif(nouvellesRoutines);
     },
     [routines, rafraichirStats],
@@ -119,6 +118,7 @@ export function useRoutines() {
     routines,
     ancresActives,
     stats,
+    preferences,
     chargement,
     toggle,
     ajouter,
