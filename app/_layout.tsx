@@ -6,7 +6,6 @@ import { logEvent } from "../lib/db";
 
 export default function RootLayout() {
   useEffect(() => {
-    // Écoute quand une notification est REÇUE alors que l'app est ouverte
     const subscriptionReception = Notifications.addNotificationReceivedListener(
       (notification) => {
         logEvent("notification_recue", null, {
@@ -15,7 +14,6 @@ export default function RootLayout() {
       },
     );
 
-    // Écoute quand l'utilisateur TAPE sur une notification (ouvre l'app depuis la notif)
     const subscriptionReponse =
       Notifications.addNotificationResponseReceivedListener((response) => {
         logEvent("notification_tapee", null, {
@@ -31,7 +29,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack />
+      <Stack screenOptions={{ headerShown: false }} />
     </GestureHandlerRootView>
   );
 }

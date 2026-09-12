@@ -15,6 +15,7 @@ import {
 import { Swipeable } from "react-native-gesture-handler";
 import { useRoutines } from "../hooks/useRoutines";
 import { getPreferences } from "../lib/db";
+import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 const LIBELLES_MOMENTS: Record<string, string> = {
   matin: "Matin",
@@ -45,6 +46,7 @@ export default function Index() {
     position: "avant" | "apres";
   } | null>(null);
   const router = useRouter();
+  const t = useTheme();
 
   useFocusEffect(
     useCallback(() => {
@@ -91,45 +93,52 @@ export default function Index() {
     setPopupAncre(null);
   };
 
-  console.log("DEBUG:", {
-    ancresActives: ancresActives.length,
-    nouvelleRoutine,
-  });
-
-  console.log("PREFS:", preferences);
-
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.titre}>Mes routines du jour</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
+      <Text style={[styles.titre, { color: t.textPrimary }]}>
+        Mes routines du jour
+      </Text>
 
       <TouchableOpacity
-        style={styles.lienAncres}
+        style={styles.lien}
         onPress={() => router.push("/ancres")}
       >
-        <Text style={styles.lienAncresTexte}>⚓ Gérer mes moments repères</Text>
+        <Text style={[styles.lienTexte, { color: t.accent }]}>
+          ⚓ Gérer mes moments repères
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.lienAncres}
+        style={styles.lien}
         onPress={() => router.push("/rappels")}
       >
-        <Text style={styles.lienAncresTexte}>🔔 Rappels quotidiens</Text>
+        <Text style={[styles.lienTexte, { color: t.accent }]}>
+          🔔 Rappels quotidiens
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.lienAncres}
+        style={styles.lien}
         onPress={() => router.push("/onboarding")}
       >
-        <Text style={styles.lienAncresTexte}>🎯 Refaire l'onboarding</Text>
+        <Text style={[styles.lienTexte, { color: t.accent }]}>
+          🎯 Refaire l'onboarding
+        </Text>
       </TouchableOpacity>
 
       {stats && preferences && preferences.gamification !== "aucune" && (
-        <View style={styles.bandeauStats}>
-          <Text style={styles.statTexte}>🔥 {stats.currentStreak} j</Text>
+        <View style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}>
+          <Text style={[styles.statTexte, { color: t.accentText }]}>
+            🔥 {stats.currentStreak} j
+          </Text>
           {preferences.gamification === "complete" && (
             <>
-              <Text style={styles.statTexte}>Niveau {stats.niveau}</Text>
-              <Text style={styles.statTexte}>{stats.points} pts</Text>
+              <Text style={[styles.statTexte, { color: t.accentText }]}>
+                Niveau {stats.niveau}
+              </Text>
+              <Text style={[styles.statTexte, { color: t.accentText }]}>
+                {stats.points} pts
+              </Text>
             </>
           )}
         </View>
@@ -137,33 +146,56 @@ export default function Index() {
 
       <View style={styles.formulaire}>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              borderColor: t.border,
+              color: t.textPrimary,
+              backgroundColor: t.bgCard,
+            },
+          ]}
           placeholder="Nouvelle routine..."
+          placeholderTextColor={t.textMuted}
           value={nouvelleRoutine}
           onChangeText={setNouvelleRoutine}
           onSubmitEditing={onAjouter}
           returnKeyType="done"
         />
-        <TouchableOpacity style={styles.boutonAjouter} onPress={onAjouter}>
-          <Text style={styles.texteBoutonAjouter}>+</Text>
+        <TouchableOpacity
+          style={[styles.boutonAjouter, { backgroundColor: t.accent }]}
+          onPress={onAjouter}
+        >
+          <Text style={[styles.texteBoutonAjouter, { color: t.textOnAccent }]}>
+            +
+          </Text>
         </TouchableOpacity>
       </View>
 
       {ancresActives.length > 0 && nouvelleRoutine.length > 0 && (
         <View style={styles.selecteurAncres}>
-          <Text style={styles.selecteurTitre}>Après quel moment ?</Text>
+          <Text style={[styles.selecteurTitre, { color: t.textSecondary }]}>
+            Après quel moment ?
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <TouchableOpacity
               style={[
                 styles.pastilleAncre,
-                ancreSelectionnee === null ? styles.pastilleActive : null,
+                {
+                  backgroundColor:
+                    ancreSelectionnee === null ? t.accent : t.bgCard,
+                },
               ]}
               onPress={() => setAncreSelectionnee(null)}
             >
               <Text
                 style={[
                   styles.pastilleTexte,
-                  ancreSelectionnee === null ? styles.pastilleTexteActif : null,
+                  {
+                    color:
+                      ancreSelectionnee === null
+                        ? t.textOnAccent
+                        : t.textSecondary,
+                  },
                 ]}
               >
                 Aucun
@@ -174,16 +206,22 @@ export default function Index() {
                 key={a.id}
                 style={[
                   styles.pastilleAncre,
-                  ancreSelectionnee === a.id ? styles.pastilleActive : null,
+                  {
+                    backgroundColor:
+                      ancreSelectionnee === a.id ? t.accent : t.bgCard,
+                  },
                 ]}
                 onPress={() => setAncreSelectionnee(a.id)}
               >
                 <Text
                   style={[
                     styles.pastilleTexte,
-                    ancreSelectionnee === a.id
-                      ? styles.pastilleTexteActif
-                      : null,
+                    {
+                      color:
+                        ancreSelectionnee === a.id
+                          ? t.textOnAccent
+                          : t.textSecondary,
+                    },
                   ]}
                 >
                   {a.nom}
@@ -199,7 +237,9 @@ export default function Index() {
         keyExtractor={(m) => m}
         renderItem={({ item: moment }) => (
           <View style={styles.section}>
-            <Text style={styles.sectionTitre}>{LIBELLES_MOMENTS[moment]}</Text>
+            <Text style={[styles.sectionTitre, { color: t.accentText }]}>
+              {LIBELLES_MOMENTS[moment]}
+            </Text>
             {parMoment[moment].map((item) => (
               <Swipeable
                 key={item.id}
@@ -208,47 +248,66 @@ export default function Index() {
                     <TouchableOpacity
                       style={[
                         styles.actionBouton,
-                        { backgroundColor: "#8a5a1a" },
+                        { backgroundColor: t.accentText },
                       ]}
                       onPress={() =>
                         setPopupAncre({ routineId: item.id, position: "avant" })
                       }
                     >
-                      <Text style={styles.actionTexte}>Avant</Text>
+                      <Text
+                        style={[styles.actionTexte, { color: t.textOnAccent }]}
+                      >
+                        Avant
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[
                         styles.actionBouton,
-                        { backgroundColor: "#4a90d9" },
+                        { backgroundColor: t.accent },
                       ]}
                       onPress={() =>
                         setPopupAncre({ routineId: item.id, position: "apres" })
                       }
                     >
-                      <Text style={styles.actionTexte}>Après</Text>
+                      <Text
+                        style={[styles.actionTexte, { color: t.textOnAccent }]}
+                      >
+                        Après
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
                 renderRightActions={() => (
                   <TouchableOpacity
-                    style={styles.boutonSupprimer}
+                    style={[
+                      styles.boutonSupprimer,
+                      { backgroundColor: t.danger },
+                    ]}
                     onPress={() => supprimer(item.id)}
                   >
-                    <Text style={styles.texteSupprimer}>Supprimer</Text>
+                    <Text
+                      style={[styles.texteSupprimer, { color: t.textOnAccent }]}
+                    >
+                      Supprimer
+                    </Text>
                   </TouchableOpacity>
                 )}
               >
                 <TouchableOpacity
                   style={[
                     styles.item,
-                    item.faitAujourdhui ? styles.itemFait : null,
+                    {
+                      backgroundColor: item.faitAujourdhui
+                        ? t.bgCardActive
+                        : t.bgCard,
+                    },
                   ]}
                   onPress={() => toggle(item.id, item.faitAujourdhui)}
                 >
-                  <Text style={styles.texteItem}>
+                  <Text style={[styles.texteItem, { color: t.textPrimary }]}>
                     {item.faitAujourdhui ? "✓ " : "○ "}
                     {item.ancre_nom ? (
-                      <Text style={styles.ancreInline}>
+                      <Text style={{ color: t.accentText, fontWeight: "600" }}>
                         {item.ancre_position === "avant" ? "Avant" : "Après"}{" "}
                         {item.ancre_nom.toLowerCase()} →{" "}
                       </Text>
@@ -258,6 +317,14 @@ export default function Index() {
                 </TouchableOpacity>
               </Swipeable>
             ))}
+            <TouchableOpacity
+              style={styles.lien}
+              onPress={() => router.push("/scene")}
+            >
+              <Text style={[styles.lienTexte, { color: t.accent }]}>
+                🌳 Voir la scène (test)
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       />
@@ -272,14 +339,16 @@ export default function Index() {
           style={styles.modalOverlay}
           onPress={() => setPopupAncre(null)}
         >
-          <Pressable style={styles.modalContenu}>
-            <Text style={styles.modalTitre}>
+          <Pressable
+            style={[styles.modalContenu, { backgroundColor: t.bgApp }]}
+          >
+            <Text style={[styles.modalTitre, { color: t.textPrimary }]}>
               {popupAncre?.position === "avant"
                 ? "Avant quel moment ?"
                 : "Après quel moment ?"}
             </Text>
             {ancresActives.length === 0 ? (
-              <Text style={styles.modalVide}>
+              <Text style={[styles.modalVide, { color: t.textSecondary }]}>
                 Aucun moment repère actif. Va dans "Gérer mes moments repères"
                 pour en activer.
               </Text>
@@ -288,10 +357,14 @@ export default function Index() {
                 {ancresActives.map((a) => (
                   <TouchableOpacity
                     key={a.id}
-                    style={styles.modalItem}
+                    style={[styles.modalItem, { borderBottomColor: t.border }]}
                     onPress={() => onChoisirAncrePourRoutine(a.id)}
                   >
-                    <Text style={styles.modalItemTexte}>{a.nom}</Text>
+                    <Text
+                      style={[styles.modalItemTexte, { color: t.textPrimary }]}
+                    >
+                      {a.nom}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -300,7 +373,9 @@ export default function Index() {
               style={styles.modalAnnuler}
               onPress={() => setPopupAncre(null)}
             >
-              <Text style={styles.modalAnnulerTexte}>Annuler</Text>
+              <Text style={[styles.modalAnnulerTexte, { color: t.danger }]}>
+                Annuler
+              </Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -310,86 +385,83 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
-  titre: { fontSize: 22, fontWeight: "600", marginBottom: 8 },
-  lienAncres: { paddingVertical: 8, marginBottom: 12 },
-  lienAncresTexte: { fontSize: 14, color: "#4a90d9", fontWeight: "500" },
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
+  titre: {
+    fontSize: typography.h1,
+    fontWeight: "600",
+    marginBottom: spacing.sm,
+  },
+  lien: { paddingVertical: spacing.sm, marginBottom: spacing.md },
+  lienTexte: { fontSize: typography.bodySmall, fontWeight: "500" },
   bandeauStats: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "#fef3e0",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
-  statTexte: { fontSize: 14, fontWeight: "600", color: "#8a5a1a" },
-  formulaire: { flexDirection: "row", marginBottom: 12, gap: 8 },
+  statTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
+  formulaire: {
+    flexDirection: "row",
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
+    borderRadius: radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 16,
+    fontSize: typography.body,
   },
   boutonAjouter: {
     width: 44,
     height: 44,
-    borderRadius: 10,
-    backgroundColor: "#4a90d9",
+    borderRadius: radius.md,
     justifyContent: "center",
     alignItems: "center",
   },
-  texteBoutonAjouter: { color: "#fff", fontSize: 24, fontWeight: "400" },
-  selecteurAncres: { marginBottom: 16 },
-  selecteurTitre: { fontSize: 13, color: "#666", marginBottom: 8 },
+  texteBoutonAjouter: { fontSize: 24, fontWeight: "400" },
+  selecteurAncres: { marginBottom: spacing.lg },
+  selecteurTitre: { fontSize: typography.small, marginBottom: spacing.sm },
   pastilleAncre: {
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#f0f0f0",
-    marginRight: 8,
+    borderRadius: radius.pill,
+    marginRight: spacing.sm,
   },
-  pastilleActive: { backgroundColor: "#4a90d9" },
-  pastilleTexte: { fontSize: 13, color: "#555" },
-  pastilleTexteActif: { color: "#fff", fontWeight: "600" },
-  section: { marginBottom: 16 },
+  pastilleTexte: { fontSize: typography.small },
+  section: { marginBottom: spacing.lg },
   sectionTitre: {
-    fontSize: 12,
+    fontSize: typography.tiny,
     fontWeight: "700",
-    color: "#8a5a1a",
     textTransform: "uppercase",
     marginBottom: 6,
   },
   item: {
-    padding: 16,
-    borderRadius: 10,
-    backgroundColor: "#f0f0f0",
-    marginBottom: 8,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
   },
-  itemFait: { backgroundColor: "#d4f4dd" },
-  texteItem: { fontSize: 15 },
-  ancreInline: { color: "#8a5a1a", fontWeight: "600" },
-  actionsGauche: { flexDirection: "row", marginBottom: 8 },
+  texteItem: { fontSize: typography.body },
+  actionsGauche: { flexDirection: "row", marginBottom: spacing.sm },
   actionBouton: {
     justifyContent: "center",
     alignItems: "center",
     width: 65,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     marginRight: 4,
   },
-  actionTexte: { color: "#fff", fontWeight: "600", fontSize: 12 },
+  actionTexte: { fontWeight: "600", fontSize: typography.tiny },
   boutonSupprimer: {
-    backgroundColor: "#e05c5c",
     justifyContent: "center",
     alignItems: "center",
     width: 90,
-    borderRadius: 10,
-    marginBottom: 8,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
     marginLeft: 4,
   },
-  texteSupprimer: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  texteSupprimer: { fontWeight: "600", fontSize: typography.small },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -398,24 +470,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
   modalContenu: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 20,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     width: "100%",
     maxWidth: 400,
   },
-  modalTitre: { fontSize: 17, fontWeight: "600", marginBottom: 16 },
-  modalVide: { fontSize: 14, color: "#666", lineHeight: 20, marginBottom: 12 },
+  modalTitre: {
+    fontSize: typography.h3,
+    fontWeight: "600",
+    marginBottom: spacing.lg,
+  },
+  modalVide: {
+    fontSize: typography.bodySmall,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
   modalItem: {
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
-  modalItemTexte: { fontSize: 15 },
+  modalItemTexte: { fontSize: typography.body },
   modalAnnuler: {
-    marginTop: 16,
-    padding: 12,
+    marginTop: spacing.lg,
+    padding: spacing.md,
     alignItems: "center",
   },
-  modalAnnulerTexte: { fontSize: 15, color: "#e05c5c", fontWeight: "500" },
+  modalAnnulerTexte: { fontSize: typography.body, fontWeight: "500" },
 });
