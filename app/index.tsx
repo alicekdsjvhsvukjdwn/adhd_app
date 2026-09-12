@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useRoutines } from "../hooks/useRoutines";
+import { getPreferences } from "../lib/db";
 
 const LIBELLES_MOMENTS: Record<string, string> = {
   matin: "Matin",
@@ -43,6 +44,17 @@ export default function Index() {
     position: "avant" | "apres";
   } | null>(null);
   const router = useRouter();
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const prefs = await getPreferences();
+        if (!prefs.onboardingFait) {
+          router.replace("/onboarding");
+        }
+      })();
+    }, [router]),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -92,6 +104,20 @@ export default function Index() {
         onPress={() => router.push("/ancres")}
       >
         <Text style={styles.lienAncresTexte}>⚓ Gérer mes moments repères</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.lienAncres}
+        onPress={() => router.push("/rappels")}
+      >
+        <Text style={styles.lienAncresTexte}>🔔 Rappels quotidiens</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.lienAncres}
+        onPress={() => router.push("/onboarding")}
+      >
+        <Text style={styles.lienAncresTexte}>🎯 Refaire l'onboarding</Text>
       </TouchableOpacity>
 
       {stats && (

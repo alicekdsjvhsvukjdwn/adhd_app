@@ -103,10 +103,9 @@ export async function updateRoutineAncre(
     id,
   );
   const { logEvent } = await import("./events");
-  await logEvent("routine_ajoutee", id, {
+  await logEvent("routine_modifiee", id, {
     ancre_id: ancreId,
     position,
-    modification: true,
   });
 }
 

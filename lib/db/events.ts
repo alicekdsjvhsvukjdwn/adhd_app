@@ -4,7 +4,11 @@ export type TypeEvenement =
   | "routine_completee"
   | "routine_decochee"
   | "routine_ajoutee"
-  | "routine_supprimee";
+  | "routine_supprimee"
+  | "routine_modifiee"
+  | "notification_recue"
+  | "notification_tapee"
+  | "rappel_programme";
 
 export type EventLog = {
   id: number;
