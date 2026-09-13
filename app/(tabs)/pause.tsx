@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -17,8 +16,8 @@ import {
   tempsFocusDuJour,
   terminerSession,
   type RoutineAvecStatut,
-} from "../lib/db";
-import { radius, spacing, typography, useTheme } from "../lib/theme";
+} from "../../lib/db";
+import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Mode = "choix" | "focus" | "respiration";
 
@@ -28,7 +27,6 @@ const DUREES = [5, 10, 20, 25, 45];
 const PHASE_MS = 5000;
 
 export default function Pause() {
-  const router = useRouter();
   const t = useTheme();
 
   const [mode, setMode] = useState<Mode>("choix");
@@ -38,7 +36,6 @@ export default function Pause() {
   const [tempsJour, setTempsJour] = useState(0);
   const [ratio, setRatio] = useState<{ ratio: number; n: number } | null>(null);
 
-  // Session en cours
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [debut, setDebut] = useState<number | null>(null);
   const [ecoule, setEcoule] = useState(0);
@@ -110,38 +107,63 @@ export default function Pause() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <TouchableOpacity
-          onPress={() => (mode === "choix" ? router.back() : setMode("choix"))}
-          style={styles.retour}
-        >
-          <Text style={[styles.retourTexte, { color: t.accent }]}>
-            ← {mode === "choix" ? "Retour" : "Pause"}
-          </Text>
-        </TouchableOpacity>
+        {mode !== "choix" && (
+          <TouchableOpacity
+            onPress={() => setMode("choix")}
+            style={styles.retour}
+          >
+            <Text style={[styles.retourTexte, { color: t.accent }]}>
+              ← Pause
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {mode === "choix" && (
-          <ChoixMode
-            t={t}
-            tempsJour={tempsJour}
-            onFocus={() => setMode("focus")}
-            onRespiration={() => setMode("respiration")}
-          />
+          <View>
+            <Text style={[styles.titre, { color: t.textPrimary }]}>Pause</Text>
+
+            {tempsJour > 0 && (
+              <Text style={[styles.note, { color: t.textMuted }]}>
+                {tempsJour} min de concentration aujourd'hui.
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.grosChoix, { backgroundColor: t.bgCard }]}
+              onPress={() => setMode("focus")}
+            >
+              <Text style={[styles.grosChoixTitre, { color: t.textPrimary }]}>
+                Je démarre quelque chose
+              </Text>
+              <Text style={[styles.grosChoixTexte, { color: t.textSecondary }]}>
+                Une seule tâche, un minuteur, et le droit de s'arrêter.
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.grosChoix, { backgroundColor: t.bgCard }]}
+              onPress={() => setMode("respiration")}
+            >
+              <Text style={[styles.grosChoixTitre, { color: t.textPrimary }]}>
+                J'ai besoin de redescendre
+              </Text>
+              <Text style={[styles.grosChoixTexte, { color: t.textSecondary }]}>
+                Quelques minutes de respiration guidée.
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {mode === "focus" && (
           <View>
             <Text style={[styles.titre, { color: t.textPrimary }]}>
-              {debut === null
-                ? "Sur quoi ?"
-                : (choisie?.nom ?? "Session libre")}
+              {debut === null ? "Sur quoi ?" : (choisie?.nom ?? "Session libre")}
             </Text>
 
             {debut === null && (
               <>
                 {choisie?.premiere_action && (
-                  <Text
-                    style={[styles.premiereAction, { color: t.accentText }]}
-                  >
+                  <Text style={[styles.premiereAction, { color: t.accentText }]}>
                     Première action : {choisie.premiere_action.toLowerCase()}
                   </Text>
                 )}
@@ -312,54 +334,6 @@ export default function Pause() {
   );
 }
 
-function ChoixMode({
-  t,
-  tempsJour,
-  onFocus,
-  onRespiration,
-}: {
-  t: ReturnType<typeof useTheme>;
-  tempsJour: number;
-  onFocus: () => void;
-  onRespiration: () => void;
-}) {
-  return (
-    <View>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Pause</Text>
-
-      {tempsJour > 0 && (
-        <Text style={[styles.note, { color: t.textMuted }]}>
-          {tempsJour} min de concentration aujourd'hui.
-        </Text>
-      )}
-
-      <TouchableOpacity
-        style={[styles.grosChoix, { backgroundColor: t.bgCard }]}
-        onPress={onFocus}
-      >
-        <Text style={[styles.grosChoixTitre, { color: t.textPrimary }]}>
-          Je démarre quelque chose
-        </Text>
-        <Text style={[styles.grosChoixTexte, { color: t.textSecondary }]}>
-          Une seule tâche, un minuteur, et le droit de s'arrêter.
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.grosChoix, { backgroundColor: t.bgCard }]}
-        onPress={onRespiration}
-      >
-        <Text style={[styles.grosChoixTitre, { color: t.textPrimary }]}>
-          J'ai besoin de redescendre
-        </Text>
-        <Text style={[styles.grosChoixTexte, { color: t.textSecondary }]}>
-          Quelques minutes de respiration guidée.
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 function Respiration({ t }: { t: ReturnType<typeof useTheme> }) {
   const [enCours, setEnCours] = useState(false);
   const [phase, setPhase] = useState<"inspire" | "expire">("inspire");
@@ -430,10 +404,7 @@ function Respiration({ t }: { t: ReturnType<typeof useTheme> }) {
         <Animated.View
           style={[
             styles.carre,
-            {
-              backgroundColor: t.accent,
-              transform: [{ scale: taille }],
-            },
+            { backgroundColor: t.accent, transform: [{ scale: taille }] },
           ]}
         />
       </View>
@@ -483,11 +454,7 @@ const styles = StyleSheet.create({
   grosChoixTexte: { fontSize: typography.small, lineHeight: 19 },
   premiereAction: { fontSize: typography.small, marginBottom: spacing.md },
   liste: { marginBottom: spacing.lg, gap: spacing.sm },
-  choix: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-  },
+  choix: { borderWidth: 1, borderRadius: radius.md, padding: spacing.lg },
   choixTexte: { fontSize: typography.body },
   label: {
     fontSize: typography.tiny,
@@ -503,11 +470,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   pastilleTexte: { fontSize: typography.small },
-  note: {
-    fontSize: typography.small,
-    lineHeight: 19,
-    marginTop: spacing.md,
-  },
+  note: { fontSize: typography.small, lineHeight: 19, marginTop: spacing.md },
   jauge: {
     height: 260,
     borderRadius: radius.lg,
@@ -535,16 +498,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   boutonTexte: { fontSize: typography.body, fontWeight: "600" },
-  bilan: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  bilanTitre: {
-    fontSize: typography.h3,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
+  bilan: { borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.lg },
+  bilanTitre: { fontSize: typography.h3, fontWeight: "600", marginBottom: 4 },
   bilanTexte: { fontSize: typography.small },
   zoneRespiration: {
     height: 260,

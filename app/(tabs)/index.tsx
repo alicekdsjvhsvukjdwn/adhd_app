@@ -13,10 +13,10 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { BandeauEtat } from "../components/BandeauEtat";
-import { useRoutines } from "../hooks/useRoutines";
-import { getPreferences } from "../lib/db";
-import { radius, spacing, typography, useTheme } from "../lib/theme";
+import { BandeauEtat } from "../../components/BandeauEtat";
+import { useRoutines } from "../../hooks/useRoutines";
+import { getPreferences } from "../../lib/db";
+import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 const LIBELLES_MOMENTS: Record<string, string> = {
   matin: "Matin",
@@ -100,49 +100,6 @@ export default function Index() {
         Mes routines du jour
       </Text>
 
-      <TouchableOpacity
-        style={styles.lien}
-        onPress={() => router.push("/ancres")}
-      >
-        <Text style={[styles.lienTexte, { color: t.accent }]}>
-          ⚓ Gérer mes moments repères
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.lien}
-        onPress={() => router.push("/problemes")}
-      >
-        <Text style={[styles.lienTexte, { color: t.accent }]}>
-          🧭 Trouver une routine
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.lien}
-        onPress={() => router.push("/pause")}
-      >
-        <Text style={[styles.lienTexte, { color: t.accent }]}>⏳ Pause</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.lien}
-        onPress={() => router.push("/rappels")}
-      >
-        <Text style={[styles.lienTexte, { color: t.accent }]}>
-          🔔 Rappels quotidiens
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.lien}
-        onPress={() => router.push("/onboarding")}
-      >
-        <Text style={[styles.lienTexte, { color: t.accent }]}>
-          🎯 Refaire l'onboarding
-        </Text>
-      </TouchableOpacity>
-
       {stats && preferences && preferences.gamification !== "aucune" && (
         <View style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}>
           <Text style={[styles.statTexte, { color: t.accentText }]}>
@@ -162,8 +119,6 @@ export default function Index() {
       )}
 
       <BandeauEtat />
-
-      <View style={styles.formulaire}></View>
 
       <View style={styles.formulaire}>
         <TextInput
@@ -256,6 +211,19 @@ export default function Index() {
       <FlatList
         data={momentsAvecRoutines}
         keyExtractor={(m) => m}
+        ListEmptyComponent={
+          <TouchableOpacity
+            style={[styles.vide, { backgroundColor: t.bgCard }]}
+            onPress={() => router.push("/problemes")}
+          >
+            <Text style={[styles.videTitre, { color: t.textPrimary }]}>
+              Aucune routine pour l'instant
+            </Text>
+            <Text style={[styles.videTexte, { color: t.textSecondary }]}>
+              Dis ce qui te pose problème, l'appli propose quoi mettre en place.
+            </Text>
+          </TouchableOpacity>
+        }
         renderItem={({ item: moment }) => (
           <View style={styles.section}>
             <Text style={[styles.sectionTitre, { color: t.accentText }]}>
@@ -338,14 +306,6 @@ export default function Index() {
                 </TouchableOpacity>
               </Swipeable>
             ))}
-            <TouchableOpacity
-              style={styles.lien}
-              onPress={() => router.push("/scene")}
-            >
-              <Text style={[styles.lienTexte, { color: t.accent }]}>
-                🌳 Voir la scène (test)
-              </Text>
-            </TouchableOpacity>
           </View>
         )}
       />
@@ -360,9 +320,7 @@ export default function Index() {
           style={styles.modalOverlay}
           onPress={() => setPopupAncre(null)}
         >
-          <Pressable
-            style={[styles.modalContenu, { backgroundColor: t.bgApp }]}
-          >
+          <Pressable style={[styles.modalContenu, { backgroundColor: t.bgApp }]}>
             <Text style={[styles.modalTitre, { color: t.textPrimary }]}>
               {popupAncre?.position === "avant"
                 ? "Avant quel moment ?"
@@ -370,8 +328,7 @@ export default function Index() {
             </Text>
             {ancresActives.length === 0 ? (
               <Text style={[styles.modalVide, { color: t.textSecondary }]}>
-                Aucun moment repère actif. Va dans "Gérer mes moments repères"
-                pour en activer.
+                Aucun moment repère actif. Va dans Profil pour en activer.
               </Text>
             ) : (
               <ScrollView style={{ maxHeight: 300 }}>
@@ -410,16 +367,14 @@ const styles = StyleSheet.create({
   titre: {
     fontSize: typography.h1,
     fontWeight: "600",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  lien: { paddingVertical: spacing.sm, marginBottom: spacing.md },
-  lienTexte: { fontSize: typography.bodySmall, fontWeight: "500" },
   bandeauStats: {
     flexDirection: "row",
     justifyContent: "space-between",
     borderRadius: radius.md,
     padding: spacing.md,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   statTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
   formulaire: {
@@ -465,6 +420,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   texteItem: { fontSize: typography.body },
+  vide: { borderRadius: radius.lg, padding: spacing.xl },
+  videTitre: {
+    fontSize: typography.h3,
+    fontWeight: "600",
+    marginBottom: spacing.sm,
+  },
+  videTexte: { fontSize: typography.small, lineHeight: 19 },
   actionsGauche: { flexDirection: "row", marginBottom: spacing.sm },
   actionBouton: {
     justifyContent: "center",
@@ -506,10 +468,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: spacing.md,
   },
-  modalItem: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
+  modalItem: { paddingVertical: 14, borderBottomWidth: 1 },
   modalItemTexte: { fontSize: typography.body },
   modalAnnuler: {
     marginTop: spacing.lg,
