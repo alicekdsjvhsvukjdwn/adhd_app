@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import { BandeauEtat } from "../components/BandeauEtat";
 import { useRoutines } from "../hooks/useRoutines";
 import { getPreferences } from "../lib/db";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -159,6 +160,10 @@ export default function Index() {
           )}
         </View>
       )}
+
+      <BandeauEtat />
+
+      <View style={styles.formulaire}></View>
 
       <View style={styles.formulaire}>
         <TextInput

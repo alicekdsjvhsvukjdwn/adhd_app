@@ -1,22 +1,22 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Easing,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Easing,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
-    demarrerSession,
-    getRoutinesAvecStatutDuJour,
-    ratioEstimation,
-    tempsFocusDuJour,
-    terminerSession,
-    type RoutineAvecStatut,
+  demarrerSession,
+  getRoutinesAvecStatutDuJour,
+  ratioEstimation,
+  tempsFocusDuJour,
+  terminerSession,
+  type RoutineAvecStatut,
 } from "../lib/db";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 

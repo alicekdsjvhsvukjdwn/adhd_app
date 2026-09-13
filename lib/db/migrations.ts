@@ -187,6 +187,34 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 4,
+    nom: "check-in d'état",
+    run: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE etat (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+
+          -- 'matin' | 'soir' : deux mesures par jour, pour voir la variation
+          -- intra-journée — c'est elle qui explique qu'une routine passe
+          -- à 10h et pas à 18h.
+          fenetre TEXT NOT NULL,
+
+          -- 1 = bas, 2 = moyen, 3 = haut
+          energie INTEGER NOT NULL,
+          focus INTEGER NOT NULL,
+          humeur INTEGER NOT NULL,
+
+          horodatage TEXT NOT NULL,
+          UNIQUE(date, fenetre)
+        );
+
+        CREATE INDEX idx_etat_date ON etat(date);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
