@@ -119,6 +119,13 @@ export default function Index() {
 
       <TouchableOpacity
         style={styles.lien}
+        onPress={() => router.push("/pause")}
+      >
+        <Text style={[styles.lienTexte, { color: t.accent }]}>⏳ Pause</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.lien}
         onPress={() => router.push("/rappels")}
       >
         <Text style={[styles.lienTexte, { color: t.accent }]}>

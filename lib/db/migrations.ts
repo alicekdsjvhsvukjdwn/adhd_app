@@ -100,7 +100,6 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX idx_items_echeance ON items(echeance);
       `);
 
-      // Reprise des routines existantes : toutes quotidiennes, toutes actives.
       await db.execAsync(`
         INSERT INTO items (
           id, nom, type, statut, recurrence,
@@ -118,7 +117,6 @@ const MIGRATIONS: Migration[] = [
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           item_id INTEGER NOT NULL,
           date TEXT NOT NULL,
-          -- 'complet' | 'partiel' : un jour à 60 % ne doit pas compter comme un échec
           statut TEXT NOT NULL DEFAULT 'complet',
           heure INTEGER,
           duree_reelle_min INTEGER,
@@ -137,8 +135,6 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX idx_completions_item ON completions(item_id, date);
       `);
 
-      // Journal des décisions du moteur : ce qu'il a proposé, avec quels scores.
-      // Sans ça, impossible de déboguer le tri ni de mesurer s'il aide.
       await db.execAsync(`
         CREATE TABLE decision_log (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,6 +151,39 @@ const MIGRATIONS: Migration[] = [
         );
 
         CREATE INDEX idx_decision_date ON decision_log(date);
+      `);
+    },
+  },
+
+  {
+    version: 3,
+    nom: "sessions de focus et de régulation",
+    run: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+          -- 'focus' (minuteur sur une tâche) | 'regulation' (respiration, pause)
+          type TEXT NOT NULL DEFAULT 'focus',
+
+          -- rattachement facultatif : une session peut porter sur rien de précis
+          item_id INTEGER,
+          libelle TEXT,
+
+          -- le cœur de l'intérêt : ce qu'on avait prévu vs ce qui s'est passé
+          estimation_min INTEGER,
+          reelle_min REAL,
+
+          debut TEXT NOT NULL,
+          fin TEXT,
+          date TEXT NOT NULL,
+
+          -- 0 = interrompue avant la fin du minuteur, 1 = allée au bout
+          terminee INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX idx_sessions_date ON sessions(date);
+        CREATE INDEX idx_sessions_item ON sessions(item_id);
       `);
     },
   },

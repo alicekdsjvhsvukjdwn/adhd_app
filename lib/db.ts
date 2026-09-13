@@ -6,5 +6,6 @@ export * from "./db/items";
 export * from "./db/migrations";
 export * from "./db/preferences";
 export * from "./db/routines";
+export * from "./db/sessions";
 export * from "./db/stats";
 
