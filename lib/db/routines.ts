@@ -1,72 +1,36 @@
-import { getDatabase } from "./client";
+/**
+ * Façade de compatibilité.
+ *
+ * La table `routines` est devenue `items` (file unifiée tâches + routines).
+ * Ce fichier garde l'ancienne API vivante le temps de migrer les écrans.
+ * À terme : importer directement depuis `./items` et supprimer ce fichier.
+ */
 
-export type Routine = {
-  id: number;
-  nom: string;
-  fait: number;
-  ancre_id: number | null;
-  ancre_position: "avant" | "apres" | null;
-};
+import {
+  addItem,
+  deleteItem,
+  getItems,
+  getItemsAvecAncre,
+  updateItemAncre,
+  type Item,
+  type ItemAvecAncre,
+} from "./items";
 
-export type RoutineAvecAncre = Routine & {
-  ancre_nom: string | null;
-  ancre_moment: string | null;
-};
+export type Routine = Item;
+export type RoutineAvecAncre = ItemAvecAncre;
 
+/** Les migrations remplacent les anciens init*(). Voir lib/db/migrations.ts. */
 export async function initRoutines() {
-  const db = await getDatabase();
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS routines (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nom TEXT NOT NULL,
-      fait INTEGER NOT NULL DEFAULT 0,
-      ancre_id INTEGER
-    );
-  `);
-  try {
-    await db.execAsync("ALTER TABLE routines ADD COLUMN ancre_id INTEGER");
-  } catch {
-    // La colonne existe déjà
-  }
-  try {
-    await db.execAsync(
-      "ALTER TABLE routines ADD COLUMN ancre_position TEXT DEFAULT 'apres'",
-    );
-  } catch {
-    // La colonne existe déjà
-  }
-  const existing = await db.getAllAsync<Routine>("SELECT * FROM routines");
-  if (existing.length === 0) {
-    await db.runAsync(
-      "INSERT INTO routines (nom, fait) VALUES (?, ?)",
-      "Boire un verre d'eau",
-      0,
-    );
-    await db.runAsync(
-      "INSERT INTO routines (nom, fait) VALUES (?, ?)",
-      "Faire le lit",
-      0,
-    );
-    await db.runAsync(
-      "INSERT INTO routines (nom, fait) VALUES (?, ?)",
-      "Sortir 10 min",
-      0,
-    );
-  }
+  const { runMigrations } = await import("./migrations");
+  await runMigrations();
 }
 
 export async function getRoutines(): Promise<Routine[]> {
-  const db = await getDatabase();
-  return db.getAllAsync<Routine>("SELECT * FROM routines");
+  return getItems("actif");
 }
 
 export async function getRoutinesAvecAncre(): Promise<RoutineAvecAncre[]> {
-  const db = await getDatabase();
-  return db.getAllAsync<RoutineAvecAncre>(
-    `SELECT r.*, a.nom as ancre_nom, a.moment as ancre_moment
-     FROM routines r
-     LEFT JOIN ancres a ON a.id = r.ancre_id`,
-  );
+  return getItemsAvecAncre("actif");
 }
 
 export async function addRoutine(
@@ -74,19 +38,12 @@ export async function addRoutine(
   ancreId: number | null = null,
   position: "avant" | "apres" = "apres",
 ) {
-  const db = await getDatabase();
-  const result = await db.runAsync(
-    "INSERT INTO routines (nom, fait, ancre_id, ancre_position) VALUES (?, ?, ?, ?)",
+  await addItem({
     nom,
-    0,
-    ancreId,
-    position,
-  );
-  const { logEvent } = await import("./events");
-  await logEvent("routine_ajoutee", result.lastInsertRowId, {
-    nom,
+    type: "routine",
+    recurrence: "quotidien",
     ancre_id: ancreId,
-    position,
+    ancre_position: position,
   });
 }
 
@@ -95,28 +52,13 @@ export async function updateRoutineAncre(
   ancreId: number | null,
   position: "avant" | "apres",
 ) {
-  const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE routines SET ancre_id = ?, ancre_position = ? WHERE id = ?",
-    ancreId,
-    position,
-    id,
-  );
-  const { logEvent } = await import("./events");
-  await logEvent("routine_modifiee", id, {
-    ancre_id: ancreId,
-    position,
-  });
+  await updateItemAncre(id, ancreId, position);
 }
 
+/**
+ * Attention : supprime définitivement.
+ * Préférer `pauserItem` — rien ne doit se perdre.
+ */
 export async function deleteRoutine(id: number) {
-  const db = await getDatabase();
-  await db.runAsync("DELETE FROM routines WHERE id = ?", id);
-  const { logEvent } = await import("./events");
-  await logEvent("routine_supprimee", id);
-}
-
-export async function toggleRoutine(id: number, fait: number) {
-  const db = await getDatabase();
-  await db.runAsync("UPDATE routines SET fait = ? WHERE id = ?", fait, id);
+  await deleteItem(id);
 }
