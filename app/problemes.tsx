@@ -25,12 +25,16 @@ const PLAFOND_ROUTINES = 5;
 
 const LIBELLES_INTENSITE = ["Doux", "Moyen", "Soutenu", "Complet"];
 
+// Mémoire de navigation : survit à un aller-retour, pas à un redémarrage.
+let selectionMemorisee: string[] = [];
+let ouvertesMemorisees: string[] = [];
+
 export default function Problemes() {
   const router = useRouter();
   const t = useTheme();
 
-  const [selection, setSelection] = useState<string[]>([]);
-  const [ouvertes, setOuvertes] = useState<string[]>([]);
+  const [selection, setSelection] = useState<string[]>(selectionMemorisee);
+  const [ouvertes, setOuvertes] = useState<string[]>(ouvertesMemorisees);
   const [recherche, setRecherche] = useState("");
   const [dejaAjoutes, setDejaAjoutes] = useState<string[]>([]);
   const [nbActives, setNbActives] = useState(0);
@@ -52,24 +56,20 @@ export default function Problemes() {
     rafraichir();
   }, [rafraichir]);
 
+  useEffect(() => {
+    selectionMemorisee = selection;
+  }, [selection]);
+
+  useEffect(() => {
+    ouvertesMemorisees = ouvertes;
+  }, [ouvertes]);
+
   const groupes = useMemo(() => problemesParCategorie(), []);
-
   const enRecherche = recherche.trim().length >= 2;
-
-  // Dédoublonne : deux problèmes peuvent pointer vers la même famille.
-  const familles: FamilleTemplate[] = useMemo(() => {
-    if (enRecherche) return rechercher(recherche);
-    const vues = new Set<string>();
-    const res: FamilleTemplate[] = [];
-    for (const p of selection) {
-      for (const f of famillesPourProbleme(p)) {
-        if (vues.has(f.id)) continue;
-        vues.add(f.id);
-        res.push(f);
-      }
-    }
-    return res;
-  }, [enRecherche, recherche, selection]);
+  const resultatsRecherche = useMemo(
+    () => (enRecherche ? rechercher(recherche) : []),
+    [enRecherche, recherche],
+  );
 
   const basculerProbleme = (p: string) => {
     setSelection((prev) =>
@@ -118,8 +118,86 @@ export default function Problemes() {
     await faire();
   };
 
-  const rangChoisi = (f: FamilleTemplate) =>
-    variantes[f.id] ?? f.variantes[0].rang;
+  /** Carte d'une routine du catalogue, réutilisée sous un problème et en recherche. */
+  const CarteFamille = ({ f }: { f: FamilleTemplate }) => {
+    const deja = dejaAjoutes.includes(f.id);
+    const rang = variantes[f.id] ?? f.variantes[0].rang;
+    const variante = f.variantes.find((v) => v.rang === rang) ?? f.variantes[0];
+
+    return (
+      <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+        <Text style={[styles.carteTitre, { color: t.textPrimary }]}>
+          {f.nom}
+        </Text>
+
+        <Text style={[styles.justification, { color: t.textSecondary }]}>
+          {f.justification}
+        </Text>
+
+        <Text style={[styles.label, { color: t.textMuted }]}>
+          À quelle intensité ?
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {f.variantes.map((v) => {
+            const choisi = v.rang === rang;
+            return (
+              <TouchableOpacity
+                key={v.rang}
+                style={[
+                  styles.pastille,
+                  {
+                    backgroundColor: choisi ? t.accent : t.bgApp,
+                    borderColor: t.border,
+                  },
+                ]}
+                onPress={() => setVariantes((p) => ({ ...p, [f.id]: v.rang }))}
+              >
+                <Text
+                  style={[
+                    styles.pastilleTexte,
+                    { color: choisi ? t.textOnAccent : t.textSecondary },
+                  ]}
+                >
+                  {LIBELLES_INTENSITE[v.rang - 1] ?? `Niveau ${v.rang}`} ·{" "}
+                  {v.duree_min} min
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <Text style={[styles.variante, { color: t.textPrimary }]}>
+          {variante.libelle}
+        </Text>
+        <Text style={[styles.premiereAction, { color: t.accentText }]}>
+          Première action : {variante.premiere_action.toLowerCase()}
+        </Text>
+
+        {f.ancre_suggeree && (
+          <Text style={[styles.ancre, { color: t.textMuted }]}>
+            Moment repère suggéré : {f.ancre_suggeree}
+          </Text>
+        )}
+
+        {deja ? (
+          <View style={[styles.dejaAjoute, { backgroundColor: t.bgApp }]}>
+            <Text style={[styles.dejaTexte, { color: t.textMuted }]}>
+              Déjà dans tes routines
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.bouton, { backgroundColor: t.accent }]}
+            onPress={() => ajouterFamille(f, rang)}
+          >
+            <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>
+              Ajouter à mes routines
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
@@ -132,6 +210,11 @@ export default function Problemes() {
 
         <Text style={[styles.titre, { color: t.textPrimary }]}>
           Qu'est-ce qui coince ?
+        </Text>
+
+        <Text style={[styles.sousTitre, { color: t.textSecondary }]}>
+          Choisis ce qui te pose problème, les routines correspondantes
+          s'affichent dessous.
         </Text>
 
         <TextInput
@@ -150,23 +233,18 @@ export default function Problemes() {
           returnKeyType="search"
         />
 
-        {!enRecherche && selection.length > 0 && (
-          <View style={styles.chips}>
-            {selection.map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.chip, { backgroundColor: t.accent }]}
-                onPress={() => basculerProbleme(p)}
-              >
-                <Text style={[styles.chipTexte, { color: t.textOnAccent }]}>
-                  {p} ✕
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {!enRecherche &&
+        {enRecherche ? (
+          <>
+            {resultatsRecherche.length === 0 ? (
+              <Text style={[styles.vide, { color: t.textSecondary }]}>
+                Rien trouvé. Tu peux créer ta propre routine depuis l'écran du
+                jour.
+              </Text>
+            ) : (
+              resultatsRecherche.map((f) => <CarteFamille key={f.id} f={f} />)
+            )}
+          </>
+        ) : (
           groupes.map((g) => {
             const ouvert = ouvertes.includes(g.categorie);
             const nbChoisis = g.problemes.filter((p) =>
@@ -188,131 +266,51 @@ export default function Problemes() {
                 {ouvert &&
                   g.problemes.map((p) => {
                     const actif = selection.includes(p);
+                    const familles = actif ? famillesPourProbleme(p) : [];
+
                     return (
-                      <TouchableOpacity
-                        key={p}
-                        style={[
-                          styles.boutonProbleme,
-                          {
-                            backgroundColor: actif ? t.accent : t.bgCard,
-                            borderColor: t.border,
-                          },
-                        ]}
-                        onPress={() => basculerProbleme(p)}
-                      >
-                        <Text
+                      <View key={p}>
+                        <TouchableOpacity
                           style={[
-                            styles.texteProbleme,
-                            { color: actif ? t.textOnAccent : t.textPrimary },
+                            styles.boutonProbleme,
+                            {
+                              backgroundColor: actif ? t.accent : t.bgCard,
+                              borderColor: t.border,
+                            },
                           ]}
+                          onPress={() => basculerProbleme(p)}
                         >
-                          {p}
-                        </Text>
-                      </TouchableOpacity>
+                          <Text
+                            style={[
+                              styles.texteProbleme,
+                              { color: actif ? t.textOnAccent : t.textPrimary },
+                            ]}
+                          >
+                            {actif ? "▾ " : ""}
+                            {p}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {actif && (
+                          <View style={styles.solutions}>
+                            <Text
+                              style={[styles.compteur, { color: t.textMuted }]}
+                            >
+                              {familles.length} routine
+                              {familles.length > 1 ? "s" : ""} pour ça
+                            </Text>
+                            {familles.map((f) => (
+                              <CarteFamille key={f.id} f={f} />
+                            ))}
+                          </View>
+                        )}
+                      </View>
                     );
                   })}
               </View>
             );
-          })}
-
-        {enRecherche && familles.length === 0 && (
-          <Text style={[styles.vide, { color: t.textSecondary }]}>
-            Rien trouvé. Tu peux créer ta propre routine depuis l'écran du jour.
-          </Text>
+          })
         )}
-
-        {familles.length > 0 && (
-          <Text style={[styles.compteur, { color: t.textMuted }]}>
-            {familles.length} routine{familles.length > 1 ? "s" : ""} proposée
-            {familles.length > 1 ? "s" : ""}
-          </Text>
-        )}
-
-        {familles.map((f) => {
-          const deja = dejaAjoutes.includes(f.id);
-          const rang = rangChoisi(f);
-          const variante =
-            f.variantes.find((v) => v.rang === rang) ?? f.variantes[0];
-
-          return (
-            <View
-              key={f.id}
-              style={[styles.carte, { backgroundColor: t.bgCard }]}
-            >
-              <Text style={[styles.carteTitre, { color: t.textPrimary }]}>
-                {f.nom}
-              </Text>
-
-              <Text style={[styles.justification, { color: t.textSecondary }]}>
-                {f.justification}
-              </Text>
-
-              <Text style={[styles.label, { color: t.textMuted }]}>
-                À quelle intensité ?
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {f.variantes.map((v) => {
-                  const choisi = v.rang === rang;
-                  return (
-                    <TouchableOpacity
-                      key={v.rang}
-                      style={[
-                        styles.pastille,
-                        {
-                          backgroundColor: choisi ? t.accent : t.bgApp,
-                          borderColor: t.border,
-                        },
-                      ]}
-                      onPress={() =>
-                        setVariantes((p) => ({ ...p, [f.id]: v.rang }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.pastilleTexte,
-                          { color: choisi ? t.textOnAccent : t.textSecondary },
-                        ]}
-                      >
-                        {LIBELLES_INTENSITE[v.rang - 1] ?? `Niveau ${v.rang}`} ·{" "}
-                        {v.duree_min} min
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <Text style={[styles.variante, { color: t.textPrimary }]}>
-                {variante.libelle}
-              </Text>
-              <Text style={[styles.premiereAction, { color: t.accentText }]}>
-                Première action : {variante.premiere_action.toLowerCase()}
-              </Text>
-
-              {f.ancre_suggeree && (
-                <Text style={[styles.ancre, { color: t.textMuted }]}>
-                  Moment repère suggéré : {f.ancre_suggeree}
-                </Text>
-              )}
-
-              {deja ? (
-                <View style={[styles.dejaAjoute, { backgroundColor: t.bgApp }]}>
-                  <Text style={[styles.dejaTexte, { color: t.textMuted }]}>
-                    Déjà dans tes routines
-                  </Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.bouton, { backgroundColor: t.accent }]}
-                  onPress={() => ajouterFamille(f, rang)}
-                >
-                  <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>
-                    Ajouter à mes routines
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })}
 
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
@@ -327,6 +325,11 @@ const styles = StyleSheet.create({
   titre: {
     fontSize: typography.h1,
     fontWeight: "600",
+    marginBottom: spacing.sm,
+  },
+  sousTitre: {
+    fontSize: typography.small,
+    lineHeight: 19,
     marginBottom: spacing.lg,
   },
   recherche: {
@@ -337,18 +340,6 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     marginBottom: spacing.md,
   },
-  chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-  },
-  chipTexte: { fontSize: typography.small, fontWeight: "500" },
   groupe: { marginBottom: spacing.md },
   groupeEntete: {
     paddingVertical: spacing.md,
@@ -367,6 +358,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   texteProbleme: { fontSize: typography.body },
+  solutions: {
+    paddingLeft: spacing.md,
+    marginBottom: spacing.md,
+  },
   vide: {
     fontSize: typography.bodySmall,
     lineHeight: 20,
