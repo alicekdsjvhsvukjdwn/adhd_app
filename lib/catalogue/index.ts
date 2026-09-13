@@ -1,5 +1,8 @@
-import type { Categorie, FamilleTemplate, VarianteTemplate } from "./types";
+import { FAMILLES_FOCUS } from "./familles/focus";
+import { FAMILLES_MOUVEMENT } from "./familles/mouvement";
+import { FAMILLES_ORGANISATION } from "./familles/organisation";
 import { FAMILLES_SOMMEIL } from "./familles/sommeil";
+import type { Categorie, FamilleTemplate, VarianteTemplate } from "./types";
 
 export * from "./types";
 
@@ -10,9 +13,9 @@ export * from "./types";
  */
 export const CATALOGUE: FamilleTemplate[] = [
   ...FAMILLES_SOMMEIL,
-  // ...FAMILLES_MOUVEMENT,
-  // ...FAMILLES_ORGANISATION,
-  // ...FAMILLES_FOCUS,
+  ...FAMILLES_MOUVEMENT,
+  ...FAMILLES_ORGANISATION,
+  ...FAMILLES_FOCUS,
 ];
 
 export function getFamille(id: string): FamilleTemplate | undefined {
