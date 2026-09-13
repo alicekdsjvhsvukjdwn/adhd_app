@@ -38,6 +38,39 @@ export function tousLesProblemes(): string[] {
   return [...new Set(CATALOGUE.flatMap((f) => f.problemes))];
 }
 
+export const LIBELLES_CATEGORIES: Record<Categorie, string> = {
+  sommeil: "Sommeil et réveil",
+  mouvement: "Corps et mouvement",
+  organisation: "Organisation du quotidien",
+  focus: "Concentration et démarrage",
+};
+
+/**
+ * Regroupe les problèmes par catégorie. Un problème est rattaché à la
+ * catégorie de la première famille qui le mentionne.
+ */
+export function problemesParCategorie(): {
+  categorie: Categorie;
+  problemes: string[];
+}[] {
+  const vus = new Set<string>();
+  const groupes = new Map<Categorie, string[]>();
+
+  for (const f of CATALOGUE) {
+    for (const p of f.problemes) {
+      if (vus.has(p)) continue;
+      vus.add(p);
+      const liste = groupes.get(f.categorie) ?? [];
+      liste.push(p);
+      groupes.set(f.categorie, liste);
+    }
+  }
+
+  return (Object.keys(LIBELLES_CATEGORIES) as Categorie[])
+    .filter((c) => groupes.has(c))
+    .map((c) => ({ categorie: c, problemes: groupes.get(c)! }));
+}
+
 export function famillesPourProbleme(probleme: string): FamilleTemplate[] {
   return CATALOGUE.filter((f) => f.problemes.includes(probleme));
 }
