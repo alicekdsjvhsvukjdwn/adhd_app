@@ -5,6 +5,7 @@ export type Composantes = {
   urgence: number;
   importance: number;
   moment: number;
+  equilibre: number;
   etat: number;
   negligence: number;
 };

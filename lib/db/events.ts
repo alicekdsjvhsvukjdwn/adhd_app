@@ -1,13 +1,26 @@
 import { getDatabase } from "./client";
 
 export type TypeEvenement =
+  // completions
   | "item_complete"
   | "item_decoche"
+  // cycle de vie d'un item
+  | "item_ajoute"
+  | "item_modifie"
+  | "item_pause"
+  | "item_repris"
+  | "item_archive"
+  | "item_supprime"
+  // adaptation d'intensité
+  | "variante_descendue"
+  | "variante_montee"
+  // hérités (routines avant unification)
   | "routine_completee"
   | "routine_decochee"
   | "routine_ajoutee"
   | "routine_supprimee"
   | "routine_modifiee"
+  // notifications
   | "notification_recue"
   | "notification_tapee"
   | "rappel_programme";

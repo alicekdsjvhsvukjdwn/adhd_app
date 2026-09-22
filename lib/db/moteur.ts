@@ -1,3 +1,5 @@
+import type { Categorie } from "../catalogue";
+import { equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { logDecisions, type Composantes, type Decision } from "./decisions";
@@ -7,23 +9,24 @@ import { traiterNegligence } from "./negligence";
  * Le moteur de tri : "l'utilisateur dépose, l'appli décide".
  *
  * Chaque item actif non fait aujourd'hui reçoit un score entre 0 et 1,
- * somme pondérée de cinq composantes normalisées. On garde le haut du
+ * somme pondérée de six composantes normalisées. On garde le haut du
  * classement, en réservant une place à un item négligé (exploration),
  * pour que l'écran ne soit jamais figé et que rien ne meure de faim.
  *
  * Les poids sont écrits à la main : le système marche dès le jour 1
  * (démarrage à froid). L'observation accumulée (heure_reelle_moy,
- * nb_propositions_sans_action...) corrige ensuite les composantes,
- * pas les poids.
+ * nb_propositions_sans_action, équilibre des catégories...) corrige
+ * ensuite les composantes, pas les poids.
  */
 
 /** Poids de départ. Somme = 1, donc le score reste dans [0, 1]. */
 export const POIDS = {
-  importance: 0.3,
-  moment: 0.25,
-  etat: 0.2,
-  urgence: 0.15,
-  negligence: 0.1,
+  importance: 0.25,
+  moment: 0.2,
+  equilibre: 0.2,
+  etat: 0.15,
+  urgence: 0.12,
+  negligence: 0.08,
 } as const;
 
 /** Nombre de places affichées sur l'écran Aujourd'hui. */
@@ -55,6 +58,8 @@ type CandidatRow = {
   id: number;
   nom: string;
   type: string;
+  categorie: string | null;
+  template_id: string | null;
   importance: number;
   effort: number | null;
   duree_min: number | null;
@@ -141,19 +146,16 @@ function scoreEtat(c: CandidatRow, energie: number | null): number {
 
 /** Phrase courte « pourquoi celui-là », tirée de la composante dominante. */
 function raisonDominante(comp: Composantes): string {
-  const contributions: [keyof Composantes, number, string][] = [
-    ["urgence", comp.urgence * POIDS.urgence, "Échéance proche"],
-    ["importance", comp.importance * POIDS.importance, "Important pour toi"],
-    ["moment", comp.moment * POIDS.moment, "C'est le bon moment"],
-    ["etat", comp.etat * POIDS.etat, "Adapté à ton énergie"],
-    [
-      "negligence",
-      comp.negligence * POIDS.negligence,
-      "Pas fait depuis un moment",
-    ],
+  const contributions: [number, string][] = [
+    [comp.urgence * POIDS.urgence, "Échéance proche"],
+    [comp.importance * POIDS.importance, "Important pour toi"],
+    [comp.moment * POIDS.moment, "C'est le bon moment"],
+    [comp.equilibre * POIDS.equilibre, "Pour varier les domaines"],
+    [comp.etat * POIDS.etat, "Adapté à ton énergie"],
+    [comp.negligence * POIDS.negligence, "Pas fait depuis un moment"],
   ];
-  contributions.sort((a, b) => b[1] - a[1]);
-  return contributions[0][2];
+  contributions.sort((a, b) => b[0] - a[0]);
+  return contributions[0][1];
 }
 
 /**
@@ -164,12 +166,15 @@ function raisonDominante(comp: Composantes): string {
 export async function genererPropositions(): Promise<Proposition[]> {
   const db = await getDatabase();
   await traiterNegligence(); // rattrape les jours écoulés avant de scorer
+
   const date = getAujourdhui();
   const heureActuelle = new Date().getHours() + new Date().getMinutes() / 60;
   const energie = await dernierEtatEnergie();
+  const equilibre = await equilibreParCategorie(7);
 
   const candidats = await db.getAllAsync<CandidatRow>(
-    `SELECT i.id, i.nom, i.type, i.importance, i.effort, i.duree_min,
+    `SELECT i.id, i.nom, i.type, i.categorie, i.template_id,
+            i.importance, i.effort, i.duree_min,
             i.premiere_action, i.echeance, i.heure_reelle_moy,
             i.nb_propositions_sans_action,
             i.fenetre_debut_h, i.fenetre_fin_h,
@@ -194,10 +199,12 @@ export async function genererPropositions(): Promise<Proposition[]> {
   });
 
   const notes = proposables.map((c) => {
+    const cat = categorieEffectiveLocale(c);
     const composantes: Composantes = {
       urgence: scoreUrgence(c.echeance),
       importance: clamp01((c.importance - 1) / 2), // 1..3 => 0, .5, 1
       moment: scoreMoment(c, heureActuelle),
+      equilibre: cat ? equilibre[cat] : 0.5,
       etat: scoreEtat(c, energie),
       negligence: clamp01(c.nb_propositions_sans_action / SEUIL_NEGLIGENCE),
     };
@@ -205,6 +212,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
       composantes.urgence * POIDS.urgence +
       composantes.importance * POIDS.importance +
       composantes.moment * POIDS.moment +
+      composantes.equilibre * POIDS.equilibre +
       composantes.etat * POIDS.etat +
       composantes.negligence * POIDS.negligence;
     return { c, composantes, score };
@@ -212,9 +220,9 @@ export async function genererPropositions(): Promise<Proposition[]> {
 
   notes.sort((a, b) => b.score - a.score);
 
-  // Si tout tient dans l'écran, rien n'est masqué : pas d'exploration.
   const propositions: Proposition[] = [];
 
+  // Si tout tient dans l'écran, rien n'est masqué : pas d'exploration.
   if (notes.length <= TOP) {
     notes.forEach((n, i) => {
       propositions.push(construire(n, i + 1, true, false));
@@ -251,6 +259,20 @@ export async function genererPropositions(): Promise<Proposition[]> {
 
   await journaliserSiPremierDuJour(propositions, energie);
   return propositions;
+}
+
+/** Catégorie effective sans requête : colonne, sinon score neutre. */
+function categorieEffectiveLocale(c: CandidatRow): Categorie | null {
+  const valides: Categorie[] = [
+    "sommeil",
+    "mouvement",
+    "organisation",
+    "focus",
+  ];
+  if (c.categorie && (valides as string[]).includes(c.categorie)) {
+    return c.categorie as Categorie;
+  }
+  return null;
 }
 
 function construire(
