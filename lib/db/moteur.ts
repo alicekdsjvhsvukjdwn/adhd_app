@@ -1,6 +1,7 @@
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { logDecisions, type Composantes, type Decision } from "./decisions";
+import { traiterNegligence } from "./negligence";
 
 /**
  * Le moteur de tri : "l'utilisateur dépose, l'appli décide".
@@ -162,6 +163,7 @@ function raisonDominante(comp: Composantes): string {
  */
 export async function genererPropositions(): Promise<Proposition[]> {
   const db = await getDatabase();
+  await traiterNegligence(); // rattrape les jours écoulés avant de scorer
   const date = getAujourdhui();
   const heureActuelle = new Date().getHours() + new Date().getMinutes() / 60;
   const energie = await dernierEtatEnergie();
