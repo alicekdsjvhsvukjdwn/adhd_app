@@ -1,6 +1,8 @@
 import { getDatabase } from "./client";
 
 export type TypeEvenement =
+  | "item_complete"
+  | "item_decoche"
   | "routine_completee"
   | "routine_decochee"
   | "routine_ajoutee"

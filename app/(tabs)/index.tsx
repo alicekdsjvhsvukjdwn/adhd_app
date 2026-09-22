@@ -16,6 +16,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { BandeauEtat } from "../../components/BandeauEtat";
 import { useRoutines } from "../../hooks/useRoutines";
 import { getPreferences } from "../../lib/db";
+import { genererPropositions, type Proposition } from "../../lib/db/moteur";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 const LIBELLES_MOMENTS: Record<string, string> = {
@@ -38,6 +39,9 @@ export default function Index() {
     changerAncre,
     recharger,
   } = useRoutines();
+
+  const [propositions, setPropositions] = useState<Proposition[]>([]);
+  const [toutVoir, setToutVoir] = useState(false);
   const [nouvelleRoutine, setNouvelleRoutine] = useState("");
   const [ancreSelectionnee, setAncreSelectionnee] = useState<number | null>(
     null,
@@ -60,17 +64,30 @@ export default function Index() {
     }, [router]),
   );
 
+  const chargerPropositions = useCallback(async () => {
+    const toutes = await genererPropositions();
+    setPropositions(toutes.filter((p) => p.propose));
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       recharger();
-    }, [recharger]),
+      chargerPropositions();
+    }, [recharger, chargerPropositions]),
   );
+
+  const onCompleterProposition = async (itemId: number) => {
+    // Le moteur n'expose que des items non faits : on complète, puis on recalcule.
+    await toggle(itemId, false);
+    await chargerPropositions();
+  };
 
   const onAjouter = async () => {
     if (nouvelleRoutine.trim().length === 0) return;
     await ajouter(nouvelleRoutine, ancreSelectionnee);
     setNouvelleRoutine("");
     setAncreSelectionnee(null);
+    await chargerPropositions();
   };
 
   const parMoment = routines.reduce<Record<string, typeof routines>>(
@@ -94,31 +111,133 @@ export default function Index() {
     setPopupAncre(null);
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // Vue par défaut : les 3 propositions du moteur, rien d'autre.
+  // « L'utilisateur dépose, l'appli décide » — le masquage est la fonctionnalité.
+  // ─────────────────────────────────────────────────────────────
+  if (!toutVoir) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
+        <Text style={[styles.titre, { color: t.textPrimary }]}>
+          Aujourd'hui
+        </Text>
+
+        {stats && preferences && preferences.gamification !== "aucune" && (
+          <View
+            style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}
+          >
+            <Text style={[styles.statTexte, { color: t.accentText }]}>
+              🔥 {stats.currentStreak} j
+            </Text>
+            {preferences.gamification === "complete" && (
+              <>
+                <Text style={[styles.statTexte, { color: t.accentText }]}>
+                  Niveau {stats.niveau}
+                </Text>
+                <Text style={[styles.statTexte, { color: t.accentText }]}>
+                  {stats.points} pts
+                </Text>
+              </>
+            )}
+          </View>
+        )}
+
+        <BandeauEtat />
+
+        <FlatList
+          data={propositions}
+          keyExtractor={(p) => String(p.itemId)}
+          contentContainerStyle={{ paddingTop: spacing.sm }}
+          ListEmptyComponent={
+            <TouchableOpacity
+              style={[styles.vide, { backgroundColor: t.bgCard }]}
+              onPress={() => router.push("/problemes")}
+            >
+              <Text style={[styles.videTitre, { color: t.textPrimary }]}>
+                Rien à faire pour l'instant
+              </Text>
+              <Text style={[styles.videTexte, { color: t.textSecondary }]}>
+                Dis ce qui te pose problème, l'appli propose quoi mettre en
+                place.
+              </Text>
+            </TouchableOpacity>
+          }
+          renderItem={({ item: p }) => (
+            <TouchableOpacity
+              style={[styles.carte, { backgroundColor: t.bgCard }]}
+              onPress={() => onCompleterProposition(p.itemId)}
+            >
+              <View style={styles.carteEntete}>
+                <View
+                  style={[
+                    styles.puceRaison,
+                    {
+                      backgroundColor: p.exploration
+                        ? t.bgHighlight
+                        : t.bgHighlight,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.puceRaisonTexte, { color: t.accentText }]}
+                  >
+                    {p.exploration ? "🔄 " : ""}
+                    {p.raison}
+                  </Text>
+                </View>
+                {p.duree_min ? (
+                  <Text style={[styles.carteDuree, { color: t.textMuted }]}>
+                    {p.duree_min} min
+                  </Text>
+                ) : null}
+              </View>
+
+              <Text style={[styles.carteNom, { color: t.textPrimary }]}>
+                ○ {p.nom}
+              </Text>
+
+              {p.premiere_action ? (
+                <Text
+                  style={[
+                    styles.cartePremiereAction,
+                    { color: t.textSecondary },
+                  ]}
+                >
+                  Commencer par : {p.premiere_action}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          )}
+        />
+
+        <TouchableOpacity
+          style={styles.toutVoir}
+          onPress={() => setToutVoir(true)}
+        >
+          <Text style={[styles.toutVoirTexte, { color: t.accentText }]}>
+            Tout voir
+          </Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Vue « Tout voir » : la liste complète, l'ajout, les ancres.
+  // Sortie de secours toujours accessible, contre l'anxiété du masquage.
+  // ─────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>
-        Mes routines du jour
-      </Text>
-
-      {stats && preferences && preferences.gamification !== "aucune" && (
-        <View style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}>
-          <Text style={[styles.statTexte, { color: t.accentText }]}>
-            🔥 {stats.currentStreak} j
+      <View style={styles.enteteToutVoir}>
+        <Text style={[styles.titre, { color: t.textPrimary }]}>
+          Toutes mes routines
+        </Text>
+        <TouchableOpacity onPress={() => setToutVoir(false)}>
+          <Text style={[styles.retourTexte, { color: t.accentText }]}>
+            ← Retour
           </Text>
-          {preferences.gamification === "complete" && (
-            <>
-              <Text style={[styles.statTexte, { color: t.accentText }]}>
-                Niveau {stats.niveau}
-              </Text>
-              <Text style={[styles.statTexte, { color: t.accentText }]}>
-                {stats.points} pts
-              </Text>
-            </>
-          )}
-        </View>
-      )}
-
-      <BandeauEtat />
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.formulaire}>
         <TextInput
@@ -291,7 +410,10 @@ export default function Index() {
                         : t.bgCard,
                     },
                   ]}
-                  onPress={() => toggle(item.id, item.faitAujourdhui)}
+                  onPress={async () => {
+                    await toggle(item.id, item.faitAujourdhui);
+                    await chargerPropositions();
+                  }}
                 >
                   <Text style={[styles.texteItem, { color: t.textPrimary }]}>
                     {item.faitAujourdhui ? "✓ " : "○ "}
@@ -320,7 +442,9 @@ export default function Index() {
           style={styles.modalOverlay}
           onPress={() => setPopupAncre(null)}
         >
-          <Pressable style={[styles.modalContenu, { backgroundColor: t.bgApp }]}>
+          <Pressable
+            style={[styles.modalContenu, { backgroundColor: t.bgApp }]}
+          >
             <Text style={[styles.modalTitre, { color: t.textPrimary }]}>
               {popupAncre?.position === "avant"
                 ? "Avant quel moment ?"
@@ -369,6 +493,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: spacing.lg,
   },
+  enteteToutVoir: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  retourTexte: {
+    fontSize: typography.body,
+    fontWeight: "600",
+    marginBottom: spacing.lg,
+  },
   bandeauStats: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -377,6 +511,43 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   statTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
+
+  // Cartes de proposition
+  carte: {
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  carteEntete: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  puceRaison: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  puceRaisonTexte: {
+    fontSize: typography.tiny,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  carteDuree: { fontSize: typography.small },
+  carteNom: { fontSize: typography.h3, fontWeight: "600" },
+  cartePremiereAction: {
+    fontSize: typography.small,
+    marginTop: 6,
+    lineHeight: 19,
+  },
+  toutVoir: {
+    padding: spacing.lg,
+    alignItems: "center",
+  },
+  toutVoirTexte: { fontSize: typography.body, fontWeight: "600" },
+
+  // Formulaire d'ajout
   formulaire: {
     flexDirection: "row",
     marginBottom: spacing.md,
