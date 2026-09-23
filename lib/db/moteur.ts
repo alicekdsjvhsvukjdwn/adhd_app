@@ -1,5 +1,5 @@
 import type { Categorie } from "../catalogue";
-import { equilibreParCategorie } from "./categories";
+import { categorieEffective, equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { logDecisions, type Composantes, type Decision } from "./decisions";
@@ -8,7 +8,8 @@ import { traiterNegligence } from "./negligence";
 /**
  * Le moteur de tri : "l'utilisateur dépose, l'appli décide".
  *
- * Chaque item actif non fait aujourd'hui reçoit un score entre 0 et 1,
+ * Chaque tâche active non faite aujourd'hui reçoit un score entre 0 et 1,
+ * (les routines, elles, sont affichées par moment et ne sont pas triées),
  * somme pondérée de six composantes normalisées. On garde le haut du
  * classement, en réservant une place à un item négligé (exploration),
  * pour que l'écran ne soit jamais figé et que rien ne meure de faim.
@@ -85,26 +86,18 @@ export type Proposition = {
   raison: string;
 };
 
-/** Dernier check-in d'état du jour, fenêtre courante en priorité (bascule 15 h). */
+/**
+ * Énergie du check-in le plus récent de la journée.
+ * Celle d'hier ne dit rien de maintenant : sans check-in du jour, neutre.
+ */
 async function dernierEtatEnergie(): Promise<number | null> {
   const db = await getDatabase();
-  const date = getAujourdhui();
-  const fenetre = new Date().getHours() < 15 ? "matin" : "soir";
-
-  const cible = await db.getFirstAsync<{ energie: number }>(
-    `SELECT energie FROM etat WHERE date = ? AND fenetre = ?
-     ORDER BY horodatage DESC LIMIT 1`,
-    date,
-    fenetre,
-  );
-  if (cible) return cible.energie;
-
-  const nimporte = await db.getFirstAsync<{ energie: number }>(
+  const row = await db.getFirstAsync<{ energie: number }>(
     `SELECT energie FROM etat WHERE date = ?
      ORDER BY horodatage DESC LIMIT 1`,
-    date,
+    getAujourdhui(),
   );
-  return nimporte?.energie ?? null;
+  return row?.energie ?? null;
 }
 
 /** Effort perçu de l'item, ramené dans [0, 1]. Neutre (0.5) si rien de connu. */
@@ -183,7 +176,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
      LEFT JOIN ancres a ON a.id = i.ancre_id
      LEFT JOIN completions c ON c.item_id = i.id AND c.date = ?
      WHERE i.statut = 'actif'
-       AND i.type IN ('routine', 'tache')
+       AND i.type = 'tache'
        AND c.id IS NULL`,
     date,
   );
@@ -261,18 +254,9 @@ export async function genererPropositions(): Promise<Proposition[]> {
   return propositions;
 }
 
-/** Catégorie effective sans requête : colonne, sinon score neutre. */
+/** Catégorie effective : colonne de l'item, sinon celle du catalogue. */
 function categorieEffectiveLocale(c: CandidatRow): Categorie | null {
-  const valides: Categorie[] = [
-    "sommeil",
-    "mouvement",
-    "organisation",
-    "focus",
-  ];
-  if (c.categorie && (valides as string[]).includes(c.categorie)) {
-    return c.categorie as Categorie;
-  }
-  return null;
+  return categorieEffective(c.categorie, c.template_id);
 }
 
 function construire(

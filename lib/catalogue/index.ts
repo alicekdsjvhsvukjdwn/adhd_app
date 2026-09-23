@@ -43,6 +43,8 @@ export const LIBELLES_CATEGORIES: Record<Categorie, string> = {
   mouvement: "Corps et mouvement",
   organisation: "Organisation du quotidien",
   focus: "Concentration et démarrage",
+  // Pas encore de familles au catalogue : sert aux tâches et routines libres.
+  competences: "Compétences et pratiques",
 };
 
 /**

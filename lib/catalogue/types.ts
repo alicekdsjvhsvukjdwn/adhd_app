@@ -1,4 +1,9 @@
-export type Categorie = "sommeil" | "mouvement" | "organisation" | "focus";
+export type Categorie =
+  | "sommeil"
+  | "mouvement"
+  | "organisation"
+  | "focus"
+  | "competences";
 
 export type Moment =
   | "reveil"

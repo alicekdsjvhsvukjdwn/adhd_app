@@ -1,32 +1,38 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { checkinManquant, type Fenetre } from "../lib/db";
+import { checkinPropose } from "../lib/db";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
  * Bandeau d'invitation au check-in d'état.
  *
- * Règles : une seule ligne, jamais un modal, et refusable. Un écarté reste
- * écarté jusqu'au changement de fenêtre (matin/soir) ou au redémarrage —
- * une invitation qui revient après un refus devient du harcèlement.
+ * Règles : une seule ligne, jamais un modal, et refusable. Il apparaît
+ * au plus 3 fois par jour, avec au moins 3 h d'écart (voir etat.ts).
+ * Écarté par la croix, il ne revient pas avant une heure : une invitation
+ * qui revient aussitôt après un refus devient du harcèlement.
  */
-let ecarteePour: Fenetre | null = null;
+const PAUSE_APRES_REFUS_MS = 60 * 60 * 1000;
+let ecarteJusqua = 0;
 
 export function BandeauEtat() {
   const router = useRouter();
   const t = useTheme();
-  const [fenetre, setFenetre] = useState<Fenetre | null>(null);
+  const [visible, setVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      checkinManquant().then((f) => {
-        setFenetre(f && f !== ecarteePour ? f : null);
+      let actif = true;
+      checkinPropose().then((propose) => {
+        if (actif) setVisible(propose && Date.now() >= ecarteJusqua);
       });
+      return () => {
+        actif = false;
+      };
     }, []),
   );
 
-  if (!fenetre) return null;
+  if (!visible) return null;
 
   return (
     <View style={[styles.bandeau, { backgroundColor: t.bgCard }]}>
@@ -35,7 +41,7 @@ export function BandeauEtat() {
         onPress={() => router.push("/etat")}
       >
         <Text style={[styles.texte, { color: t.textPrimary }]}>
-          Comment ça va, {fenetre === "matin" ? "ce matin" : "ce soir"} ?
+          Comment ça va, là ?
         </Text>
         <Text style={[styles.sousTexte, { color: t.textMuted }]}>
           Trois taps
@@ -45,8 +51,8 @@ export function BandeauEtat() {
       <TouchableOpacity
         style={styles.fermer}
         onPress={() => {
-          ecarteePour = fenetre;
-          setFenetre(null);
+          ecarteJusqua = Date.now() + PAUSE_APRES_REFUS_MS;
+          setVisible(false);
         }}
         hitSlop={12}
       >

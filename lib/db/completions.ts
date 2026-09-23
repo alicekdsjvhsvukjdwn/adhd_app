@@ -1,11 +1,17 @@
+import type { Categorie } from "../catalogue";
+import { categorieEffective } from "./categories";
 import { getDatabase } from "./client";
-import { rafraichirObservations, reinitialiserPropositionSansAction } from "./items";
+import {
+  rafraichirObservations,
+  reinitialiserPropositionSansAction,
+} from "./items";
 
 export type StatutCompletion = "complet" | "partiel";
 
 /**
- * Forme conservée à l'identique pour ne pas casser l'UI existante
- * (useRoutines, écran Aujourd'hui).
+ * Forme conservée pour l'UI (useRoutines, écran Aujourd'hui), enrichie
+ * de la catégorie (pour la pastille) et du moment propre à l'item
+ * (pour le regroupement matin/aprem/soir même sans ancre).
  */
 export type RoutineAvecStatut = {
   id: number;
@@ -14,6 +20,8 @@ export type RoutineAvecStatut = {
   statutDuJour: StatutCompletion | null;
   premiere_action: string | null;
   duree_min: number | null;
+  categorie: Categorie | null;
+  moment: string | null;
   ancre_id: number | null;
   ancre_nom: string | null;
   ancre_moment: string | null;
@@ -36,7 +44,9 @@ const ORDRE_MOMENT = `
     ELSE 7
   END`;
 
-export async function getRoutinesAvecStatutDuJour(): Promise<RoutineAvecStatut[]> {
+export async function getRoutinesAvecStatutDuJour(): Promise<
+  RoutineAvecStatut[]
+> {
   const db = await getDatabase();
   const aujourdhui = getAujourdhui();
 
@@ -46,12 +56,16 @@ export async function getRoutinesAvecStatutDuJour(): Promise<RoutineAvecStatut[]
     statut_jour: StatutCompletion | null;
     premiere_action: string | null;
     duree_min: number | null;
+    categorie: string | null;
+    template_id: string | null;
+    moment: string | null;
     ancre_id: number | null;
     ancre_nom: string | null;
     ancre_moment: string | null;
     ancre_position: "avant" | "apres" | null;
   }>(
     `SELECT i.id, i.nom, i.premiere_action, i.duree_min,
+            i.categorie, i.template_id, i.moment,
             i.ancre_id, i.ancre_position,
             a.nom AS ancre_nom, a.moment AS ancre_moment,
             c.statut AS statut_jour
@@ -70,6 +84,8 @@ export async function getRoutinesAvecStatutDuJour(): Promise<RoutineAvecStatut[]
     statutDuJour: r.statut_jour,
     premiere_action: r.premiere_action,
     duree_min: r.duree_min,
+    categorie: categorieEffective(r.categorie, r.template_id),
+    moment: r.moment,
     ancre_id: r.ancre_id,
     ancre_nom: r.ancre_nom,
     ancre_moment: r.ancre_moment,
@@ -114,6 +130,16 @@ export async function completer(
     now.toISOString(),
   );
 
+  // Une tâche ponctuelle faite est terminée : elle ne revient pas le lendemain.
+  // Les routines, elles, restent actives (récurrentes).
+  if (statut === "complet") {
+    await db.runAsync(
+      "UPDATE items SET statut = 'termine', maj_le = ? WHERE id = ? AND type = 'tache'",
+      now.toISOString(),
+      itemId,
+    );
+  }
+
   const { addPoints } = await import("./stats");
   const delta = POINTS[statut] - (existante ? POINTS[existante.statut] : 0);
   if (delta !== 0) await addPoints(delta);
@@ -130,9 +156,15 @@ export async function completer(
   await rafraichirObservations(itemId);
 }
 
-export async function annulerCompletion(itemId: number) {
+/**
+ * Annule une complétion. Par défaut celle d'aujourd'hui ; une date passée
+ * permet de corriger une tâche cochée par erreur depuis l'écran Progression.
+ */
+export async function annulerCompletion(
+  itemId: number,
+  date: string = getAujourdhui(),
+) {
   const db = await getDatabase();
-  const date = getAujourdhui();
 
   const existante = await db.getFirstAsync<{ statut: StatutCompletion }>(
     "SELECT statut FROM completions WHERE item_id = ? AND date = ?",
@@ -145,6 +177,13 @@ export async function annulerCompletion(itemId: number) {
     "DELETE FROM completions WHERE item_id = ? AND date = ?",
     itemId,
     date,
+  );
+
+  // Annuler la complétion d'une tâche la remet dans la file.
+  await db.runAsync(
+    "UPDATE items SET statut = 'actif', maj_le = ? WHERE id = ? AND type = 'tache' AND statut = 'termine'",
+    new Date().toISOString(),
+    itemId,
   );
 
   const { addPoints } = await import("./stats");

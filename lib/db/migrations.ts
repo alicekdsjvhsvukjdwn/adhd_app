@@ -215,6 +215,58 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 5,
+    nom: "check-in d'état sans créneau fixe (heure exacte)",
+    run: async (db) => {
+      // Plus de créneau matin/soir ni de limite à une mesure par créneau :
+      // on enregistre l'heure exacte, le moment de la journée est déduit
+      // à l'affichage selon les données réellement disponibles.
+      await db.execAsync(`
+        CREATE TABLE etat_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+
+          -- heure locale décimale (14.5 = 14 h 30)
+          heure REAL NOT NULL,
+
+          -- 1 = bas, 2 = moyen, 3 = haut
+          energie INTEGER NOT NULL,
+          focus INTEGER NOT NULL,
+          humeur INTEGER NOT NULL,
+
+          horodatage TEXT NOT NULL
+        );
+
+        INSERT INTO etat_v2 (id, date, heure, energie, focus, humeur, horodatage)
+        SELECT id, date,
+               CASE fenetre WHEN 'matin' THEN 10 ELSE 19 END,
+               energie, focus, humeur, horodatage
+        FROM etat;
+
+        DROP TABLE etat;
+        ALTER TABLE etat_v2 RENAME TO etat;
+
+        CREATE INDEX idx_etat_date ON etat(date);
+      `);
+
+      // L'heure réelle des anciens check-ins est dans l'horodatage (UTC) :
+      // JavaScript connaît le fuseau du téléphone, SQLite non.
+      const anciens = await db.getAllAsync<{ id: number; horodatage: string }>(
+        "SELECT id, horodatage FROM etat",
+      );
+      for (const r of anciens) {
+        const d = new Date(r.horodatage);
+        if (isNaN(d.getTime())) continue;
+        await db.runAsync(
+          "UPDATE etat SET heure = ? WHERE id = ?",
+          d.getHours() + d.getMinutes() / 60,
+          r.id,
+        );
+      }
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -1,123 +1,158 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FlatList,
-  Modal,
-  Pressable,
-  SafeAreaView,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { BandeauEtat } from "../../components/BandeauEtat";
 import { useRoutines } from "../../hooks/useRoutines";
-import { getPreferences } from "../../lib/db";
+import type { Categorie } from "../../lib/catalogue";
+import { annulerCompletion, deleteItem, getPreferences } from "../../lib/db";
+import { completionsParCategorieJour } from "../../lib/db/categories";
+import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
+import {
+  ICONES_CATEGORIE,
+  ORDRE_CATEGORIES,
+  useCouleurCategorie
+} from "../../lib/theme-categories";
 
-const LIBELLES_MOMENTS: Record<string, string> = {
-  matin: "Matin",
-  midi: "Midi",
-  apres_midi: "Après-midi",
-  soir: "Soir",
-  sans_ancre: "Sans moment repère",
+// Regroupe les moments fins du catalogue en trois blocs lisibles.
+const BLOC_PAR_MOMENT: Record<string, string> = {
+  reveil: "matin",
+  matin: "matin",
+  midi: "apres_midi",
+  apres_midi: "apres_midi",
+  "apres-midi": "apres_midi",
+  soir: "soir",
+  coucher: "soir",
 };
 
-export default function Index() {
-  const {
-    routines,
-    ancresActives,
-    stats,
-    preferences,
-    toggle,
-    ajouter,
-    supprimer,
-    changerAncre,
-    recharger,
-  } = useRoutines();
+const ORDRE_BLOCS = ["matin", "apres_midi", "soir", "sans_ancre"];
 
-  const [propositions, setPropositions] = useState<Proposition[]>([]);
-  const [toutVoir, setToutVoir] = useState(false);
-  const [nouvelleRoutine, setNouvelleRoutine] = useState("");
-  const [ancreSelectionnee, setAncreSelectionnee] = useState<number | null>(
-    null,
-  );
-  const [popupAncre, setPopupAncre] = useState<{
-    routineId: number;
-    position: "avant" | "apres";
-  } | null>(null);
+const LIBELLES_BLOCS: Record<string, string> = {
+  matin: "Matin",
+  apres_midi: "Après-midi",
+  soir: "Soir",
+  sans_ancre: "À tout moment",
+};
+
+function blocDeRoutine(r: RoutineAvecStatut): string {
+  const m = r.ancre_moment || r.moment;
+  if (m && BLOC_PAR_MOMENT[m]) return BLOC_PAR_MOMENT[m];
+  return "sans_ancre";
+}
+
+export default function Index() {
+  const { routines, stats, preferences, toggle, supprimer, recharger } =
+    useRoutines();
+
+  const [taches, setTaches] = useState<Proposition[]>([]);
+  const [equilibreJour, setEquilibreJour] = useState<Record<
+    Categorie,
+    number
+  > | null>(null);
+
   const router = useRouter();
   const t = useTheme();
+  const couleurCat = useCouleurCategorie();
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
         const prefs = await getPreferences();
-        if (!prefs.onboardingFait) {
-          router.replace("/onboarding");
-        }
+        if (!prefs.onboardingFait) router.replace("/onboarding");
       })();
     }, [router]),
   );
 
-  const chargerPropositions = useCallback(async () => {
-    const toutes = await genererPropositions();
-    setPropositions(toutes.filter((p) => p.propose));
+  const chargerAnnexes = useCallback(async () => {
+    const props = await genererPropositions();
+    setTaches(props.filter((p) => p.propose));
+    setEquilibreJour(await completionsParCategorieJour());
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       recharger();
-      chargerPropositions();
-    }, [recharger, chargerPropositions]),
+      chargerAnnexes();
+    }, [recharger, chargerAnnexes]),
   );
 
-  const onCompleterProposition = async (itemId: number) => {
-    // Le moteur n'expose que des items non faits : on complète, puis on recalcule.
-    await toggle(itemId, false);
-    await chargerPropositions();
+  const onToggleRoutine = async (id: number, fait: boolean) => {
+    await toggle(id, fait);
+    await chargerAnnexes();
   };
 
-  const onAjouter = async () => {
-    if (nouvelleRoutine.trim().length === 0) return;
-    await ajouter(nouvelleRoutine, ancreSelectionnee);
-    setNouvelleRoutine("");
-    setAncreSelectionnee(null);
-    await chargerPropositions();
+  // Filet contre le tap par erreur : quelques secondes pour annuler.
+  const [annulable, setAnnulable] = useState<{
+    id: number;
+    nom: string;
+  } | null>(null);
+  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (minuteur.current) clearTimeout(minuteur.current);
+    },
+    [],
+  );
+
+  const onCompleterTache = async (id: number, nom: string) => {
+    await toggle(id, false);
+    await chargerAnnexes();
+    if (minuteur.current) clearTimeout(minuteur.current);
+    setAnnulable({ id, nom });
+    minuteur.current = setTimeout(() => setAnnulable(null), 6000);
   };
 
-  const parMoment = routines.reduce<Record<string, typeof routines>>(
+  const onAnnulerTache = async () => {
+    if (!annulable) return;
+    if (minuteur.current) clearTimeout(minuteur.current);
+    const id = annulable.id;
+    setAnnulable(null);
+    await annulerCompletion(id);
+    await recharger();
+    await chargerAnnexes();
+  };
+
+  const onSupprimerTache = (id: number, nom: string) => {
+    Alert.alert("Supprimer cette tâche ?", nom, [
+      { text: "Garder", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await deleteItem(id);
+          await chargerAnnexes();
+        },
+      },
+    ]);
+  };
+
+  // Regroupement des routines par bloc de moment.
+  const parBloc = routines.reduce<Record<string, RoutineAvecStatut[]>>(
     (acc, r) => {
-      const cle = r.ancre_moment || "sans_ancre";
-      if (!acc[cle]) acc[cle] = [];
-      acc[cle].push(r);
+      const b = blocDeRoutine(r);
+      (acc[b] ??= []).push(r);
       return acc;
     },
     {},
   );
+  const blocsAvecRoutines = ORDRE_BLOCS.filter((b) => parBloc[b]?.length > 0);
+  const nbRoutinesFaites = routines.filter((r) => r.faitAujourdhui).length;
 
-  const ordreMoments = ["matin", "midi", "apres_midi", "soir", "sans_ancre"];
-  const momentsAvecRoutines = ordreMoments.filter(
-    (m) => parMoment[m]?.length > 0,
-  );
-
-  const onChoisirAncrePourRoutine = async (ancreId: number) => {
-    if (!popupAncre) return;
-    await changerAncre(popupAncre.routineId, ancreId, popupAncre.position);
-    setPopupAncre(null);
-  };
-
-  // ─────────────────────────────────────────────────────────────
-  // Vue par défaut : les 3 propositions du moteur, rien d'autre.
-  // « L'utilisateur dépose, l'appli décide » — le masquage est la fonctionnalité.
-  // ─────────────────────────────────────────────────────────────
-  if (!toutVoir) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
+  return (
+    <View style={{ flex: 1, backgroundColor: t.bgApp }}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: t.bgApp }]}
+        contentContainerStyle={{ paddingBottom: spacing.xxxl }}
+      >
         <Text style={[styles.titre, { color: t.textPrimary }]}>
           Aujourd'hui
         </Text>
@@ -144,193 +179,47 @@ export default function Index() {
 
         <BandeauEtat />
 
-        <FlatList
-          data={propositions}
-          keyExtractor={(p) => String(p.itemId)}
-          contentContainerStyle={{ paddingTop: spacing.sm }}
-          ListEmptyComponent={
-            <TouchableOpacity
-              style={[styles.vide, { backgroundColor: t.bgCard }]}
-              onPress={() => router.push("/problemes")}
-            >
-              <Text style={[styles.videTitre, { color: t.textPrimary }]}>
-                Rien à faire pour l'instant
-              </Text>
-              <Text style={[styles.videTexte, { color: t.textSecondary }]}>
-                Dis ce qui te pose problème, l'appli propose quoi mettre en
-                place.
-              </Text>
-            </TouchableOpacity>
-          }
-          renderItem={({ item: p }) => (
-            <TouchableOpacity
-              style={[styles.carte, { backgroundColor: t.bgCard }]}
-              onPress={() => onCompleterProposition(p.itemId)}
-            >
-              <View style={styles.carteEntete}>
-                <View
-                  style={[
-                    styles.puceRaison,
-                    {
-                      backgroundColor: p.exploration
-                        ? t.bgHighlight
-                        : t.bgHighlight,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.puceRaisonTexte, { color: t.accentText }]}
+        {/* Indicateur d'équilibre : les catégories touchées aujourd'hui */}
+        {equilibreJour && (
+          <View style={styles.equilibre}>
+            {ORDRE_CATEGORIES.map((c) => {
+              const touche = (equilibreJour[c] ?? 0) > 0;
+              return (
+                <View key={c} style={styles.equilibreItem}>
+                  <View
+                    style={[
+                      styles.equilibrePastille,
+                      {
+                        backgroundColor: touche ? couleurCat(c) : t.bgCard,
+                        borderColor: couleurCat(c),
+                      },
+                    ]}
                   >
-                    {p.exploration ? "🔄 " : ""}
-                    {p.raison}
+                    <Text style={styles.equilibreIcone}>
+                      {ICONES_CATEGORIE[c]}
+                    </Text>
+                  </View>
+                  <Text style={[styles.equilibreLabel, { color: t.textMuted }]}>
+                    {equilibreJour[c] ?? 0}
                   </Text>
                 </View>
-                {p.duree_min ? (
-                  <Text style={[styles.carteDuree, { color: t.textMuted }]}>
-                    {p.duree_min} min
-                  </Text>
-                ) : null}
-              </View>
+              );
+            })}
+          </View>
+        )}
 
-              <Text style={[styles.carteNom, { color: t.textPrimary }]}>
-                ○ {p.nom}
-              </Text>
-
-              {p.premiere_action ? (
-                <Text
-                  style={[
-                    styles.cartePremiereAction,
-                    { color: t.textSecondary },
-                  ]}
-                >
-                  Commencer par : {p.premiere_action}
-                </Text>
-              ) : null}
-            </TouchableOpacity>
+        {/* Section routines, groupées par moment */}
+        <View style={styles.titreBlocLigne}>
+          <Text style={[styles.titreBloc, { color: t.textPrimary }]}>
+            Routines
+          </Text>
+          {routines.length > 0 && (
+            <Text style={[styles.compteur, { color: t.textMuted }]}>
+              {nbRoutinesFaites}/{routines.length}
+            </Text>
           )}
-        />
-
-        <TouchableOpacity
-          style={styles.toutVoir}
-          onPress={() => setToutVoir(true)}
-        >
-          <Text style={[styles.toutVoirTexte, { color: t.accentText }]}>
-            Tout voir
-          </Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // Vue « Tout voir » : la liste complète, l'ajout, les ancres.
-  // Sortie de secours toujours accessible, contre l'anxiété du masquage.
-  // ─────────────────────────────────────────────────────────────
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
-      <View style={styles.enteteToutVoir}>
-        <Text style={[styles.titre, { color: t.textPrimary }]}>
-          Toutes mes routines
-        </Text>
-        <TouchableOpacity onPress={() => setToutVoir(false)}>
-          <Text style={[styles.retourTexte, { color: t.accentText }]}>
-            ← Retour
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.formulaire}>
-        <TextInput
-          style={[
-            styles.input,
-            {
-              borderColor: t.border,
-              color: t.textPrimary,
-              backgroundColor: t.bgCard,
-            },
-          ]}
-          placeholder="Nouvelle routine..."
-          placeholderTextColor={t.textMuted}
-          value={nouvelleRoutine}
-          onChangeText={setNouvelleRoutine}
-          onSubmitEditing={onAjouter}
-          returnKeyType="done"
-        />
-        <TouchableOpacity
-          style={[styles.boutonAjouter, { backgroundColor: t.accent }]}
-          onPress={onAjouter}
-        >
-          <Text style={[styles.texteBoutonAjouter, { color: t.textOnAccent }]}>
-            +
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {ancresActives.length > 0 && nouvelleRoutine.length > 0 && (
-        <View style={styles.selecteurAncres}>
-          <Text style={[styles.selecteurTitre, { color: t.textSecondary }]}>
-            Après quel moment ?
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              style={[
-                styles.pastilleAncre,
-                {
-                  backgroundColor:
-                    ancreSelectionnee === null ? t.accent : t.bgCard,
-                },
-              ]}
-              onPress={() => setAncreSelectionnee(null)}
-            >
-              <Text
-                style={[
-                  styles.pastilleTexte,
-                  {
-                    color:
-                      ancreSelectionnee === null
-                        ? t.textOnAccent
-                        : t.textSecondary,
-                  },
-                ]}
-              >
-                Aucun
-              </Text>
-            </TouchableOpacity>
-            {ancresActives.map((a) => (
-              <TouchableOpacity
-                key={a.id}
-                style={[
-                  styles.pastilleAncre,
-                  {
-                    backgroundColor:
-                      ancreSelectionnee === a.id ? t.accent : t.bgCard,
-                  },
-                ]}
-                onPress={() => setAncreSelectionnee(a.id)}
-              >
-                <Text
-                  style={[
-                    styles.pastilleTexte,
-                    {
-                      color:
-                        ancreSelectionnee === a.id
-                          ? t.textOnAccent
-                          : t.textSecondary,
-                    },
-                  ]}
-                >
-                  {a.nom}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
         </View>
-      )}
-
-      <FlatList
-        data={momentsAvecRoutines}
-        keyExtractor={(m) => m}
-        ListEmptyComponent={
+        {blocsAvecRoutines.length === 0 ? (
           <TouchableOpacity
             style={[styles.vide, { backgroundColor: t.bgCard }]}
             onPress={() => router.push("/problemes")}
@@ -339,150 +228,192 @@ export default function Index() {
               Aucune routine pour l'instant
             </Text>
             <Text style={[styles.videTexte, { color: t.textSecondary }]}>
-              Dis ce qui te pose problème, l'appli propose quoi mettre en place.
+              Va dans Profil → Trouver une routine pour en mettre en place.
             </Text>
           </TouchableOpacity>
-        }
-        renderItem={({ item: moment }) => (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitre, { color: t.accentText }]}>
-              {LIBELLES_MOMENTS[moment]}
-            </Text>
-            {parMoment[moment].map((item) => (
-              <Swipeable
-                key={item.id}
-                renderLeftActions={() => (
-                  <View style={styles.actionsGauche}>
+        ) : (
+          blocsAvecRoutines.map((bloc) => (
+            <View key={bloc} style={styles.section}>
+              <Text style={[styles.sectionTitre, { color: t.accentText }]}>
+                {LIBELLES_BLOCS[bloc]}
+              </Text>
+              {parBloc[bloc].map((r) => (
+                <Swipeable
+                  key={r.id}
+                  renderRightActions={() => (
                     <TouchableOpacity
                       style={[
-                        styles.actionBouton,
-                        { backgroundColor: t.accentText },
+                        styles.boutonSupprimer,
+                        { backgroundColor: t.danger },
                       ]}
-                      onPress={() =>
-                        setPopupAncre({ routineId: item.id, position: "avant" })
-                      }
+                      onPress={() => supprimer(r.id)}
                     >
                       <Text
-                        style={[styles.actionTexte, { color: t.textOnAccent }]}
+                        style={[
+                          styles.texteSupprimer,
+                          { color: t.textOnAccent },
+                        ]}
                       >
-                        Avant
+                        Supprimer
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.actionBouton,
-                        { backgroundColor: t.accent },
-                      ]}
-                      onPress={() =>
-                        setPopupAncre({ routineId: item.id, position: "apres" })
-                      }
-                    >
-                      <Text
-                        style={[styles.actionTexte, { color: t.textOnAccent }]}
-                      >
-                        Après
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                renderRightActions={() => (
+                  )}
+                >
                   <TouchableOpacity
                     style={[
-                      styles.boutonSupprimer,
-                      { backgroundColor: t.danger },
+                      styles.routine,
+                      {
+                        backgroundColor: r.faitAujourdhui
+                          ? t.bgCardActive
+                          : t.bgCard,
+                      },
                     ]}
-                    onPress={() => supprimer(item.id)}
+                    onPress={() => onToggleRoutine(r.id, r.faitAujourdhui)}
                   >
+                    <View
+                      style={[
+                        styles.pastilleCat,
+                        {
+                          backgroundColor: r.categorie
+                            ? couleurCat(r.categorie)
+                            : t.border,
+                        },
+                      ]}
+                    />
                     <Text
-                      style={[styles.texteSupprimer, { color: t.textOnAccent }]}
+                      style={[
+                        styles.texteRoutine,
+                        {
+                          color: r.faitAujourdhui ? t.textMuted : t.textPrimary,
+                          textDecorationLine: r.faitAujourdhui
+                            ? "line-through"
+                            : "none",
+                        },
+                      ]}
                     >
-                      Supprimer
+                      {r.faitAujourdhui ? "✓ " : "○ "}
+                      {r.ancre_nom ? (
+                        <Text
+                          style={{ color: t.accentText, fontWeight: "600" }}
+                        >
+                          {r.ancre_position === "avant" ? "Avant" : "Après"}{" "}
+                          {r.ancre_nom.toLowerCase()} →{" "}
+                        </Text>
+                      ) : null}
+                      {r.nom}
                     </Text>
                   </TouchableOpacity>
-                )}
-              >
+                </Swipeable>
+              ))}
+            </View>
+          ))
+        )}
+
+        {/* Section tâches ponctuelles, triées par le moteur */}
+        <View style={styles.titreTachesLigne}>
+          <Text
+            style={[
+              styles.titreBloc,
+              { color: t.textPrimary, marginBottom: 0 },
+            ]}
+          >
+            Tâches
+          </Text>
+          <TouchableOpacity
+            style={[styles.boutonAjout, { backgroundColor: t.accent }]}
+            onPress={() => router.push("/nouvelle-tache")}
+            accessibilityLabel="Ajouter une tâche"
+          >
+            <Text style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}>
+              +
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {taches.length === 0 ? (
+          <Text style={[styles.tachesVide, { color: t.textMuted }]}>
+            Aucune tâche en cours. Appuie sur + pour en noter une.
+          </Text>
+        ) : (
+          taches.map((p) => (
+            <Swipeable
+              key={p.itemId}
+              renderRightActions={() => (
                 <TouchableOpacity
                   style={[
-                    styles.item,
-                    {
-                      backgroundColor: item.faitAujourdhui
-                        ? t.bgCardActive
-                        : t.bgCard,
-                    },
+                    styles.boutonSupprimerTache,
+                    { backgroundColor: t.danger },
                   ]}
-                  onPress={async () => {
-                    await toggle(item.id, item.faitAujourdhui);
-                    await chargerPropositions();
-                  }}
+                  onPress={() => onSupprimerTache(p.itemId, p.nom)}
                 >
-                  <Text style={[styles.texteItem, { color: t.textPrimary }]}>
-                    {item.faitAujourdhui ? "✓ " : "○ "}
-                    {item.ancre_nom ? (
-                      <Text style={{ color: t.accentText, fontWeight: "600" }}>
-                        {item.ancre_position === "avant" ? "Avant" : "Après"}{" "}
-                        {item.ancre_nom.toLowerCase()} →{" "}
-                      </Text>
-                    ) : null}
-                    {item.nom}
+                  <Text
+                    style={[styles.texteSupprimer, { color: t.textOnAccent }]}
+                  >
+                    Supprimer
                   </Text>
                 </TouchableOpacity>
-              </Swipeable>
-            ))}
-          </View>
-        )}
-      />
-
-      <Modal
-        visible={popupAncre !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPopupAncre(null)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setPopupAncre(null)}
-        >
-          <Pressable
-            style={[styles.modalContenu, { backgroundColor: t.bgApp }]}
-          >
-            <Text style={[styles.modalTitre, { color: t.textPrimary }]}>
-              {popupAncre?.position === "avant"
-                ? "Avant quel moment ?"
-                : "Après quel moment ?"}
-            </Text>
-            {ancresActives.length === 0 ? (
-              <Text style={[styles.modalVide, { color: t.textSecondary }]}>
-                Aucun moment repère actif. Va dans Profil pour en activer.
-              </Text>
-            ) : (
-              <ScrollView style={{ maxHeight: 300 }}>
-                {ancresActives.map((a) => (
-                  <TouchableOpacity
-                    key={a.id}
-                    style={[styles.modalItem, { borderBottomColor: t.border }]}
-                    onPress={() => onChoisirAncrePourRoutine(a.id)}
+              )}
+            >
+              <TouchableOpacity
+                style={[styles.carte, { backgroundColor: t.bgCard }]}
+                onPress={() => onCompleterTache(p.itemId, p.nom)}
+              >
+                <View style={styles.carteEntete}>
+                  <View
+                    style={[
+                      styles.puceRaison,
+                      { backgroundColor: t.bgHighlight },
+                    ]}
                   >
                     <Text
-                      style={[styles.modalItemTexte, { color: t.textPrimary }]}
+                      style={[styles.puceRaisonTexte, { color: t.accentText }]}
                     >
-                      {a.nom}
+                      {p.exploration ? "🔄 " : ""}
+                      {p.raison}
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-            <TouchableOpacity
-              style={styles.modalAnnuler}
-              onPress={() => setPopupAncre(null)}
-            >
-              <Text style={[styles.modalAnnulerTexte, { color: t.danger }]}>
-                Annuler
-              </Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </SafeAreaView>
+                  </View>
+                  {p.duree_min ? (
+                    <Text style={[styles.carteDuree, { color: t.textMuted }]}>
+                      {p.duree_min} min
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={[styles.carteNom, { color: t.textPrimary }]}>
+                  ○ {p.nom}
+                </Text>
+                {p.premiere_action ? (
+                  <Text
+                    style={[
+                      styles.cartePremiereAction,
+                      { color: t.textSecondary },
+                    ]}
+                  >
+                    Commencer par : {p.premiere_action}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
+            </Swipeable>
+          ))
+        )}
+      </ScrollView>
+
+      {annulable && (
+        <View
+          style={[styles.bandeauAnnuler, { backgroundColor: t.textPrimary }]}
+        >
+          <Text
+            style={[styles.bandeauTexte, { color: t.bgApp }]}
+            numberOfLines={1}
+          >
+            ✓ {annulable.nom}
+          </Text>
+          <TouchableOpacity onPress={onAnnulerTache} hitSlop={10}>
+            <Text style={[styles.bandeauAction, { color: t.bgApp }]}>
+              Annuler
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -490,16 +421,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
   titre: {
     fontSize: typography.h1,
-    fontWeight: "600",
-    marginBottom: spacing.lg,
-  },
-  enteteToutVoir: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  retourTexte: {
-    fontSize: typography.body,
     fontWeight: "600",
     marginBottom: spacing.lg,
   },
@@ -512,7 +433,69 @@ const styles = StyleSheet.create({
   },
   statTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
 
-  // Cartes de proposition
+  equilibre: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: spacing.md,
+  },
+  equilibreItem: { alignItems: "center", gap: 4 },
+  equilibrePastille: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  equilibreIcone: { fontSize: 18 },
+  equilibreLabel: { fontSize: typography.tiny, fontWeight: "600" },
+
+  section: { marginBottom: spacing.lg },
+  sectionTitre: {
+    fontSize: typography.tiny,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  routine: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  pastilleCat: { width: 10, height: 10, borderRadius: 5 },
+  texteRoutine: { fontSize: typography.body, flex: 1 },
+
+  titreBlocLigne: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+  },
+  titreBloc: {
+    fontSize: typography.h2,
+    fontWeight: "600",
+    marginBottom: spacing.md,
+  },
+  compteur: { fontSize: typography.bodySmall, fontWeight: "600" },
+  titreTachesLigne: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  boutonAjout: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  boutonAjoutTexte: { fontSize: 22, lineHeight: 24, fontWeight: "500" },
+  tachesVide: { fontSize: typography.small, fontStyle: "italic" },
+
   carte: {
     borderRadius: radius.lg,
     padding: spacing.lg,
@@ -541,72 +524,19 @@ const styles = StyleSheet.create({
     marginTop: 6,
     lineHeight: 19,
   },
-  toutVoir: {
-    padding: spacing.lg,
-    alignItems: "center",
-  },
-  toutVoirTexte: { fontSize: typography.body, fontWeight: "600" },
 
-  // Formulaire d'ajout
-  formulaire: {
-    flexDirection: "row",
-    marginBottom: spacing.md,
-    gap: spacing.sm,
+  vide: {
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: typography.body,
-  },
-  boutonAjouter: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  texteBoutonAjouter: { fontSize: 24, fontWeight: "400" },
-  selecteurAncres: { marginBottom: spacing.lg },
-  selecteurTitre: { fontSize: typography.small, marginBottom: spacing.sm },
-  pastilleAncre: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    marginRight: spacing.sm,
-  },
-  pastilleTexte: { fontSize: typography.small },
-  section: { marginBottom: spacing.lg },
-  sectionTitre: {
-    fontSize: typography.tiny,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    marginBottom: 6,
-  },
-  item: {
-    padding: spacing.lg,
-    borderRadius: radius.md,
-    marginBottom: spacing.sm,
-  },
-  texteItem: { fontSize: typography.body },
-  vide: { borderRadius: radius.lg, padding: spacing.xl },
   videTitre: {
     fontSize: typography.h3,
     fontWeight: "600",
     marginBottom: spacing.sm,
   },
   videTexte: { fontSize: typography.small, lineHeight: 19 },
-  actionsGauche: { flexDirection: "row", marginBottom: spacing.sm },
-  actionBouton: {
-    justifyContent: "center",
-    alignItems: "center",
-    width: 65,
-    borderRadius: radius.sm,
-    marginRight: 4,
-  },
-  actionTexte: { fontWeight: "600", fontSize: typography.tiny },
+
   boutonSupprimer: {
     justifyContent: "center",
     alignItems: "center",
@@ -616,35 +546,31 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   texteSupprimer: { fontWeight: "600", fontSize: typography.small },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+  boutonSupprimerTache: {
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 30,
-  },
-  modalContenu: {
+    width: 90,
     borderRadius: radius.lg,
-    padding: spacing.xl,
-    width: "100%",
-    maxWidth: 400,
-  },
-  modalTitre: {
-    fontSize: typography.h3,
-    fontWeight: "600",
-    marginBottom: spacing.lg,
-  },
-  modalVide: {
-    fontSize: typography.bodySmall,
-    lineHeight: 20,
     marginBottom: spacing.md,
+    marginLeft: 4,
   },
-  modalItem: { paddingVertical: 14, borderBottomWidth: 1 },
-  modalItemTexte: { fontSize: typography.body },
-  modalAnnuler: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
+  bandeauAnnuler: {
+    position: "absolute",
+    left: spacing.xl,
+    right: spacing.xl,
+    bottom: spacing.lg,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
   },
-  modalAnnulerTexte: { fontSize: typography.body, fontWeight: "500" },
+  bandeauTexte: { flex: 1, fontSize: typography.bodySmall },
+  bandeauAction: {
+    fontSize: typography.bodySmall,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
 });

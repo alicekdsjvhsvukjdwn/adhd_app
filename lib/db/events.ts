@@ -20,6 +20,8 @@ export type TypeEvenement =
   | "routine_ajoutee"
   | "routine_supprimee"
   | "routine_modifiee"
+  // check-in d'état
+  | "etat_enregistre"
   // notifications
   | "notification_recue"
   | "notification_tapee"
