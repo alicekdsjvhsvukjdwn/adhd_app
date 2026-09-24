@@ -47,10 +47,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="jardin"
+        name="infos"
         options={{
-          title: "Jardin",
-          tabBarIcon: ({ focused }) => <Icone symbole="🌳" actif={focused} />,
+          title: "Infos",
+          tabBarIcon: ({ focused }) => <Icone symbole="💡" actif={focused} />,
         }}
       />
       <Tabs.Screen

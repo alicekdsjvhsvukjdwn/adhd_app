@@ -209,15 +209,33 @@ export default function Index() {
         )}
 
         {/* Section routines, groupées par moment */}
-        <View style={styles.titreBlocLigne}>
-          <Text style={[styles.titreBloc, { color: t.textPrimary }]}>
+        <View style={styles.titreRoutinesLigne}>
+          <Text
+            style={[
+              styles.titreBloc,
+              { color: t.textPrimary, marginBottom: 0 },
+            ]}
+          >
             Routines
           </Text>
-          {routines.length > 0 && (
-            <Text style={[styles.compteur, { color: t.textMuted }]}>
-              {nbRoutinesFaites}/{routines.length}
-            </Text>
-          )}
+          <View style={styles.titreDroite}>
+            {routines.length > 0 && (
+              <Text style={[styles.compteur, { color: t.textMuted }]}>
+                {nbRoutinesFaites}/{routines.length}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.boutonAjout, { backgroundColor: t.accent }]}
+              onPress={() => router.push("/nouvelle-tache?type=routine")}
+              accessibilityLabel="Ajouter une routine"
+            >
+              <Text
+                style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}
+              >
+                +
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
         {blocsAvecRoutines.length === 0 ? (
           <TouchableOpacity
@@ -228,7 +246,7 @@ export default function Index() {
               Aucune routine pour l'instant
             </Text>
             <Text style={[styles.videTexte, { color: t.textSecondary }]}>
-              Va dans Profil → Trouver une routine pour en mettre en place.
+              Appuie sur + pour créer la tienne, ou touche ici pour des idées.
             </Text>
           </TouchableOpacity>
         ) : (
@@ -479,6 +497,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   compteur: { fontSize: typography.bodySmall, fontWeight: "600" },
+  titreRoutinesLigne: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  titreDroite: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   titreTachesLigne: {
     flexDirection: "row",
     justifyContent: "space-between",

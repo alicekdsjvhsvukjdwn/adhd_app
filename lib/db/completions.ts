@@ -32,6 +32,31 @@ export function getAujourdhui(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+/**
+ * Une routine est-elle attendue ce jour-là ? Règle unique, utilisée par
+ * l'accueil (quoi afficher) et par Progression (quoi compter).
+ * - jamais avant sa création
+ * - toujours le jour de sa création, pour la voir dès qu'on l'a ajoutée
+ * - 'jours:1,3,5' : ces jours de la semaine (0 = dimanche, convention JS)
+ * - 'hebdo' : le même jour de la semaine que sa création
+ * - sinon (quotidien) : tous les jours
+ */
+export function routineAttendueLe(
+  recurrence: string | null,
+  depuis: string,
+  iso: string,
+): boolean {
+  if (iso < depuis) return false;
+  if (iso === depuis) return true;
+  const jourDe = (d: string) => new Date(d + "T00:00:00Z").getUTCDay();
+  const r = recurrence ?? "quotidien";
+  if (r.startsWith("jours:")) {
+    return r.slice(6).split(",").map(Number).includes(jourDe(iso));
+  }
+  if (r === "hebdo") return jourDe(iso) === jourDe(depuis);
+  return true;
+}
+
 const ORDRE_MOMENT = `
   CASE COALESCE(a.moment, i.moment)
     WHEN 'reveil' THEN 1
@@ -59,6 +84,8 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     categorie: string | null;
     template_id: string | null;
     moment: string | null;
+    recurrence: string | null;
+    cree_le: string;
     ancre_id: number | null;
     ancre_nom: string | null;
     ancre_moment: string | null;
@@ -66,6 +93,7 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
   }>(
     `SELECT i.id, i.nom, i.premiere_action, i.duree_min,
             i.categorie, i.template_id, i.moment,
+            i.recurrence, i.cree_le,
             i.ancre_id, i.ancre_position,
             a.nom AS ancre_nom, a.moment AS ancre_moment,
             c.statut AS statut_jour
@@ -77,7 +105,13 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     aujourdhui,
   );
 
-  return rows.map((r) => ({
+  // Une routine « lun, mer, ven » n'apparaît que ces jours-là
+  // (et le jour de sa création, pour la voir tout de suite).
+  const duJour = rows.filter((r) =>
+    routineAttendueLe(r.recurrence, r.cree_le.slice(0, 10), aujourdhui),
+  );
+
+  return duJour.map((r) => ({
     id: r.id,
     nom: r.nom,
     faitAujourdhui: r.statut_jour !== null,

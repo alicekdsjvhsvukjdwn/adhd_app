@@ -1,7 +1,7 @@
 import type { Categorie } from "../catalogue";
 import { CATEGORIES, categorieEffective } from "./categories";
 import { getDatabase } from "./client";
-import { getAujourdhui } from "./completions";
+import { getAujourdhui, routineAttendueLe } from "./completions";
 import { trancheDeHeure, type Tranche } from "./etat";
 
 /**
@@ -69,16 +69,7 @@ async function routinesSuivies(): Promise<RoutineSuivie[]> {
  * Jamais avant sa création : c'est ce qui évite de gonfler le dénominateur.
  */
 function attenduCeJour(r: RoutineSuivie, iso: string): boolean {
-  if (iso < r.depuis) return false;
-  if (r.recurrence.startsWith("jours:")) {
-    const jours = r.recurrence.slice(6).split(",").map(Number);
-    return jours.includes(jourSemaine(iso));
-  }
-  if (r.recurrence === "hebdo") {
-    // Une fois par semaine : attendue le même jour que sa création.
-    return jourSemaine(iso) === jourSemaine(r.depuis);
-  }
-  return true; // quotidien
+  return routineAttendueLe(r.recurrence, r.depuis, iso);
 }
 
 type CompletionRow = {
