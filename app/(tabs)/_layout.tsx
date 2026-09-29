@@ -33,13 +33,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="pause"
-        options={{
-          title: "Pause",
-          tabBarIcon: ({ focused }) => <Icone symbole="⏳" actif={focused} />,
-        }}
-      />
-      <Tabs.Screen
         name="progression"
         options={{
           title: "Progression",

@@ -17,9 +17,9 @@ type Entree = {
 
 const ENTREES: Entree[] = [
   {
-    titre: "Trouver une routine",
-    description: "Par ce qui te pose problème, ou par recherche.",
-    route: "/problemes",
+    titre: "Ajouter des routines",
+    description: "À partir de ce qui est difficile en ce moment.",
+    route: "/mise-en-place",
   },
   {
     titre: "Mes moments repères",
@@ -37,9 +37,9 @@ const ENTREES: Entree[] = [
     route: "/etat",
   },
   {
-    titre: "Refaire l'onboarding",
-    description: "Rechoisir ton profil et tes préférences.",
-    route: "/onboarding",
+    titre: "Réglages",
+    description: "Points et séries affichés sur l'accueil.",
+    route: "/reglages",
   },
 ];
 

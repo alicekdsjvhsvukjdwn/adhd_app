@@ -21,6 +21,7 @@ export const CATEGORIES: Categorie[] = [
   "organisation",
   "focus",
   "competences",
+  "emotions",
 ];
 
 /** Catégorie réelle d'un item : sa colonne, ou à défaut celle du catalogue. */
@@ -91,6 +92,7 @@ function agreger(
     organisation: 0,
     focus: 0,
     competences: 0,
+    emotions: 0,
   };
   for (const r of rows) {
     const cat = categorieEffective(r.categorie, r.template_id);
@@ -132,6 +134,7 @@ export async function equilibreParCategorie(
     organisation: 0.5,
     focus: 0.5,
     competences: 0.5,
+    emotions: 0.5,
   };
   for (const c of CATEGORIES) {
     if (!presentes.has(c) || partEquitable <= 0) {

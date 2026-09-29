@@ -15,22 +15,25 @@ const COULEURS: Record<Categorie, CouleurCategorie> = {
   organisation: { clair: "#7a8a4a", sombre: "#c7cd9c" }, // olive
   focus: { clair: "#c99a3a", sombre: "#e0c47a" }, // ocre / moutarde
   competences: { clair: "#9a6a8a", sombre: "#c9a3bd" }, // prune
+  emotions: { clair: "#4a8a86", sombre: "#9fcfcb" }, // bleu-vert
 };
 
 export const LIBELLES_CATEGORIE: Record<Categorie, string> = {
   sommeil: "Sommeil",
-  mouvement: "Mouvement",
+  mouvement: "Corps",
   organisation: "Organisation",
   focus: "Focus",
   competences: "Compétences",
+  emotions: "Émotions",
 };
 
 export const ICONES_CATEGORIE: Record<Categorie, string> = {
   sommeil: "🌙",
-  mouvement: "🏃",
+  mouvement: "🌿",
   organisation: "🗂️",
   focus: "🎯",
   competences: "🎨",
+  emotions: "💭",
 };
 
 export const ORDRE_CATEGORIES: Categorie[] = [
@@ -38,6 +41,7 @@ export const ORDRE_CATEGORIES: Categorie[] = [
   "mouvement",
   "organisation",
   "focus",
+  "emotions",
   "competences",
 ];
 

@@ -3,7 +3,8 @@ export type Categorie =
   | "mouvement"
   | "organisation"
   | "focus"
-  | "competences";
+  | "competences"
+  | "emotions";
 
 export type Moment =
   | "reveil"
@@ -36,6 +37,8 @@ export type FamilleTemplate = {
   /** Synonymes pour la recherche. */
   mots_cles: string[];
   moment: Moment;
+  /** Récurrence de la routine créée. Absent = tous les jours. */
+  recurrence?: string;
   ancre_suggeree: string | null;
   variantes: VarianteTemplate[];
   contre_indication: string | null;

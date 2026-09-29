@@ -2,9 +2,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -12,8 +14,13 @@ import { Swipeable } from "react-native-gesture-handler";
 import { BandeauEtat } from "../../components/BandeauEtat";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { useRoutines } from "../../hooks/useRoutines";
-import type { Categorie } from "../../lib/catalogue";
-import { annulerCompletion, deleteItem, getPreferences } from "../../lib/db";
+import { deviner, type Categorie } from "../../lib/catalogue";
+import {
+  addItem,
+  annulerCompletion,
+  deleteItem,
+  getPreferences,
+} from "../../lib/db";
 import { completionsParCategorieJour } from "../../lib/db/categories";
 import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
@@ -88,6 +95,27 @@ export default function Index() {
 
   const onToggleRoutine = async (id: number, fait: boolean) => {
     await toggle(id, fait);
+    await chargerAnnexes();
+  };
+
+  // Noter une tâche en une ligne.
+  const [nouvelleTache, setNouvelleTache] = useState("");
+  const [tacheNotee, setTacheNotee] = useState<string | null>(null);
+  const minuteurNotee = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onNoterTache = async () => {
+    const nom = nouvelleTache.trim();
+    if (!nom) return;
+    await addItem({
+      nom,
+      type: "tache",
+      categorie: deviner(nom)?.categorie ?? null,
+    });
+    setNouvelleTache("");
+    Keyboard.dismiss();
+    setTacheNotee(nom);
+    if (minuteurNotee.current) clearTimeout(minuteurNotee.current);
+    minuteurNotee.current = setTimeout(() => setTacheNotee(null), 4000);
     await chargerAnnexes();
   };
 
@@ -169,6 +197,7 @@ export default function Index() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         style={[styles.container, { backgroundColor: t.bgApp }]}
         contentContainerStyle={{ paddingBottom: spacing.xxxl }}
       >
@@ -252,8 +281,8 @@ export default function Index() {
             )}
             <TouchableOpacity
               style={[styles.boutonAjout, { backgroundColor: t.accent }]}
-              onPress={() => router.push("/nouvelle-tache?type=routine")}
-              accessibilityLabel="Ajouter une routine"
+              onPress={() => router.push("/mise-en-place")}
+              accessibilityLabel="Ajouter des routines"
             >
               <Text
                 style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}
@@ -266,13 +295,13 @@ export default function Index() {
         {blocsAvecRoutines.length === 0 ? (
           <TouchableOpacity
             style={[styles.vide, { backgroundColor: t.bgCard }]}
-            onPress={() => router.push("/problemes")}
+            onPress={() => router.push("/mise-en-place")}
           >
             <Text style={[styles.videTitre, { color: t.textPrimary }]}>
               Aucune routine pour l'instant
             </Text>
             <Text style={[styles.videTexte, { color: t.textSecondary }]}>
-              Appuie sur + pour créer la tienne, ou touche ici pour des idées.
+              Touche ici pour les mettre en place en quelques secondes.
             </Text>
           </TouchableOpacity>
         ) : (
@@ -383,19 +412,65 @@ export default function Index() {
           >
             Tâches
           </Text>
+        </View>
+
+        {/* Noter une tâche en une ligne : l'appli devine le domaine et la trie */}
+        <View style={styles.ajoutRapide}>
+          <TextInput
+            style={[
+              styles.ajoutChamp,
+              {
+                backgroundColor: t.bgCard,
+                borderColor: t.border,
+                color: t.textPrimary,
+              },
+            ]}
+            placeholder="Une tâche à noter"
+            placeholderTextColor={t.textMuted}
+            value={nouvelleTache}
+            onChangeText={setNouvelleTache}
+            onSubmitEditing={onNoterTache}
+            returnKeyType="done"
+          />
           <TouchableOpacity
-            style={[styles.boutonAjout, { backgroundColor: t.accent }]}
-            onPress={() => router.push("/nouvelle-tache")}
-            accessibilityLabel="Ajouter une tâche"
+            style={[styles.ajoutBouton, { backgroundColor: t.accent }]}
+            onPress={onNoterTache}
           >
-            <Text style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}>
-              +
+            <Text style={[styles.ajoutBoutonTexte, { color: t.textOnAccent }]}>
+              Noter
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.ajoutPied}>
+          {tacheNotee ? (
+            <Text
+              style={[styles.ajoutConfirmation, { color: t.textSecondary }]}
+            >
+              ✓ « {tacheNotee} » est notée.
+            </Text>
+          ) : (
+            <View />
+          )}
+          <TouchableOpacity
+            onPress={() => {
+              const n = nouvelleTache.trim();
+              setNouvelleTache("");
+              router.push(
+                n
+                  ? `/nouvelle-tache?nom=${encodeURIComponent(n)}`
+                  : "/nouvelle-tache",
+              );
+            }}
+            hitSlop={8}
+          >
+            <Text style={[styles.ajoutOptions, { color: t.accentText }]}>
+              Plus d'options
             </Text>
           </TouchableOpacity>
         </View>
         {taches.length === 0 ? (
           <Text style={[styles.tachesVide, { color: t.textMuted }]}>
-            Aucune tâche en cours. Appuie sur + pour en noter une.
+            Aucune tâche en cours.
           </Text>
         ) : (
           taches.map((p) => (
@@ -582,6 +657,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   boutonAjoutTexte: { fontSize: 22, lineHeight: 24, fontWeight: "500" },
+  ajoutRapide: { flexDirection: "row", gap: spacing.sm },
+  ajoutChamp: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: typography.body,
+  },
+  ajoutBouton: {
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+  },
+  ajoutBoutonTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
+  ajoutPied: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+    marginBottom: spacing.md,
+    minHeight: 18,
+  },
+  ajoutConfirmation: {
+    flex: 1,
+    fontSize: typography.small,
+    marginRight: spacing.md,
+  },
+  ajoutOptions: { fontSize: typography.small, fontWeight: "600" },
   tachesVide: { fontSize: typography.small, fontStyle: "italic" },
 
   carte: {

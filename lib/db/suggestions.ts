@@ -246,7 +246,7 @@ export async function suggestionDuJour(): Promise<Suggestion | null> {
           titre: `« ${r.nom} » tient depuis trois semaines. Ajouter une nouvelle routine ?`,
           explication: `Faite ${fois(long.faits, long.prevus)}. Une habitude installée libère de la place pour la suivante.`,
           accepter: "Choisir une routine",
-          route: "/problemes",
+          route: "/mise-en-place",
         });
       }
     }

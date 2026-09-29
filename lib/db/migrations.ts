@@ -295,6 +295,22 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 7,
+    nom: "difficultés choisies à la mise en place",
+    run: async (db) => {
+      // Ce que la personne a dit trouver difficile : sert à marquer ses choix
+      // précédents, et plus tard à choisir quoi proposer.
+      await db.execAsync(`
+        CREATE TABLE difficultes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          difficulte_id TEXT NOT NULL UNIQUE,
+          choisie_le TEXT NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

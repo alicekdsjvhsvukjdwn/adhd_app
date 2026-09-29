@@ -1,7 +1,13 @@
+import { FAMILLES_COMPETENCES } from "./familles/competences";
+import { FAMILLES_CORPS } from "./familles/corps";
+import { FAMILLES_DEMARRER } from "./familles/demarrer";
+import { FAMILLES_EMOTIONS } from "./familles/emotions";
 import { FAMILLES_FOCUS } from "./familles/focus";
 import { FAMILLES_MOUVEMENT } from "./familles/mouvement";
 import { FAMILLES_ORGANISATION } from "./familles/organisation";
+import { FAMILLES_QUOTIDIEN } from "./familles/quotidien";
 import { FAMILLES_SOMMEIL } from "./familles/sommeil";
+import { FAMILLES_TEMPS } from "./familles/temps";
 import type { Categorie, FamilleTemplate, VarianteTemplate } from "./types";
 
 export * from "./types";
@@ -14,8 +20,14 @@ export * from "./types";
 export const CATALOGUE: FamilleTemplate[] = [
   ...FAMILLES_SOMMEIL,
   ...FAMILLES_MOUVEMENT,
+  ...FAMILLES_CORPS,
   ...FAMILLES_ORGANISATION,
+  ...FAMILLES_TEMPS,
+  ...FAMILLES_QUOTIDIEN,
   ...FAMILLES_FOCUS,
+  ...FAMILLES_DEMARRER,
+  ...FAMILLES_EMOTIONS,
+  ...FAMILLES_COMPETENCES,
 ];
 
 export function getFamille(id: string): FamilleTemplate | undefined {
@@ -40,11 +52,12 @@ export function tousLesProblemes(): string[] {
 
 export const LIBELLES_CATEGORIES: Record<Categorie, string> = {
   sommeil: "Sommeil et réveil",
-  mouvement: "Corps et mouvement",
+  mouvement: "Corps et santé",
   organisation: "Organisation du quotidien",
   focus: "Concentration et démarrage",
   // Pas encore de familles au catalogue : sert aux tâches et routines libres.
   competences: "Compétences et pratiques",
+  emotions: "Émotions et charge mentale",
 };
 
 /**

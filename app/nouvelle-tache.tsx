@@ -131,14 +131,18 @@ export default function Ajouter() {
   const router = useRouter();
   const t = useTheme();
   const couleurCat = useCouleurCategorie();
-  const params = useLocalSearchParams<{ type?: string; id?: string }>();
+  const params = useLocalSearchParams<{
+    type?: string;
+    id?: string;
+    nom?: string;
+  }>();
   const idModifie = params.id ? Number(params.id) : null;
   const [typeInitial, setTypeInitial] = useState<Mode | null>(null);
 
   const [mode, setMode] = useState<Mode>(
     params.type === "routine" ? "routine" : "tache",
   );
-  const [nom, setNom] = useState("");
+  const [nom, setNom] = useState(params.nom ?? "");
   const [categorie, setCategorie] = useState<Categorie | null>(null);
   const [duree, setDuree] = useState<number | null>(null);
   const [premiereAction, setPremiereAction] = useState("");
