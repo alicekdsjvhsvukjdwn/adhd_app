@@ -3,25 +3,19 @@ import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import {
-  initAncres,
-  initPreferences,
-  initStats,
-  logEvent,
-  runMigrations,
-} from "../lib/db";
+import { logEvent } from "../lib/db";
+import { initialiserBase } from "../lib/db/demarrage";
 
 export default function RootLayout() {
   const [pret, setPret] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
-  // Base de données : migrations d'abord, puis les tables annexes.
+  // Base de données : migrations, puis les tables annexes (voir demarrage.ts).
   // Rien ne s'affiche tant que ce n'est pas terminé.
   useEffect(() => {
     (async () => {
       try {
-        await runMigrations();
-        await Promise.all([initAncres(), initStats(), initPreferences()]);
+        await initialiserBase();
         setPret(true);
       } catch (e) {
         console.error("[db] initialisation impossible", e);

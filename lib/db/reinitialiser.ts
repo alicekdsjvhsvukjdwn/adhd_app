@@ -1,6 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { getDatabase, supprimerBase } from "./client";
-import { runMigrations } from "./migrations";
+import { initialiserBase } from "./demarrage";
 
 /**
  * Remet l'appli dans l'état d'une première installation :
@@ -29,6 +29,6 @@ export async function toutReinitialiser(): Promise<void> {
     await db.execAsync("PRAGMA user_version = 0");
   }
 
-  // Recrée les tables comme au premier lancement.
-  await runMigrations();
+  // Exactement ce que fait le démarrage de l'appli.
+  await initialiserBase();
 }
