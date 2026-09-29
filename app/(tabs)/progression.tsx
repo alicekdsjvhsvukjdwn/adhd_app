@@ -17,11 +17,13 @@ import {
   decalerJours,
   etatSelonMoment,
   intensiteJours,
+  mesureAdaptation,
   recapJour,
   tachesFaites,
   type AvanceeCategorie,
   type EtatSelonMoment,
   type EtatTranche,
+  type MesureAdaptation,
   type Periode,
   type RecapJour,
   type TacheFaite,
@@ -334,6 +336,7 @@ export default function Progression() {
   );
   const [annee, setAnnee] = useState<Record<string, number | null>>({});
   const [recap, setRecap] = useState<RecapJour | null>(null);
+  const [mesure, setMesure] = useState<MesureAdaptation | null>(null);
 
   const charger = useCallback(async () => {
     const [avancee, tf, e, cal, an] = await Promise.all([
@@ -346,6 +349,7 @@ export default function Progression() {
       ),
       intensiteJours(`${anneeCourante}-01-01`, `${anneeCourante}-12-31`),
     ]);
+    setMesure(await mesureAdaptation(14));
     setGlobal(avancee.global);
     setParCategorie(avancee.parCategorie);
     setTaches(tf);
@@ -604,6 +608,44 @@ export default function Progression() {
           </View>
         </View>
       )}
+
+      {/* Ce que l'appli apprend : ses propositions sont-elles utiles ? */}
+      {mesure &&
+        (mesure.propositions > 0 || mesure.suggestionsDecidees > 0) && (
+          <View
+            style={[
+              styles.carte,
+              { backgroundColor: t.bgCard, marginTop: spacing.lg },
+            ]}
+          >
+            <Text style={[styles.carteTitre, { color: t.textPrimary }]}>
+              Ce que l'appli apprend
+            </Text>
+            {mesure.propositions > 0 && (
+              <>
+                <Text style={[styles.mesureChiffre, { color: t.textPrimary }]}>
+                  {Math.round((mesure.faites / mesure.propositions) * 100)} %
+                </Text>
+                <Text style={[styles.carteTexte, { color: t.textSecondary }]}>
+                  des tâches proposées faites le jour même ({mesure.faites} sur{" "}
+                  {mesure.propositions}, 14 derniers jours)
+                </Text>
+              </>
+            )}
+            {mesure.suggestionsDecidees > 0 && (
+              <Text
+                style={[
+                  styles.carteTexte,
+                  { color: t.textSecondary, marginTop: spacing.sm },
+                ]}
+              >
+                Suggestions d'ajustement : {mesure.suggestionsAcceptees}{" "}
+                acceptée{mesure.suggestionsAcceptees > 1 ? "s" : ""} sur{" "}
+                {mesure.suggestionsDecidees}
+              </Text>
+            )}
+          </View>
+        )}
 
       {/* Calendrier du mois */}
       <View style={styles.enteteMois}>
@@ -1002,6 +1044,7 @@ const styles = StyleSheet.create({
   legendeTexte: { fontSize: 10 },
   legendeCase: { width: 12, height: 12, borderRadius: 2 },
 
+  mesureChiffre: { fontSize: 32, fontWeight: "300", marginTop: 4 },
   aideListe: { fontSize: typography.tiny, marginBottom: spacing.sm },
 
   barre: {

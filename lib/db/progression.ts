@@ -390,3 +390,46 @@ export async function recapJour(date: string): Promise<RecapJour> {
     checkins,
   };
 }
+
+export type MesureAdaptation = {
+  /** Tâches proposées par le moteur (première ouverture de chaque jour). */
+  propositions: number;
+  /** Parmi elles, celles faites le jour même. */
+  faites: number;
+  suggestionsDecidees: number;
+  suggestionsAcceptees: number;
+};
+
+/**
+ * Ce que l'appli peut dire de sa propre utilité : ses propositions sont-elles
+ * suivies, ses suggestions acceptées ? Ne prouve pas à elle seule que le tri
+ * aide (il faudrait une comparaison), mais permet de le suivre dans le temps.
+ */
+export async function mesureAdaptation(jours = 14): Promise<MesureAdaptation> {
+  const db = await getDatabase();
+  const debut = decalerJours(getAujourdhui(), -(jours - 1));
+
+  const p = await db.getFirstAsync<{ proposes: number; faits: number }>(
+    `SELECT
+       COUNT(DISTINCT d.date || '-' || d.item_id) AS proposes,
+       COUNT(DISTINCT CASE WHEN c.id IS NOT NULL
+             THEN d.date || '-' || d.item_id END) AS faits
+     FROM decision_log d
+     LEFT JOIN completions c ON c.item_id = d.item_id AND c.date = d.date
+     WHERE d.propose = 1 AND d.date >= ?`,
+    debut,
+  );
+
+  const s = await db.getFirstAsync<{ n: number; acceptees: number | null }>(
+    `SELECT COUNT(*) AS n,
+            SUM(CASE WHEN statut = 'acceptee' THEN 1 ELSE 0 END) AS acceptees
+     FROM suggestions`,
+  );
+
+  return {
+    propositions: p?.proposes ?? 0,
+    faites: p?.faits ?? 0,
+    suggestionsDecidees: s?.n ?? 0,
+    suggestionsAcceptees: s?.acceptees ?? 0,
+  };
+}

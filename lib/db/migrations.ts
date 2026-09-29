@@ -267,6 +267,34 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+
+  {
+    version: 6,
+    nom: "suggestions d'ajustement",
+    run: async (db) => {
+      // Les suggestions sont calculées à la volée ; on garde seulement les
+      // décisions, pour ne pas reproposer trop tôt et pour mesurer
+      // combien sont acceptées.
+      await db.execAsync(`
+        CREATE TABLE suggestions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+          -- type:item_id, ex. 'horaire:12'
+          cle TEXT NOT NULL,
+          -- 'horaire' | 'simplifier' | 'alleger' | 'monter' | 'ajouter'
+          type TEXT NOT NULL,
+          item_id INTEGER,
+
+          -- 'acceptee' | 'refusee'
+          statut TEXT NOT NULL,
+          date TEXT NOT NULL,
+          horodatage TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_suggestions_cle ON suggestions(cle);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { BandeauEtat } from "../../components/BandeauEtat";
+import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { useRoutines } from "../../hooks/useRoutines";
 import type { Categorie } from "../../lib/catalogue";
 import { annulerCompletion, deleteItem, getPreferences } from "../../lib/db";
@@ -196,6 +197,13 @@ export default function Index() {
         )}
 
         <BandeauEtat />
+
+        <CarteSuggestion
+          onDecision={async () => {
+            await recharger();
+            await chargerAnnexes();
+          }}
+        />
 
         {/* Indicateur d'équilibre : les catégories touchées aujourd'hui */}
         {equilibreJour && (
