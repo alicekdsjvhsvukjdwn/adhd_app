@@ -1,4 +1,5 @@
 import { getFamille } from "../catalogue";
+import { decalerJours, jourDeCreation } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui, routineAttendueLe } from "./completions";
 import { trancheDeHeure, type Tranche } from "./etat";
@@ -77,11 +78,7 @@ function trancheDuMoment(moment: string | null): Tranche | null {
   }
 }
 
-function decaler(iso: string, n: number): string {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().split("T")[0];
-}
+const decaler = decalerJours;
 
 /** Les n jours révolus avant aujourd'hui (aujourd'hui exclu : pas fini). */
 function joursRevolus(aujourdhui: string, n: number): string[] {
@@ -141,7 +138,7 @@ export async function suggestionDuJour(): Promise<Suggestion | null> {
   const installees: Suggestion[] = [];
 
   for (const r of routines) {
-    const depuis = r.cree_le.slice(0, 10);
+    const depuis = jourDeCreation(r.cree_le);
     const siennes = completions.filter((c) => c.item_id === r.id);
     const faitesLe = new Set(siennes.map((c) => c.date));
     const famille = r.template_id ? getFamille(r.template_id) : undefined;

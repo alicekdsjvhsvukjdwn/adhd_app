@@ -1,3 +1,4 @@
+import { ilYA } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -58,9 +59,7 @@ export async function logDecisions(
  */
 export async function tauxReussiteDesPropositions(jours = 14): Promise<number> {
   const db = await getDatabase();
-  const debut = new Date(Date.now() - jours * 86400000)
-    .toISOString()
-    .split("T")[0];
+  const debut = ilYA(jours);
 
   const row = await db.getFirstAsync<{ proposes: number; faits: number }>(
     `SELECT

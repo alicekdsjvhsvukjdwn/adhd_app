@@ -1,3 +1,4 @@
+import { ilYA } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -165,9 +166,7 @@ export async function enregistrerEtat(params: {
 
 export async function historiqueEtat(jours = 30): Promise<Etat[]> {
   const db = await getDatabase();
-  const debut = new Date(Date.now() - jours * 86400000)
-    .toISOString()
-    .split("T")[0];
+  const debut = ilYA(jours);
   return db.getAllAsync<Etat>(
     "SELECT * FROM etat WHERE date >= ? ORDER BY horodatage DESC",
     debut,

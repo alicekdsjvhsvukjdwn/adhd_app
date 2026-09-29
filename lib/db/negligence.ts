@@ -1,3 +1,4 @@
+import { ilYA } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -19,7 +20,7 @@ import { getAujourdhui } from "./completions";
 const CLE_DERNIER_JOUR = "negligence_dernier_jour_traite";
 
 function isoHier(): string {
-  return new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  return ilYA(1);
 }
 
 async function assurerMeta() {

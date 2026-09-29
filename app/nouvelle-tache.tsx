@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import type { Categorie } from "../lib/catalogue";
+import { dateLocale, decalerJours, jourDeCreation } from "../lib/dates";
 import { addItem, getItem, modifierItem } from "../lib/db";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
@@ -90,7 +91,7 @@ function joursDe(recurrence: string | null, creeLe: string): number[] {
     return recurrence.slice(6).split(",").map(Number);
   }
   if (recurrence === "hebdo") {
-    return [new Date(creeLe.slice(0, 10) + "T00:00:00Z").getUTCDay()];
+    return [new Date(jourDeCreation(creeLe) + "T00:00:00Z").getUTCDay()];
   }
   return [0, 1, 2, 3, 4, 5, 6];
 }
@@ -109,9 +110,9 @@ const TOUS_LES_JOURS = JOURS.map((j) => j.valeur);
 
 const DUREES = [5, 15, 30, 60];
 
-/** Même convention de date que getAujourdhui() dans completions.ts. */
+/** Date locale dans n jours (même convention que getAujourdhui). */
 function dateDansJours(n: number): string {
-  return new Date(Date.now() + n * 86400000).toISOString().split("T")[0];
+  return decalerJours(dateLocale(), n);
 }
 
 function recurrenceDe(jours: number[]): string {

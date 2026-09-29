@@ -1,4 +1,5 @@
 import type { Categorie } from "../catalogue";
+import { dateLocale, ilYA, jourDeCreation } from "../dates";
 import { categorieEffective } from "./categories";
 import { getDatabase } from "./client";
 import {
@@ -28,8 +29,9 @@ export type RoutineAvecStatut = {
   ancre_position: "avant" | "apres" | null;
 };
 
+/** Date du jour en heure locale (la journée bascule à minuit). */
 export function getAujourdhui(): string {
-  return new Date().toISOString().split("T")[0];
+  return dateLocale();
 }
 
 /**
@@ -108,7 +110,7 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
   // Une routine « lun, mer, ven » n'apparaît que ces jours-là
   // (et le jour de sa création, pour la voir tout de suite).
   const duJour = rows.filter((r) =>
-    routineAttendueLe(r.recurrence, r.cree_le.slice(0, 10), aujourdhui),
+    routineAttendueLe(r.recurrence, jourDeCreation(r.cree_le), aujourdhui),
   );
 
   return duJour.map((r) => ({
@@ -247,9 +249,7 @@ export async function toggleCompletionAujourdhui(
  */
 export async function tauxCompletion(jours = 14): Promise<number> {
   const db = await getDatabase();
-  const debut = new Date(Date.now() - jours * 86400000)
-    .toISOString()
-    .split("T")[0];
+  const debut = ilYA(jours);
 
   const actives = await db.getFirstAsync<{ n: number }>(
     "SELECT COUNT(*) AS n FROM items WHERE type = 'routine' AND statut = 'actif'",
@@ -269,9 +269,7 @@ export async function tauxCompletion(jours = 14): Promise<number> {
 /** Historique d'un item, pour l'écran Progression. N'affiche que ce qui a été fait. */
 export async function historiqueItem(itemId: number, jours = 30) {
   const db = await getDatabase();
-  const debut = new Date(Date.now() - jours * 86400000)
-    .toISOString()
-    .split("T")[0];
+  const debut = ilYA(jours);
   return db.getAllAsync<{
     date: string;
     statut: StatutCompletion;

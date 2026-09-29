@@ -1,8 +1,10 @@
 import { getFamille, type Categorie } from "../catalogue";
 import { getDatabase } from "./client";
 
-/** Date du jour, calculée ici pour ne pas importer completions.ts (cycle). */
-const aujourdhui = () => new Date().toISOString().split("T")[0];
+import { dateLocale, ilYA } from "../dates";
+
+/** Date du jour, prise dans dates.ts pour ne pas importer completions.ts (cycle). */
+const aujourdhui = () => dateLocale();
 
 /**
  * Équilibre entre catégories.
@@ -41,9 +43,7 @@ export async function completionsParCategorie(
   jours = 7,
 ): Promise<Record<Categorie, number>> {
   const db = await getDatabase();
-  const debut = new Date(Date.now() - jours * 86400000)
-    .toISOString()
-    .split("T")[0];
+  const debut = ilYA(jours);
 
   const rows = await db.getAllAsync<{
     categorie: string | null;

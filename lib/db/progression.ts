@@ -1,4 +1,5 @@
 import type { Categorie } from "../catalogue";
+import { decalerJours as decaler, jourDeCreation } from "../dates";
 import { CATEGORIES, categorieEffective } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui, routineAttendueLe } from "./completions";
@@ -13,10 +14,9 @@ import { trancheDeHeure, type Tranche } from "./etat";
 
 export type Periode = "jour" | "semaine" | "mois";
 
+/** Réexporté pour l'écran Progression. */
 export function decalerJours(iso: string, n: number): string {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().split("T")[0];
+  return decaler(iso, n);
 }
 
 /** 0 = dimanche, 1 = lundi... (convention JavaScript). */
@@ -60,7 +60,7 @@ async function routinesSuivies(): Promise<RoutineSuivie[]> {
     id: r.id,
     cat: categorieEffective(r.categorie, r.template_id),
     recurrence: r.recurrence ?? "quotidien",
-    depuis: r.cree_le.slice(0, 10),
+    depuis: jourDeCreation(r.cree_le),
   }));
 }
 
