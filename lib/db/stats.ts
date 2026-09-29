@@ -1,3 +1,4 @@
+import { decalerJours } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -54,34 +55,28 @@ export async function addPoints(delta: number) {
   );
 }
 
-function formatDate(d: Date): string {
-  return d.toISOString().split("T")[0];
-}
-
+/**
+ * Nombre de jours consécutifs avec au moins une complétion.
+ * Aujourd'hui compte s'il y a déjà quelque chose ; sinon la série court
+ * encore depuis hier, puisque la journée n'est pas finie.
+ * Calcul sur les dates du calendrier (dates.ts), sans passer par une heure :
+ * c'est ce qui décalait la série d'un jour à cause de l'UTC.
+ */
 async function computeCurrentStreak(): Promise<number> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<{ date: string }>(
-    "SELECT DISTINCT date FROM completions ORDER BY date DESC",
+    "SELECT DISTINCT date FROM completions",
   );
-  const dateSet = new Set(rows.map((r) => r.date));
-  const today = getAujourdhui();
+  const jours = new Set(rows.map((r) => r.date));
+  const aujourdhui = getAujourdhui();
 
-  let streak = 0;
-  const cursor = new Date(today + "T00:00:00");
-
-  if (dateSet.has(formatDate(cursor))) {
-    streak = 1;
-    cursor.setDate(cursor.getDate() - 1);
-  } else {
-    cursor.setDate(cursor.getDate() - 1);
+  let jour = jours.has(aujourdhui) ? aujourdhui : decalerJours(aujourdhui, -1);
+  let serie = 0;
+  while (jours.has(jour)) {
+    serie++;
+    jour = decalerJours(jour, -1);
   }
-
-  while (dateSet.has(formatDate(cursor))) {
-    streak++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return streak;
+  return serie;
 }
 
 export async function getStats(): Promise<Stats> {
