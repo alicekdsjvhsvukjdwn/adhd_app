@@ -121,6 +121,24 @@ export default function Index() {
     await chargerAnnexes();
   };
 
+  const onSupprimerRoutine = (id: number, nom: string) => {
+    Alert.alert(
+      "Supprimer cette routine ?",
+      `« ${nom} » et son historique seront effacés.`,
+      [
+        { text: "Garder", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            await supprimer(id);
+            await chargerAnnexes();
+          },
+        },
+      ],
+    );
+  };
+
   const onSupprimerTache = (id: number, nom: string) => {
     Alert.alert("Supprimer cette tâche ?", nom, [
       { text: "Garder", style: "cancel" },
@@ -259,22 +277,42 @@ export default function Index() {
                 <Swipeable
                   key={r.id}
                   renderRightActions={() => (
-                    <TouchableOpacity
-                      style={[
-                        styles.boutonSupprimer,
-                        { backgroundColor: t.danger },
-                      ]}
-                      onPress={() => supprimer(r.id)}
-                    >
-                      <Text
+                    <View style={styles.actions}>
+                      <TouchableOpacity
                         style={[
-                          styles.texteSupprimer,
-                          { color: t.textOnAccent },
+                          styles.boutonSupprimer,
+                          { backgroundColor: t.accentText },
                         ]}
+                        onPress={() =>
+                          router.push(`/nouvelle-tache?id=${r.id}`)
+                        }
                       >
-                        Supprimer
-                      </Text>
-                    </TouchableOpacity>
+                        <Text
+                          style={[
+                            styles.texteSupprimer,
+                            { color: t.textOnAccent },
+                          ]}
+                        >
+                          Modifier
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.boutonSupprimer,
+                          { backgroundColor: t.danger },
+                        ]}
+                        onPress={() => onSupprimerRoutine(r.id, r.nom)}
+                      >
+                        <Text
+                          style={[
+                            styles.texteSupprimer,
+                            { color: t.textOnAccent },
+                          ]}
+                        >
+                          Supprimer
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 >
                   <TouchableOpacity
@@ -356,19 +394,36 @@ export default function Index() {
             <Swipeable
               key={p.itemId}
               renderRightActions={() => (
-                <TouchableOpacity
-                  style={[
-                    styles.boutonSupprimerTache,
-                    { backgroundColor: t.danger },
-                  ]}
-                  onPress={() => onSupprimerTache(p.itemId, p.nom)}
-                >
-                  <Text
-                    style={[styles.texteSupprimer, { color: t.textOnAccent }]}
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.boutonSupprimerTache,
+                      { backgroundColor: t.accentText },
+                    ]}
+                    onPress={() =>
+                      router.push(`/nouvelle-tache?id=${p.itemId}`)
+                    }
                   >
-                    Supprimer
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[styles.texteSupprimer, { color: t.textOnAccent }]}
+                    >
+                      Modifier
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.boutonSupprimerTache,
+                      { backgroundColor: t.danger },
+                    ]}
+                    onPress={() => onSupprimerTache(p.itemId, p.nom)}
+                  >
+                    <Text
+                      style={[styles.texteSupprimer, { color: t.textOnAccent }]}
+                    >
+                      Supprimer
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             >
               <TouchableOpacity
@@ -562,10 +617,11 @@ const styles = StyleSheet.create({
   },
   videTexte: { fontSize: typography.small, lineHeight: 19 },
 
+  actions: { flexDirection: "row" },
   boutonSupprimer: {
     justifyContent: "center",
     alignItems: "center",
-    width: 90,
+    width: 86,
     borderRadius: radius.md,
     marginBottom: spacing.sm,
     marginLeft: 4,
@@ -574,7 +630,7 @@ const styles = StyleSheet.create({
   boutonSupprimerTache: {
     justifyContent: "center",
     alignItems: "center",
-    width: 90,
+    width: 86,
     borderRadius: radius.lg,
     marginBottom: spacing.md,
     marginLeft: 4,

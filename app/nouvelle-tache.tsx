@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import type { Categorie } from "../lib/catalogue";
-import { addItem } from "../lib/db";
+import { addItem, getItem, modifierItem } from "../lib/db";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -23,7 +23,8 @@ import {
 /**
  * Écran d'ajout unique : une tâche (une fois) ou une routine (régulièrement).
  * Seul le nom est obligatoire : noter doit prendre quelques secondes.
- * Ouvrir avec ?type=routine pour démarrer sur « Régulièrement ».
+ * - ?type=routine : démarre sur « Régulièrement »
+ * - ?id=12 : modifie l'item 12 au lieu d'en créer un
  */
 
 type Mode = "tache" | "routine";
@@ -51,6 +52,48 @@ const MOMENTS: { valeur: string | null; libelle: string }[] = [
   { valeur: "soir", libelle: "🌙 Soir" },
   { valeur: null, libelle: "À tout moment" },
 ];
+
+/** Moments du catalogue qui n'ont pas de bouton : affichés seulement s'ils sont déjà choisis. */
+const AUTRES_MOMENTS: Record<string, string> = {
+  reveil: "⏰ Réveil",
+  midi: "🍽️ Midi",
+  coucher: "🛏️ Coucher",
+  apres_midi: "🌤️ Après-midi",
+};
+
+const CATEGORIES_VALIDES = ORDRE_CATEGORIES as string[];
+
+const MOIS_COURTS = [
+  "janv.",
+  "févr.",
+  "mars",
+  "avr.",
+  "mai",
+  "juin",
+  "juil.",
+  "août",
+  "sept.",
+  "oct.",
+  "nov.",
+  "déc.",
+];
+
+function dateCourte(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z");
+  return `Le ${d.getUTCDate()} ${MOIS_COURTS[d.getUTCMonth()]}`;
+}
+
+/** Jours d'une récurrence, pour pré-remplir les ronds L M M J V S D. */
+function joursDe(recurrence: string | null, creeLe: string): number[] {
+  if (!recurrence || recurrence === "quotidien") return [0, 1, 2, 3, 4, 5, 6];
+  if (recurrence.startsWith("jours:")) {
+    return recurrence.slice(6).split(",").map(Number);
+  }
+  if (recurrence === "hebdo") {
+    return [new Date(creeLe.slice(0, 10) + "T00:00:00Z").getUTCDay()];
+  }
+  return [0, 1, 2, 3, 4, 5, 6];
+}
 
 /** Lundi en premier à l'écran ; valeurs en convention JavaScript (0 = dimanche). */
 const JOURS: { valeur: number; libelle: string }[] = [
@@ -87,7 +130,9 @@ export default function Ajouter() {
   const router = useRouter();
   const t = useTheme();
   const couleurCat = useCouleurCategorie();
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; id?: string }>();
+  const idModifie = params.id ? Number(params.id) : null;
+  const [typeInitial, setTypeInitial] = useState<Mode | null>(null);
 
   const [mode, setMode] = useState<Mode>(
     params.type === "routine" ? "routine" : "tache",
@@ -99,13 +144,40 @@ export default function Ajouter() {
 
   // Tâche
   const [importance, setImportance] = useState<Importance>(2);
-  const [echeanceJours, setEcheanceJours] = useState<number | null>(null);
+  const [echeance, setEcheance] = useState<string | null>(null);
 
   // Routine
   const [moment, setMoment] = useState<string | null>("matin");
   const [jours, setJours] = useState<number[]>(TOUS_LES_JOURS);
 
   const [enregistrement, setEnregistrement] = useState(false);
+  const [chargement, setChargement] = useState(idModifie !== null);
+
+  // Mode modification : pré-remplir avec l'item existant.
+  useEffect(() => {
+    if (idModifie === null) return;
+    (async () => {
+      const item = await getItem(idModifie);
+      if (item) {
+        const m: Mode = item.type === "routine" ? "routine" : "tache";
+        setMode(m);
+        setTypeInitial(m);
+        setNom(item.nom);
+        setCategorie(
+          item.categorie && CATEGORIES_VALIDES.includes(item.categorie)
+            ? (item.categorie as Categorie)
+            : null,
+        );
+        setDuree(item.duree_min);
+        setPremiereAction(item.premiere_action ?? "");
+        setImportance(Math.max(1, Math.min(3, item.importance)) as Importance);
+        setEcheance(item.echeance);
+        setMoment(item.moment === "indifferent" ? null : item.moment);
+        setJours(joursDe(item.recurrence, item.cree_le));
+      }
+      setChargement(false);
+    })();
+  }, [idModifie]);
 
   const valide =
     nom.trim().length > 0 && (mode === "tache" || jours.length > 0);
@@ -125,14 +197,19 @@ export default function Ajouter() {
         duree_min: duree,
         premiere_action: premiereAction.trim() || null,
       };
-      if (mode === "tache") {
-        await addItem({
+      if (idModifie !== null) {
+        // Passer d'une tâche à une routine (ou l'inverse) : l'item redevient actif.
+        const changeDeType = typeInitial !== null && typeInitial !== mode;
+        await modifierItem(idModifie, {
           ...commun,
-          type: "tache",
-          importance,
-          echeance:
-            echeanceJours === null ? null : dateDansJours(echeanceJours),
+          type: mode,
+          ...(changeDeType ? { statut: "actif" as const } : {}),
+          ...(mode === "tache"
+            ? { importance, echeance, recurrence: null }
+            : { recurrence: recurrenceDe(jours), moment }),
         });
+      } else if (mode === "tache") {
+        await addItem({ ...commun, type: "tache", importance, echeance });
       } else {
         await addItem({
           ...commun,
@@ -179,6 +256,14 @@ export default function Ajouter() {
     </TouchableOpacity>
   );
 
+  if (chargement) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.bgApp }}>
+        <Stack.Screen options={{ headerShown: false }} />
+      </View>
+    );
+  }
+
   const styleInput = [
     styles.input,
     {
@@ -204,7 +289,9 @@ export default function Ajouter() {
           </Text>
         </TouchableOpacity>
 
-        <Text style={[styles.titre, { color: t.textPrimary }]}>Ajouter</Text>
+        <Text style={[styles.titre, { color: t.textPrimary }]}>
+          {idModifie !== null ? "Modifier" : "Ajouter"}
+        </Text>
 
         {/* Une fois / Régulièrement */}
         <View style={[styles.selecteur, { backgroundColor: t.bgCard }]}>
@@ -257,7 +344,7 @@ export default function Ajouter() {
           placeholderTextColor={t.textMuted}
           value={nom}
           onChangeText={setNom}
-          autoFocus
+          autoFocus={idModifie === null}
           returnKeyType="done"
         />
 
@@ -284,11 +371,30 @@ export default function Ajouter() {
               {ECHEANCES.map((e) => (
                 <Choix
                   key={e.libelle}
-                  actif={echeanceJours === e.jours}
+                  actif={
+                    e.jours === null
+                      ? echeance === null
+                      : echeance === dateDansJours(e.jours)
+                  }
                   libelle={e.libelle}
-                  onPress={() => setEcheanceJours(e.jours)}
+                  onPress={() =>
+                    setEcheance(
+                      e.jours === null ? null : dateDansJours(e.jours),
+                    )
+                  }
                 />
               ))}
+              {echeance !== null &&
+                !ECHEANCES.some(
+                  (e) =>
+                    e.jours !== null && dateDansJours(e.jours) === echeance,
+                ) && (
+                  <Choix
+                    actif
+                    libelle={dateCourte(echeance)}
+                    onPress={() => {}}
+                  />
+                )}
             </View>
           </>
         ) : (
@@ -305,6 +411,13 @@ export default function Ajouter() {
                   onPress={() => setMoment(m.valeur)}
                 />
               ))}
+              {moment !== null && AUTRES_MOMENTS[moment] && (
+                <Choix
+                  actif
+                  libelle={AUTRES_MOMENTS[moment]}
+                  onPress={() => {}}
+                />
+              )}
             </View>
 
             <Text style={[styles.label, { color: t.textSecondary }]}>
@@ -410,7 +523,11 @@ export default function Ajouter() {
               { color: valide ? t.textOnAccent : t.textMuted },
             ]}
           >
-            {mode === "tache" ? "Ajouter la tâche" : "Ajouter la routine"}
+            {idModifie !== null
+              ? "Enregistrer"
+              : mode === "tache"
+                ? "Ajouter la tâche"
+                : "Ajouter la routine"}
           </Text>
         </TouchableOpacity>
       </ScrollView>

@@ -1,12 +1,12 @@
 import { useRouter } from "expo-router";
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Entree = {
@@ -48,7 +48,7 @@ export default function Profil() {
   const t = useTheme();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: t.bgApp }]}>
+    <View style={[styles.container, { backgroundColor: t.bgApp }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <Text style={[styles.titre, { color: t.textPrimary }]}>Profil</Text>
 
@@ -67,9 +67,11 @@ export default function Profil() {
           </TouchableOpacity>
         ))}
 
+        <BoutonReinitialiser />
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -1,5 +1,7 @@
 import * as SQLite from "expo-sqlite";
 
+const NOM_BASE = "routines_v2.db";
+
 let db: SQLite.SQLiteDatabase | null = null;
 let ouverture: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -13,11 +15,23 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
   // Mémorise la promesse : deux appels simultanés ouvrent une seule connexion.
   if (!ouverture) {
-    ouverture = SQLite.openDatabaseAsync("routines_v2.db").then((instance) => {
+    ouverture = SQLite.openDatabaseAsync(NOM_BASE).then((instance) => {
       db = instance;
       return instance;
     });
   }
 
   return ouverture;
+}
+
+/**
+ * Ferme la connexion et supprime le fichier de la base.
+ * Le prochain getDatabase() repart d'une base vide.
+ */
+export async function supprimerBase(): Promise<void> {
+  const instance = db ?? (ouverture ? await ouverture : null);
+  db = null;
+  ouverture = null;
+  if (instance) await instance.closeAsync();
+  await SQLite.deleteDatabaseAsync(NOM_BASE);
 }
