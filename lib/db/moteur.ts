@@ -3,6 +3,7 @@ import { categorieEffective, equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { logDecisions, type Composantes, type Decision } from "./decisions";
+import { energieDuJour } from "./energie";
 import { traiterNegligence } from "./negligence";
 
 /**
@@ -91,13 +92,9 @@ export type Proposition = {
  * Celle d'hier ne dit rien de maintenant : sans check-in du jour, neutre.
  */
 async function dernierEtatEnergie(): Promise<number | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<{ energie: number }>(
-    `SELECT energie FROM etat WHERE date = ?
-     ORDER BY horodatage DESC LIMIT 1`,
-    getAujourdhui(),
-  );
-  return row?.energie ?? null;
+  // Le choix fait à la main sur l'onglet Routines prime, puis le check-in du jour.
+  const { niveau } = await energieDuJour();
+  return niveau;
 }
 
 /** Effort perçu de l'item, ramené dans [0, 1]. Neutre (0.5) si rien de connu. */

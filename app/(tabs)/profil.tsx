@@ -18,7 +18,7 @@ type Entree = {
 
 const ENTREES: Entree[] = [
   {
-    titre: "Ajouter des routines",
+    titre: "Idées de routines",
     description: "À partir de ce qui est difficile en ce moment.",
     route: "/mise-en-place",
   },

@@ -145,3 +145,30 @@ export async function equilibreParCategorie(
   }
   return eq;
 }
+
+/** Routines actives rangées par domaine, pour voir ce qui manque. */
+export async function routinesParCategorie(): Promise<{
+  parCategorie: Record<Categorie, string[]>;
+  sansDomaine: string[];
+}> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    nom: string;
+    categorie: string | null;
+    template_id: string | null;
+  }>(
+    `SELECT nom, categorie, template_id FROM items
+     WHERE type = 'routine' AND statut = 'actif'
+     ORDER BY nom`,
+  );
+  const parCategorie = Object.fromEntries(
+    CATEGORIES.map((c) => [c, [] as string[]]),
+  ) as Record<Categorie, string[]>;
+  const sansDomaine: string[] = [];
+  for (const r of rows) {
+    const c = categorieEffective(r.categorie, r.template_id);
+    if (c) parCategorie[c].push(r.nom);
+    else sansDomaine.push(r.nom);
+  }
+  return { parCategorie, sansDomaine };
+}

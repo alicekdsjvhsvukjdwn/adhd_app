@@ -112,6 +112,13 @@ const TOUS_LES_JOURS = JOURS.map((j) => j.valeur);
 
 const DUREES = [5, 15, 30, 60];
 
+/** Difficulté : sert à savoir si c'est faisable selon l'énergie du jour. */
+const DIFFICULTES: { valeur: 1 | 2 | 3; libelle: string }[] = [
+  { valeur: 1, libelle: "Facile" },
+  { valeur: 2, libelle: "Moyenne" },
+  { valeur: 3, libelle: "Exigeante" },
+];
+
 /** Date locale dans n jours (même convention que getAujourdhui). */
 function dateDansJours(n: number): string {
   return decalerJours(dateLocale(), n);
@@ -171,6 +178,10 @@ export default function Ajouter() {
   >([]);
   const [nouvelleEtape, setNouvelleEtape] = useState("");
 
+  const [effort, setEffort] = useState<1 | 2 | 3>(2);
+  // Formulaire court par défaut ; tout est déplié quand on modifie.
+  const [plusOptions, setPlusOptions] = useState(idModifie !== null);
+
   const [enregistrement, setEnregistrement] = useState(false);
   const [chargement, setChargement] = useState(idModifie !== null);
 
@@ -195,6 +206,7 @@ export default function Ajouter() {
         setEcheance(item.echeance);
         setMoment(item.moment === "indifferent" ? null : item.moment);
         setJours(joursDe(item.recurrence, item.cree_le));
+        setEffort(item.effort === 1 || item.effort === 3 ? item.effort : 2);
         setVersionCourte(item.version_courte ?? "");
         setVersionLongue(item.version_longue ?? "");
         // Ce que proposerait le catalogue, affiché en exemple dans les champs vides
@@ -233,6 +245,7 @@ export default function Ajouter() {
     try {
       const commun = {
         nom: nom.trim(),
+        effort,
         categorie,
         duree_min: duree,
         premiere_action: premiereAction.trim() || null,
@@ -450,74 +463,6 @@ export default function Ajouter() {
                   />
                 )}
             </View>
-
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Étapes (facultatif)
-            </Text>
-            <Text
-              style={[
-                styles.aide,
-                { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm },
-              ]}
-            >
-              Pour une grosse tâche : des petits morceaux à cocher un par un.
-              Chaque étape rapporte des points, et finir le tout donne un bonus.
-            </Text>
-            {etapes.map((e, i) => (
-              <View
-                key={e.id ?? `n${i}`}
-                style={[styles.etape, { backgroundColor: t.bgCard }]}
-              >
-                <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
-                  {e.faite ? "✓" : i + 1}
-                </Text>
-                <Text style={[styles.etapeNom, { color: t.textPrimary }]}>
-                  {e.nom}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setEtapes(etapes.filter((_, k) => k !== i))}
-                  hitSlop={10}
-                >
-                  <Text style={[styles.etapeRetirer, { color: t.textMuted }]}>
-                    ✕
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-            <View style={styles.etapeAjout}>
-              <TextInput
-                style={[styleInput, { flex: 1 }]}
-                placeholder={
-                  etapes.length === 0
-                    ? "Ex : trouver le formulaire"
-                    : "Étape suivante"
-                }
-                placeholderTextColor={t.textMuted}
-                value={nouvelleEtape}
-                onChangeText={setNouvelleEtape}
-                onSubmitEditing={() => {
-                  if (!nouvelleEtape.trim()) return;
-                  setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
-                  setNouvelleEtape("");
-                }}
-                blurOnSubmit={false}
-                returnKeyType="next"
-              />
-              <TouchableOpacity
-                style={[styles.etapeBouton, { backgroundColor: t.accent }]}
-                onPress={() => {
-                  if (!nouvelleEtape.trim()) return;
-                  setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
-                  setNouvelleEtape("");
-                }}
-              >
-                <Text
-                  style={[styles.etapeBoutonTexte, { color: t.textOnAccent }]}
-                >
-                  +
-                </Text>
-              </TouchableOpacity>
-            </View>
           </>
         ) : (
           <>
@@ -580,93 +525,223 @@ export default function Ajouter() {
             >
               {resumeJours(jours)}
             </Text>
-
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Selon ton énergie (facultatif)
-            </Text>
-            <Text
-              style={[
-                styles.aide,
-                { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm },
-              ]}
-            >
-              La version affichée change avec ton énergie du jour. Les trois
-              rapportent les mêmes points.
-            </Text>
-            <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
-              🪫 Version courte, quand l'énergie est basse
-            </Text>
-            <TextInput
-              style={styleInput}
-              placeholder={
-                suggestionsVersions.courte ?? "Ex : deux minutes seulement"
-              }
-              placeholderTextColor={t.textMuted}
-              value={versionCourte}
-              onChangeText={setVersionCourte}
-              returnKeyType="done"
-            />
-            <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
-              ⚡ Version longue, quand l'énergie est haute
-            </Text>
-            <TextInput
-              style={styleInput}
-              placeholder={suggestionsVersions.longue ?? "Ex : vingt minutes"}
-              placeholderTextColor={t.textMuted}
-              value={versionLongue}
-              onChangeText={setVersionLongue}
-              returnKeyType="done"
-            />
           </>
         )}
 
         <Text style={[styles.label, { color: t.textSecondary }]}>
-          Domaine (facultatif)
+          Difficulté
         </Text>
         <View style={styles.ligneChoix}>
-          {ORDRE_CATEGORIES.map((c) => (
+          {DIFFICULTES.map((d) => (
             <Choix
-              key={c}
-              actif={categorie === c}
-              libelle={`${ICONES_CATEGORIE[c]} ${LIBELLES_CATEGORIE[c]}`}
-              couleurActive={couleurCat(c)}
-              onPress={() => setCategorie(categorie === c ? null : c)}
+              key={d.valeur}
+              actif={effort === d.valeur}
+              libelle={d.libelle}
+              onPress={() => setEffort(d.valeur)}
             />
           ))}
         </View>
-
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Durée estimée (facultatif)
-        </Text>
-        <View style={styles.ligneChoix}>
-          {DUREES.map((d) => (
-            <Choix
-              key={d}
-              actif={duree === d}
-              libelle={d === 60 ? "1 h ou +" : `${d} min`}
-              onPress={() => setDuree(duree === d ? null : d)}
-            />
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Première petite action (facultatif)
-        </Text>
-        <TextInput
-          style={styleInput}
-          placeholder={
-            mode === "tache"
-              ? "Ex : chercher le numéro"
-              : "Ex : sortir la guitare de sa housse"
-          }
-          placeholderTextColor={t.textMuted}
-          value={premiereAction}
-          onChangeText={setPremiereAction}
-          returnKeyType="done"
-        />
         <Text style={[styles.aide, { color: t.textMuted }]}>
-          Le plus dur, c'est de commencer. Une action de deux minutes suffit.
+          {mode === "routine"
+            ? "Quand ton énergie est basse, les routines exigeantes passent à part, sans pression."
+            : "L'appli propose les tâches faciles en premier quand ton énergie est basse."}
         </Text>
+
+        {!plusOptions ? (
+          <TouchableOpacity
+            style={[styles.plusOptions, { borderColor: t.border }]}
+            onPress={() => setPlusOptions(true)}
+          >
+            <Text style={[styles.plusOptionsTexte, { color: t.textPrimary }]}>
+              Plus d'options
+            </Text>
+            <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
+              {mode === "routine"
+                ? "Versions selon l'énergie, domaine, durée, première action"
+                : "Étapes, domaine, durée, première action"}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            {mode === "tache" ? (
+              <>
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Étapes (facultatif)
+                </Text>
+                <Text
+                  style={[
+                    styles.aide,
+                    {
+                      color: t.textMuted,
+                      marginTop: 0,
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
+                >
+                  Pour une grosse tâche : des petits morceaux à cocher un par
+                  un. Chaque étape rapporte des points, et finir le tout donne
+                  un bonus.
+                </Text>
+                {etapes.map((e, i) => (
+                  <View
+                    key={e.id ?? `n${i}`}
+                    style={[styles.etape, { backgroundColor: t.bgCard }]}
+                  >
+                    <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
+                      {e.faite ? "✓" : i + 1}
+                    </Text>
+                    <Text style={[styles.etapeNom, { color: t.textPrimary }]}>
+                      {e.nom}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setEtapes(etapes.filter((_, k) => k !== i))
+                      }
+                      hitSlop={10}
+                    >
+                      <Text
+                        style={[styles.etapeRetirer, { color: t.textMuted }]}
+                      >
+                        ✕
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <View style={styles.etapeAjout}>
+                  <TextInput
+                    style={[styleInput, { flex: 1 }]}
+                    placeholder={
+                      etapes.length === 0
+                        ? "Ex : trouver le formulaire"
+                        : "Étape suivante"
+                    }
+                    placeholderTextColor={t.textMuted}
+                    value={nouvelleEtape}
+                    onChangeText={setNouvelleEtape}
+                    onSubmitEditing={() => {
+                      if (!nouvelleEtape.trim()) return;
+                      setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
+                      setNouvelleEtape("");
+                    }}
+                    blurOnSubmit={false}
+                    returnKeyType="next"
+                  />
+                  <TouchableOpacity
+                    style={[styles.etapeBouton, { backgroundColor: t.accent }]}
+                    onPress={() => {
+                      if (!nouvelleEtape.trim()) return;
+                      setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
+                      setNouvelleEtape("");
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.etapeBoutonTexte,
+                        { color: t.textOnAccent },
+                      ]}
+                    >
+                      +
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Selon ton énergie (facultatif)
+                </Text>
+                <Text
+                  style={[
+                    styles.aide,
+                    {
+                      color: t.textMuted,
+                      marginTop: 0,
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
+                >
+                  La version affichée change avec ton énergie du jour. Les trois
+                  rapportent les mêmes points.
+                </Text>
+                <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
+                  🪫 Version courte, quand l'énergie est basse
+                </Text>
+                <TextInput
+                  style={styleInput}
+                  placeholder={
+                    suggestionsVersions.courte ?? "Ex : deux minutes seulement"
+                  }
+                  placeholderTextColor={t.textMuted}
+                  value={versionCourte}
+                  onChangeText={setVersionCourte}
+                  returnKeyType="done"
+                />
+                <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
+                  ⚡ Version longue, quand l'énergie est haute
+                </Text>
+                <TextInput
+                  style={styleInput}
+                  placeholder={
+                    suggestionsVersions.longue ?? "Ex : vingt minutes"
+                  }
+                  placeholderTextColor={t.textMuted}
+                  value={versionLongue}
+                  onChangeText={setVersionLongue}
+                  returnKeyType="done"
+                />
+              </>
+            )}
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Domaine (facultatif)
+            </Text>
+            <View style={styles.ligneChoix}>
+              {ORDRE_CATEGORIES.map((c) => (
+                <Choix
+                  key={c}
+                  actif={categorie === c}
+                  libelle={`${ICONES_CATEGORIE[c]} ${LIBELLES_CATEGORIE[c]}`}
+                  couleurActive={couleurCat(c)}
+                  onPress={() => setCategorie(categorie === c ? null : c)}
+                />
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Durée estimée (facultatif)
+            </Text>
+            <View style={styles.ligneChoix}>
+              {DUREES.map((d) => (
+                <Choix
+                  key={d}
+                  actif={duree === d}
+                  libelle={d === 60 ? "1 h ou +" : `${d} min`}
+                  onPress={() => setDuree(duree === d ? null : d)}
+                />
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Première petite action (facultatif)
+            </Text>
+            <TextInput
+              style={styleInput}
+              placeholder={
+                mode === "tache"
+                  ? "Ex : chercher le numéro"
+                  : "Ex : sortir la guitare de sa housse"
+              }
+              placeholderTextColor={t.textMuted}
+              value={premiereAction}
+              onChangeText={setPremiereAction}
+              returnKeyType="done"
+            />
+            <Text style={[styles.aide, { color: t.textMuted }]}>
+              Le plus dur, c'est de commencer. Une action de deux minutes
+              suffit.
+            </Text>
+          </>
+        )}
 
         <TouchableOpacity
           style={[
@@ -759,6 +834,19 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: spacing.sm,
     marginBottom: 6,
+  },
+  plusOptions: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.xl,
+    alignItems: "center",
+  },
+  plusOptionsTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
+  plusOptionsDetail: {
+    fontSize: typography.tiny,
+    marginTop: 2,
+    textAlign: "center",
   },
   etape: {
     flexDirection: "row",

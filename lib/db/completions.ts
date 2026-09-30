@@ -21,6 +21,8 @@ export type RoutineAvecStatut = {
   statutDuJour: StatutCompletion | null;
   premiere_action: string | null;
   duree_min: number | null;
+  /** Difficulté : 1 facile, 2 moyenne, 3 exigeante. */
+  effort: number | null;
   categorie: Categorie | null;
   moment: string | null;
   template_id: string | null;
@@ -89,6 +91,7 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     statut_jour: StatutCompletion | null;
     premiere_action: string | null;
     duree_min: number | null;
+    effort: number | null;
     categorie: string | null;
     template_id: string | null;
     moment: string | null;
@@ -103,7 +106,7 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     ancre_moment: string | null;
     ancre_position: "avant" | "apres" | null;
   }>(
-    `SELECT i.id, i.nom, i.premiere_action, i.duree_min,
+    `SELECT i.id, i.nom, i.premiere_action, i.duree_min, i.effort,
             i.categorie, i.template_id, i.moment,
             i.recurrence, i.cree_le,
             i.variante_rang, i.version_courte, i.version_longue,
@@ -132,6 +135,7 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     statutDuJour: r.statut_jour,
     premiere_action: r.premiere_action,
     duree_min: r.duree_min,
+    effort: r.effort,
     categorie: categorieEffective(r.categorie, r.template_id),
     moment: r.moment,
     template_id: r.template_id,

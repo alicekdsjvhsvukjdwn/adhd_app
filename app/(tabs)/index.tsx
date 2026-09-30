@@ -15,13 +15,17 @@ import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { useRoutines } from "../../hooks/useRoutines";
 import type { Categorie } from "../../lib/catalogue";
 import { annulerCompletion, completer, getPreferences } from "../../lib/db";
-import { completionsParCategorieJour } from "../../lib/db/categories";
+import {
+  completionsParCategorieJour,
+  routinesParCategorie,
+} from "../../lib/db/categories";
 import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
 import { soldePoints } from "../../lib/db/recompenses";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 import {
   ICONES_CATEGORIE,
+  LIBELLES_CATEGORIE,
   ORDRE_CATEGORIES,
   useCouleurCategorie,
 } from "../../lib/theme-categories";
@@ -81,6 +85,10 @@ export default function Routines() {
     number
   > | null>(null);
   const [solde, setSolde] = useState<number | null>(null);
+  const [resume, setResume] = useState<{
+    parCategorie: Record<Categorie, string[]>;
+    sansDomaine: string[];
+  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -95,6 +103,7 @@ export default function Routines() {
     setEnergie(await energieDuJour());
     setEquilibreJour(await completionsParCategorieJour());
     setSolde(await soldePoints());
+    setResume(await routinesParCategorie());
   }, []);
 
   useFocusEffect(
@@ -139,15 +148,102 @@ export default function Routines() {
     );
   };
 
-  const parBloc = routines.reduce<Record<string, RoutineAvecStatut[]>>(
-    (acc, r) => {
+  // Énergie basse : les routines exigeantes non faites passent dans un groupe à part.
+  const energieBasse = energie.niveau === 1;
+  const estMiseDeCote = (r: RoutineAvecStatut) =>
+    energieBasse && (r.effort ?? 0) >= 3 && !r.faitAujourdhui;
+  const miseDeCote = routines.filter(estMiseDeCote);
+
+  const parBloc = routines
+    .filter((r) => !estMiseDeCote(r))
+    .reduce<Record<string, RoutineAvecStatut[]>>((acc, r) => {
       (acc[blocDeRoutine(r)] ??= []).push(r);
       return acc;
-    },
-    {},
-  );
+    }, {});
   const blocs = ORDRE_BLOCS.filter((b) => parBloc[b]?.length > 0);
   const nbFaites = routines.filter((r) => r.faitAujourdhui).length;
+
+  const ligneRoutine = (r: RoutineAvecStatut) => {
+    const versions = versionsDe(r);
+    // Cochée : on montre ce qui a été fait. Sinon : la version du jour.
+    const v: Version =
+      r.faitAujourdhui && r.versionDuJour
+        ? (r.versionDuJour as Version)
+        : version;
+    const affichee = versions[v];
+    return (
+      <Swipeable
+        key={r.id}
+        renderRightActions={() => (
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.action, { backgroundColor: t.accentText }]}
+              onPress={() => router.push(`/nouvelle-tache?id=${r.id}`)}
+            >
+              <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>
+                Modifier
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.action, { backgroundColor: t.danger }]}
+              onPress={() => onSupprimer(r)}
+            >
+              <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>
+                Supprimer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      >
+        <TouchableOpacity
+          style={[
+            styles.routine,
+            { backgroundColor: r.faitAujourdhui ? t.bgCardActive : t.bgCard },
+          ]}
+          onPress={() => onToggle(r)}
+        >
+          <View
+            style={[
+              styles.pastilleCat,
+              {
+                backgroundColor: r.categorie
+                  ? couleurCat(r.categorie)
+                  : t.border,
+              },
+            ]}
+          />
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[
+                styles.texteRoutine,
+                {
+                  color: r.faitAujourdhui ? t.textMuted : t.textPrimary,
+                  textDecorationLine: r.faitAujourdhui
+                    ? "line-through"
+                    : "none",
+                },
+              ]}
+            >
+              {r.faitAujourdhui ? "✓ " : "○ "}
+              {r.ancre_nom ? (
+                <Text style={{ color: t.accentText, fontWeight: "600" }}>
+                  {r.ancre_position === "avant" ? "Avant" : "Après"}{" "}
+                  {r.ancre_nom.toLowerCase()} →{" "}
+                </Text>
+              ) : null}
+              {affichee.nom}
+            </Text>
+            {v !== "normale" && versions.distincte[v] && (
+              <Text style={[styles.versionTag, { color: t.textMuted }]}>
+                version {v}
+                {affichee.duree ? ` · ${affichee.duree} min` : ""}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
 
   const sousTitreEnergie =
     energie.source === "checkin"
@@ -267,8 +363,8 @@ export default function Routines() {
           )}
           <TouchableOpacity
             style={[styles.boutonAjout, { backgroundColor: t.accent }]}
-            onPress={() => router.push("/mise-en-place")}
-            accessibilityLabel="Ajouter des routines"
+            onPress={() => router.push("/nouvelle-tache?type=routine")}
+            accessibilityLabel="Ajouter une routine"
           >
             <Text style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}>
               +
@@ -277,7 +373,7 @@ export default function Routines() {
         </View>
       </View>
 
-      {blocs.length === 0 ? (
+      {blocs.length === 0 && miseDeCote.length === 0 ? (
         <TouchableOpacity
           style={[styles.vide, { backgroundColor: t.bgCard }]}
           onPress={() => router.push("/mise-en-place")}
@@ -286,7 +382,7 @@ export default function Routines() {
             Aucune routine pour l'instant
           </Text>
           <Text style={[styles.videTexte, { color: t.textSecondary }]}>
-            Touche ici pour les mettre en place en quelques secondes.
+            Touche ici pour choisir parmi des idées, ou + pour écrire la tienne.
           </Text>
         </TouchableOpacity>
       ) : (
@@ -295,119 +391,111 @@ export default function Routines() {
             <Text style={[styles.sectionTitre, { color: t.accentText }]}>
               {LIBELLES_BLOCS[bloc]}
             </Text>
-            {parBloc[bloc].map((r) => {
-              const versions = versionsDe(r);
-              // Cochée : on montre ce qui a été fait. Sinon : la version du jour.
-              const v: Version =
-                r.faitAujourdhui && r.versionDuJour
-                  ? (r.versionDuJour as Version)
-                  : version;
-              const affichee = versions[v];
-              return (
-                <Swipeable
-                  key={r.id}
-                  renderRightActions={() => (
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        style={[
-                          styles.action,
-                          { backgroundColor: t.accentText },
-                        ]}
-                        onPress={() =>
-                          router.push(`/nouvelle-tache?id=${r.id}`)
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.actionTexte,
-                            { color: t.textOnAccent },
-                          ]}
-                        >
-                          Modifier
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.action, { backgroundColor: t.danger }]}
-                        onPress={() => onSupprimer(r)}
-                      >
-                        <Text
-                          style={[
-                            styles.actionTexte,
-                            { color: t.textOnAccent },
-                          ]}
-                        >
-                          Supprimer
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                >
-                  <TouchableOpacity
-                    style={[
-                      styles.routine,
-                      {
-                        backgroundColor: r.faitAujourdhui
-                          ? t.bgCardActive
-                          : t.bgCard,
-                      },
-                    ]}
-                    onPress={() => onToggle(r)}
-                  >
-                    <View
-                      style={[
-                        styles.pastilleCat,
-                        {
-                          backgroundColor: r.categorie
-                            ? couleurCat(r.categorie)
-                            : t.border,
-                        },
-                      ]}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.texteRoutine,
-                          {
-                            color: r.faitAujourdhui
-                              ? t.textMuted
-                              : t.textPrimary,
-                            textDecorationLine: r.faitAujourdhui
-                              ? "line-through"
-                              : "none",
-                          },
-                        ]}
-                      >
-                        {r.faitAujourdhui ? "✓ " : "○ "}
-                        {r.ancre_nom ? (
-                          <Text
-                            style={{ color: t.accentText, fontWeight: "600" }}
-                          >
-                            {r.ancre_position === "avant" ? "Avant" : "Après"}{" "}
-                            {r.ancre_nom.toLowerCase()} →{" "}
-                          </Text>
-                        ) : null}
-                        {affichee.nom}
-                      </Text>
-                      {v !== "normale" && versions.distincte[v] && (
-                        <Text
-                          style={[styles.versionTag, { color: t.textMuted }]}
-                        >
-                          version {v}
-                          {affichee.duree ? ` · ${affichee.duree} min` : ""}
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </Swipeable>
-              );
-            })}
+            {parBloc[bloc].map(ligneRoutine)}
           </View>
         ))
+      )}
+
+      {miseDeCote.length > 0 && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitre, { color: t.textMuted }]}>
+            Si l'énergie revient
+          </Text>
+          <Text style={[styles.miseDeCoteAide, { color: t.textMuted }]}>
+            Routines exigeantes : pas de pression aujourd'hui.
+          </Text>
+          <View style={{ opacity: 0.7 }}>{miseDeCote.map(ligneRoutine)}</View>
+        </View>
       )}
 
       <View style={{ marginTop: spacing.xl }}>
         <CalendrierMois type="routine" titre="Routines" />
       </View>
+
+      {/* Ce qu'on a par domaine, pour voir ce qui manque */}
+      {resume && (
+        <View style={{ marginTop: spacing.xl }}>
+          <Text
+            style={[
+              styles.titreBloc,
+              { color: t.textPrimary, marginBottom: spacing.md },
+            ]}
+          >
+            Tes routines par domaine
+          </Text>
+          {ORDRE_CATEGORIES.map((c) => {
+            const noms = resume.parCategorie[c];
+            const vide = noms.length === 0;
+            return (
+              <View
+                key={c}
+                style={[
+                  styles.domaine,
+                  {
+                    backgroundColor: t.bgCard,
+                    borderLeftColor: couleurCat(c),
+                    opacity: vide ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.domaineEntete}>
+                  <Text style={[styles.domaineTitre, { color: t.textPrimary }]}>
+                    {ICONES_CATEGORIE[c]} {LIBELLES_CATEGORIE[c]}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.domaineCompte,
+                      { color: vide ? t.textMuted : t.accentText },
+                    ]}
+                  >
+                    {noms.length}
+                  </Text>
+                </View>
+                {vide ? (
+                  <TouchableOpacity
+                    onPress={() => router.push("/mise-en-place")}
+                    hitSlop={6}
+                  >
+                    <Text style={[styles.domaineVide, { color: t.accentText }]}>
+                      Rien pour l'instant · Trouver une idée
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text
+                    style={[styles.domaineNoms, { color: t.textSecondary }]}
+                  >
+                    {noms.join(" · ")}
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+          {resume.sansDomaine.length > 0 && (
+            <View
+              style={[
+                styles.domaine,
+                { backgroundColor: t.bgCard, borderLeftColor: t.border },
+              ]}
+            >
+              <View style={styles.domaineEntete}>
+                <Text style={[styles.domaineTitre, { color: t.textPrimary }]}>
+                  Sans domaine
+                </Text>
+                <Text style={[styles.domaineCompte, { color: t.textMuted }]}>
+                  {resume.sansDomaine.length}
+                </Text>
+              </View>
+              <Text style={[styles.domaineNoms, { color: t.textSecondary }]}>
+                {resume.sansDomaine.join(" · ")}
+              </Text>
+              <Text style={[styles.domaineVide, { color: t.textMuted }]}>
+                Glisse une routine vers la gauche → Modifier pour lui donner un
+                domaine.
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -522,6 +610,22 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     marginBottom: spacing.lg,
   },
+  miseDeCoteAide: { fontSize: typography.tiny, marginBottom: spacing.sm },
+  domaine: {
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  domaineEntete: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  domaineTitre: { fontSize: typography.bodySmall, fontWeight: "600" },
+  domaineCompte: { fontSize: typography.bodySmall, fontWeight: "700" },
+  domaineNoms: { fontSize: typography.small, marginTop: 4, lineHeight: 18 },
+  domaineVide: { fontSize: typography.small, marginTop: 4, fontWeight: "600" },
   videTitre: {
     fontSize: typography.h3,
     fontWeight: "600",

@@ -173,6 +173,7 @@ const CHAMPS_MODIFIABLES = [
   "echeance",
   "version_courte",
   "version_longue",
+  "effort",
 ] as const;
 
 export type ModificationItem = Partial<
