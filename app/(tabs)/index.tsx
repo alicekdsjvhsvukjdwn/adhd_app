@@ -18,6 +18,7 @@ import { annulerCompletion, completer, getPreferences } from "../../lib/db";
 import { completionsParCategorieJour } from "../../lib/db/categories";
 import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
+import { soldePoints } from "../../lib/db/recompenses";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -79,6 +80,7 @@ export default function Routines() {
     Categorie,
     number
   > | null>(null);
+  const [solde, setSolde] = useState<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,6 +94,7 @@ export default function Routines() {
   const chargerAnnexes = useCallback(async () => {
     setEnergie(await energieDuJour());
     setEquilibreJour(await completionsParCategorieJour());
+    setSolde(await soldePoints());
   }, []);
 
   useFocusEffect(
@@ -170,9 +173,11 @@ export default function Routines() {
               <Text style={[styles.statTexte, { color: t.accentText }]}>
                 Niveau {stats.niveau}
               </Text>
-              <Text style={[styles.statTexte, { color: t.accentText }]}>
-                {stats.points} pts
-              </Text>
+              <TouchableOpacity onPress={() => router.push("/recompenses")}>
+                <Text style={[styles.statTexte, { color: t.accentText }]}>
+                  🎁 {solde ?? 0} pts
+                </Text>
+              </TouchableOpacity>
             </>
           )}
         </View>

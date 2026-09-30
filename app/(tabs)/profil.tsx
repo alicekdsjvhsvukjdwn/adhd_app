@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import {
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,11 +38,6 @@ const ENTREES: Entree[] = [
     route: "/etat",
   },
   {
-    titre: "Comprendre le TDAH",
-    description: "Astuces, explications et où trouver de l'aide.",
-    route: "/infos",
-  },
-  {
     titre: "Réglages",
     description: "Points et séries affichés sur l'accueil.",
     route: "/reglages",
@@ -74,6 +70,16 @@ export default function Profil() {
 
         <BoutonReinitialiser />
 
+        <TouchableOpacity
+          style={styles.aide}
+          onPress={() => Linking.openURL("tel:3114")}
+        >
+          <Text style={[styles.aideTexte, { color: t.textMuted }]}>
+            Si ça ne va vraiment pas : le 3114, numéro national de prévention du
+            suicide, gratuit, 24 h/24. Toucher pour appeler.
+          </Text>
+        </TouchableOpacity>
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </View>
@@ -98,4 +104,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   entreeTexte: { fontSize: typography.small, lineHeight: 19 },
+  aide: { marginTop: spacing.xl, paddingVertical: spacing.sm },
+  aideTexte: { fontSize: typography.tiny, lineHeight: 17, textAlign: "center" },
 });

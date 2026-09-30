@@ -40,6 +40,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="recompenses"
+        options={{
+          title: "Récompenses",
+          tabBarIcon: ({ focused }) => <Icone symbole="🎁" actif={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="progression"
         options={{
           title: "Progression",

@@ -338,6 +338,38 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 9,
+    nom: "récompenses",
+    run: async (db) => {
+      await db.execAsync(`
+        -- Récompenses réelles choisies par la personne
+        CREATE TABLE recompenses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nom TEXT NOT NULL,
+          icone TEXT,
+          prix INTEGER NOT NULL,
+          cree_le TEXT NOT NULL
+        );
+
+        -- Achats : nom et prix recopiés, pour garder l'historique
+        -- même si la récompense est modifiée ou supprimée ensuite.
+        -- Solde à dépenser = points gagnés au total − somme des achats.
+        CREATE TABLE achats (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          recompense_id INTEGER,
+          nom TEXT NOT NULL,
+          icone TEXT,
+          prix INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          horodatage TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_achats_date ON achats(date);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

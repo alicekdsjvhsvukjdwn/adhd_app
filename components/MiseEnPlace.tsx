@@ -1,31 +1,32 @@
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { getFamille, type FamilleTemplate } from "../lib/catalogue";
 import {
-    DEMARRAGE_UNIVERSEL,
-    DIFFICULTES,
-    THEMES,
-    type Difficulte,
+  DEMARRAGE_UNIVERSEL,
+  DIFFICULTES,
+  THEMES,
+  type Difficulte,
 } from "../lib/catalogue/difficultes";
 import {
-    addItem,
-    getAncres,
-    getItems,
-    skipOnboarding,
-    toggleAncre,
-    type Ancre,
+  addItem,
+  getAncres,
+  getItems,
+  skipOnboarding,
+  toggleAncre,
+  type Ancre,
 } from "../lib/db";
 import {
-    difficultesChoisies,
-    enregistrerDifficultes,
+  difficultesChoisies,
+  enregistrerDifficultes,
 } from "../lib/db/difficultes";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
@@ -643,12 +644,10 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
                   );
                 })}
                 {g.lienAide && (
-                  <TouchableOpacity
-                    onPress={() => router.push("/infos" as never)}
-                  >
+                  <TouchableOpacity onPress={() => Linking.openURL("tel:3114")}>
                     <Text style={[styles.aide, { color: t.textMuted }]}>
-                      Si ça ne va vraiment pas, l'onglet Infos a une carte pour
-                      ça.
+                      Si ça ne va vraiment pas : le 3114, gratuit, 24 h/24.
+                      Toucher pour appeler.
                     </Text>
                   </TouchableOpacity>
                 )}
