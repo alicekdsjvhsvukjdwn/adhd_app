@@ -35,6 +35,8 @@ export type Item = {
   nb_propositions_sans_action: number;
   cree_le: string;
   maj_le: string;
+  version_courte: string | null;
+  version_longue: string | null;
 };
 
 export type ItemAvecAncre = Item & {
@@ -64,6 +66,8 @@ export type NouvelItem = {
   fenetre_fin_h?: number | null;
   date_evenement?: string | null;
   heure_evenement?: string | null;
+  version_courte?: string | null;
+  version_longue?: string | null;
 };
 
 const maintenant = () => new Date().toISOString();
@@ -114,8 +118,9 @@ export async function addItem(item: NouvelItem): Promise<number> {
       echeance, effort_total_min, taille_seance_min,
       fenetre_jours, fenetre_debut_h, fenetre_fin_h,
       date_evenement, heure_evenement,
+      version_courte, version_longue,
       cree_le, maj_le
-    ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.nom,
     item.type ?? "routine",
     item.recurrence ??
@@ -138,6 +143,8 @@ export async function addItem(item: NouvelItem): Promise<number> {
     item.fenetre_fin_h ?? null,
     item.date_evenement ?? null,
     item.heure_evenement ?? null,
+    item.version_courte ?? null,
+    item.version_longue ?? null,
     ts,
     ts,
   );
@@ -164,6 +171,8 @@ const CHAMPS_MODIFIABLES = [
   "premiere_action",
   "importance",
   "echeance",
+  "version_courte",
+  "version_longue",
 ] as const;
 
 export type ModificationItem = Partial<
@@ -253,6 +262,7 @@ export async function deleteItem(id: number) {
   const db = await getDatabase();
   await db.runAsync("DELETE FROM items WHERE id = ?", id);
   await db.runAsync("DELETE FROM completions WHERE item_id = ?", id);
+  await db.runAsync("DELETE FROM etapes WHERE item_id = ?", id);
   const { logEvent } = await import("./events");
   await logEvent("item_supprime", id);
 }

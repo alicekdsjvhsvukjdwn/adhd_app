@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
     Linking,
@@ -7,21 +8,21 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import type { Categorie } from "../../lib/catalogue";
-import { getAujourdhui } from "../../lib/db/completions";
+import type { Categorie } from "../lib/catalogue";
+import { getAujourdhui } from "../lib/db/completions";
 import {
     ASTUCES,
     SECTIONS,
     astuceDuJour,
     type Carte,
-} from "../../lib/infos/contenu";
-import { radius, spacing, typography, useTheme } from "../../lib/theme";
+} from "../lib/infos/contenu";
+import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
     ICONES_CATEGORIE,
     LIBELLES_CATEGORIE,
     ORDRE_CATEGORIES,
     useCouleurCategorie,
-} from "../../lib/theme-categories";
+} from "../lib/theme-categories";
 
 /** Domaines qui ont au moins une astuce, dans l'ordre habituel. */
 const DOMAINES_ASTUCES = ORDRE_CATEGORIES.filter((c) =>
@@ -29,6 +30,7 @@ const DOMAINES_ASTUCES = ORDRE_CATEGORIES.filter((c) =>
 );
 
 export default function Infos() {
+  const router = useRouter();
   const t = useTheme();
   const couleurCat = useCouleurCategorie();
   const [ouverte, setOuverte] = useState<string | null>(null);
@@ -118,7 +120,12 @@ export default function Infos() {
       style={[styles.container, { backgroundColor: t.bgApp }]}
       contentContainerStyle={{ paddingBottom: spacing.xxxl }}
     >
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Infos</Text>
+      <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+      </TouchableOpacity>
+      <Text style={[styles.titre, { color: t.textPrimary }]}>
+        Comprendre le TDAH
+      </Text>
 
       {/* Astuce du jour */}
       <View style={[styles.astuceJour, { backgroundColor: t.bgHighlight }]}>
@@ -228,6 +235,11 @@ export default function Infos() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
+  retour: {
+    fontSize: typography.body,
+    fontWeight: "600",
+    marginBottom: spacing.lg,
+  },
   titre: {
     fontSize: typography.h1,
     fontWeight: "600",

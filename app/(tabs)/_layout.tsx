@@ -28,8 +28,15 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Aujourd'hui",
+          title: "Routines",
           tabBarIcon: ({ focused }) => <Icone symbole="☀️" actif={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="taches"
+        options={{
+          title: "Tâches",
+          tabBarIcon: ({ focused }) => <Icone symbole="✅" actif={focused} />,
         }}
       />
       <Tabs.Screen
@@ -37,13 +44,6 @@ export default function TabsLayout() {
         options={{
           title: "Progression",
           tabBarIcon: ({ focused }) => <Icone symbole="📈" actif={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="infos"
-        options={{
-          title: "Infos",
-          tabBarIcon: ({ focused }) => <Icone symbole="💡" actif={focused} />,
         }}
       />
       <Tabs.Screen

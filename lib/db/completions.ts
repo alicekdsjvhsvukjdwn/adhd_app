@@ -23,6 +23,12 @@ export type RoutineAvecStatut = {
   duree_min: number | null;
   categorie: Categorie | null;
   moment: string | null;
+  template_id: string | null;
+  variante_rang: number | null;
+  version_courte: string | null;
+  version_longue: string | null;
+  /** Version faite aujourd'hui, si la routine est cochée. */
+  versionDuJour: string | null;
   ancre_id: number | null;
   ancre_nom: string | null;
   ancre_moment: string | null;
@@ -88,6 +94,10 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     moment: string | null;
     recurrence: string | null;
     cree_le: string;
+    variante_rang: number | null;
+    version_courte: string | null;
+    version_longue: string | null;
+    version_jour: string | null;
     ancre_id: number | null;
     ancre_nom: string | null;
     ancre_moment: string | null;
@@ -96,6 +106,8 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     `SELECT i.id, i.nom, i.premiere_action, i.duree_min,
             i.categorie, i.template_id, i.moment,
             i.recurrence, i.cree_le,
+            i.variante_rang, i.version_courte, i.version_longue,
+            c.version AS version_jour,
             i.ancre_id, i.ancre_position,
             a.nom AS ancre_nom, a.moment AS ancre_moment,
             c.statut AS statut_jour
@@ -122,6 +134,11 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     duree_min: r.duree_min,
     categorie: categorieEffective(r.categorie, r.template_id),
     moment: r.moment,
+    template_id: r.template_id,
+    variante_rang: r.variante_rang,
+    version_courte: r.version_courte,
+    version_longue: r.version_longue,
+    versionDuJour: r.version_jour,
     ancre_id: r.ancre_id,
     ancre_nom: r.ancre_nom,
     ancre_moment: r.ancre_moment,
@@ -139,6 +156,8 @@ export async function completer(
   itemId: number,
   statut: StatutCompletion = "complet",
   dureeReelleMin?: number,
+  /** Version faite : 'courte' | 'normale' | 'longue'. Même nombre de points. */
+  version?: string,
 ) {
   const db = await getDatabase();
   const date = getAujourdhui();
@@ -152,11 +171,12 @@ export async function completer(
   );
 
   await db.runAsync(
-    `INSERT INTO completions (item_id, date, statut, heure, duree_reelle_min, horodatage)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO completions (item_id, date, statut, heure, duree_reelle_min, horodatage, version)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(item_id, date) DO UPDATE SET
        statut = excluded.statut,
        heure = excluded.heure,
+       version = COALESCE(excluded.version, completions.version),
        duree_reelle_min = COALESCE(excluded.duree_reelle_min, completions.duree_reelle_min)`,
     itemId,
     date,
@@ -164,6 +184,7 @@ export async function completer(
     heure,
     dureeReelleMin ?? null,
     now.toISOString(),
+    version ?? null,
   );
 
   // Une tâche ponctuelle faite est terminée : elle ne revient pas le lendemain.

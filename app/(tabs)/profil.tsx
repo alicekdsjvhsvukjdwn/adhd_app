@@ -37,6 +37,11 @@ const ENTREES: Entree[] = [
     route: "/etat",
   },
   {
+    titre: "Comprendre le TDAH",
+    description: "Astuces, explications et où trouver de l'aide.",
+    route: "/infos",
+  },
+  {
     titre: "Réglages",
     description: "Points et séries affichés sur l'accueil.",
     route: "/reglages",

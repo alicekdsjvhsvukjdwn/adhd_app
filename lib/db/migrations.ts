@@ -311,6 +311,33 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 8,
+    nom: "versions selon l'énergie et étapes des tâches",
+    run: async (db) => {
+      await db.execAsync(`
+        -- Versions courte et longue écrites par la personne (sinon : catalogue)
+        ALTER TABLE items ADD COLUMN version_courte TEXT;
+        ALTER TABLE items ADD COLUMN version_longue TEXT;
+
+        -- Version faite ce jour-là : 'courte' | 'normale' | 'longue'
+        ALTER TABLE completions ADD COLUMN version TEXT;
+
+        -- Étapes d'une grosse tâche
+        CREATE TABLE etapes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item_id INTEGER NOT NULL,
+          nom TEXT NOT NULL,
+          ordre INTEGER NOT NULL,
+          faite INTEGER NOT NULL DEFAULT 0,
+          faite_le TEXT
+        );
+
+        CREATE INDEX idx_etapes_item ON etapes(item_id);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

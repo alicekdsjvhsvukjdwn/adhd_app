@@ -1,37 +1,36 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
-  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { BandeauEtat } from "../../components/BandeauEtat";
+import { CalendrierMois } from "../../components/CalendrierMois";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { useRoutines } from "../../hooks/useRoutines";
-import { deviner, type Categorie } from "../../lib/catalogue";
-import {
-  addItem,
-  annulerCompletion,
-  deleteItem,
-  getPreferences,
-} from "../../lib/db";
+import type { Categorie } from "../../lib/catalogue";
+import { annulerCompletion, completer, getPreferences } from "../../lib/db";
 import { completionsParCategorieJour } from "../../lib/db/categories";
 import type { RoutineAvecStatut } from "../../lib/db/completions";
-import { genererPropositions, type Proposition } from "../../lib/db/moteur";
+import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 import {
   ICONES_CATEGORIE,
   ORDRE_CATEGORIES,
-  useCouleurCategorie
+  useCouleurCategorie,
 } from "../../lib/theme-categories";
+import {
+  versionPourEnergie,
+  versionsDe,
+  type Niveau,
+  type Version,
+} from "../../lib/versions";
 
-// Regroupe les moments fins du catalogue en trois blocs lisibles.
 const BLOC_PAR_MOMENT: Record<string, string> = {
   reveil: "matin",
   matin: "matin",
@@ -41,9 +40,7 @@ const BLOC_PAR_MOMENT: Record<string, string> = {
   soir: "soir",
   coucher: "soir",
 };
-
 const ORDRE_BLOCS = ["matin", "apres_midi", "soir", "sans_ancre"];
-
 const LIBELLES_BLOCS: Record<string, string> = {
   matin: "Matin",
   apres_midi: "Après-midi",
@@ -51,25 +48,37 @@ const LIBELLES_BLOCS: Record<string, string> = {
   sans_ancre: "À tout moment",
 };
 
+const NIVEAUX: { niveau: Niveau; libelle: string }[] = [
+  { niveau: 1, libelle: "🪫 Basse" },
+  { niveau: 2, libelle: "🔋 Normale" },
+  { niveau: 3, libelle: "⚡ Haute" },
+];
+
+const EXPLICATION_VERSION: Record<Version, string> = {
+  courte: "Tes routines s'affichent en version courte.",
+  normale: "Tes routines s'affichent en version normale.",
+  longue: "Tes routines s'affichent en version longue.",
+};
+
 function blocDeRoutine(r: RoutineAvecStatut): string {
   const m = r.ancre_moment || r.moment;
-  if (m && BLOC_PAR_MOMENT[m]) return BLOC_PAR_MOMENT[m];
-  return "sans_ancre";
+  return (m && BLOC_PAR_MOMENT[m]) || "sans_ancre";
 }
 
-export default function Index() {
-  const { routines, stats, preferences, toggle, supprimer, recharger } =
-    useRoutines();
+export default function Routines() {
+  const { routines, stats, preferences, supprimer, recharger } = useRoutines();
+  const router = useRouter();
+  const t = useTheme();
+  const couleurCat = useCouleurCategorie();
 
-  const [taches, setTaches] = useState<Proposition[]>([]);
+  const [energie, setEnergie] = useState<{
+    niveau: Niveau | null;
+    source: "choix" | "checkin" | null;
+  }>({ niveau: null, source: null });
   const [equilibreJour, setEquilibreJour] = useState<Record<
     Categorie,
     number
   > | null>(null);
-
-  const router = useRouter();
-  const t = useTheme();
-  const couleurCat = useCouleurCategorie();
 
   useFocusEffect(
     useCallback(() => {
@@ -81,8 +90,7 @@ export default function Index() {
   );
 
   const chargerAnnexes = useCallback(async () => {
-    const props = await genererPropositions();
-    setTaches(props.filter((p) => p.propose));
+    setEnergie(await energieDuJour());
     setEquilibreJour(await completionsParCategorieJour());
   }, []);
 
@@ -93,74 +101,34 @@ export default function Index() {
     }, [recharger, chargerAnnexes]),
   );
 
-  const onToggleRoutine = async (id: number, fait: boolean) => {
-    await toggle(id, fait);
-    await chargerAnnexes();
+  const version = versionPourEnergie(energie.niveau);
+
+  const onChoisirEnergie = async (n: Niveau) => {
+    await choisirEnergie(n);
+    setEnergie({ niveau: n, source: "choix" });
   };
 
-  // Noter une tâche en une ligne.
-  const [nouvelleTache, setNouvelleTache] = useState("");
-  const [tacheNotee, setTacheNotee] = useState<string | null>(null);
-  const minuteurNotee = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const onNoterTache = async () => {
-    const nom = nouvelleTache.trim();
-    if (!nom) return;
-    await addItem({
-      nom,
-      type: "tache",
-      categorie: deviner(nom)?.categorie ?? null,
-    });
-    setNouvelleTache("");
-    Keyboard.dismiss();
-    setTacheNotee(nom);
-    if (minuteurNotee.current) clearTimeout(minuteurNotee.current);
-    minuteurNotee.current = setTimeout(() => setTacheNotee(null), 4000);
-    await chargerAnnexes();
-  };
-
-  // Filet contre le tap par erreur : quelques secondes pour annuler.
-  const [annulable, setAnnulable] = useState<{
-    id: number;
-    nom: string;
-  } | null>(null);
-  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (minuteur.current) clearTimeout(minuteur.current);
-    },
-    [],
-  );
-
-  const onCompleterTache = async (id: number, nom: string) => {
-    await toggle(id, false);
-    await chargerAnnexes();
-    if (minuteur.current) clearTimeout(minuteur.current);
-    setAnnulable({ id, nom });
-    minuteur.current = setTimeout(() => setAnnulable(null), 6000);
-  };
-
-  const onAnnulerTache = async () => {
-    if (!annulable) return;
-    if (minuteur.current) clearTimeout(minuteur.current);
-    const id = annulable.id;
-    setAnnulable(null);
-    await annulerCompletion(id);
+  const onToggle = async (r: RoutineAvecStatut) => {
+    if (r.faitAujourdhui) {
+      await annulerCompletion(r.id);
+    } else {
+      await completer(r.id, "complet", undefined, version);
+    }
     await recharger();
     await chargerAnnexes();
   };
 
-  const onSupprimerRoutine = (id: number, nom: string) => {
+  const onSupprimer = (r: RoutineAvecStatut) => {
     Alert.alert(
       "Supprimer cette routine ?",
-      `« ${nom} » et son historique seront effacés.`,
+      `« ${r.nom} » et son historique seront effacés.`,
       [
         { text: "Garder", style: "cancel" },
         {
           text: "Supprimer",
           style: "destructive",
           onPress: async () => {
-            await supprimer(id);
+            await supprimer(r.id);
             await chargerAnnexes();
           },
         },
@@ -168,156 +136,176 @@ export default function Index() {
     );
   };
 
-  const onSupprimerTache = (id: number, nom: string) => {
-    Alert.alert("Supprimer cette tâche ?", nom, [
-      { text: "Garder", style: "cancel" },
-      {
-        text: "Supprimer",
-        style: "destructive",
-        onPress: async () => {
-          await deleteItem(id);
-          await chargerAnnexes();
-        },
-      },
-    ]);
-  };
-
-  // Regroupement des routines par bloc de moment.
   const parBloc = routines.reduce<Record<string, RoutineAvecStatut[]>>(
     (acc, r) => {
-      const b = blocDeRoutine(r);
-      (acc[b] ??= []).push(r);
+      (acc[blocDeRoutine(r)] ??= []).push(r);
       return acc;
     },
     {},
   );
-  const blocsAvecRoutines = ORDRE_BLOCS.filter((b) => parBloc[b]?.length > 0);
-  const nbRoutinesFaites = routines.filter((r) => r.faitAujourdhui).length;
+  const blocs = ORDRE_BLOCS.filter((b) => parBloc[b]?.length > 0);
+  const nbFaites = routines.filter((r) => r.faitAujourdhui).length;
+
+  const sousTitreEnergie =
+    energie.source === "checkin"
+      ? `D'après ton dernier check-in. ${EXPLICATION_VERSION[version]}`
+      : energie.source === "choix"
+        ? EXPLICATION_VERSION[version]
+        : "Choisis-la pour adapter tes routines : version courte, normale ou longue.";
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.bgApp }}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={[styles.container, { backgroundColor: t.bgApp }]}
-        contentContainerStyle={{ paddingBottom: spacing.xxxl }}
-      >
-        <Text style={[styles.titre, { color: t.textPrimary }]}>
-          Aujourd'hui
+    <ScrollView
+      style={[styles.container, { backgroundColor: t.bgApp }]}
+      contentContainerStyle={{ paddingBottom: spacing.xxxl }}
+    >
+      <Text style={[styles.titre, { color: t.textPrimary }]}>Routines</Text>
+
+      {stats && preferences && preferences.gamification !== "aucune" && (
+        <View style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}>
+          <Text style={[styles.statTexte, { color: t.accentText }]}>
+            🔥 {stats.currentStreak} j
+          </Text>
+          {preferences.gamification === "complete" && (
+            <>
+              <Text style={[styles.statTexte, { color: t.accentText }]}>
+                Niveau {stats.niveau}
+              </Text>
+              <Text style={[styles.statTexte, { color: t.accentText }]}>
+                {stats.points} pts
+              </Text>
+            </>
+          )}
+        </View>
+      )}
+
+      <BandeauEtat />
+
+      <CarteSuggestion
+        onDecision={async () => {
+          await recharger();
+          await chargerAnnexes();
+        }}
+      />
+
+      {/* Énergie du jour : choisit la version des routines */}
+      <View style={[styles.energie, { backgroundColor: t.bgCard }]}>
+        <Text style={[styles.energieTitre, { color: t.textPrimary }]}>
+          Ton énergie aujourd'hui
         </Text>
-
-        {stats && preferences && preferences.gamification !== "aucune" && (
-          <View
-            style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}
-          >
-            <Text style={[styles.statTexte, { color: t.accentText }]}>
-              🔥 {stats.currentStreak} j
-            </Text>
-            {preferences.gamification === "complete" && (
-              <>
-                <Text style={[styles.statTexte, { color: t.accentText }]}>
-                  Niveau {stats.niveau}
+        <View style={styles.energieChoix}>
+          {NIVEAUX.map((n) => {
+            const actif = (energie.niveau ?? 2) === n.niveau;
+            return (
+              <TouchableOpacity
+                key={n.niveau}
+                onPress={() => onChoisirEnergie(n.niveau)}
+                style={[
+                  styles.energieBouton,
+                  {
+                    backgroundColor: actif ? t.accent : t.bgApp,
+                    borderColor: actif ? t.accent : t.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.energieBoutonTexte,
+                    { color: actif ? t.textOnAccent : t.textSecondary },
+                  ]}
+                >
+                  {n.libelle}
                 </Text>
-                <Text style={[styles.statTexte, { color: t.accentText }]}>
-                  {stats.points} pts
-                </Text>
-              </>
-            )}
-          </View>
-        )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={[styles.energieAide, { color: t.textMuted }]}>
+          {sousTitreEnergie}
+        </Text>
+      </View>
 
-        <BandeauEtat />
-
-        <CarteSuggestion
-          onDecision={async () => {
-            await recharger();
-            await chargerAnnexes();
-          }}
-        />
-
-        {/* Indicateur d'équilibre : les catégories touchées aujourd'hui */}
-        {equilibreJour && (
-          <View style={styles.equilibre}>
-            {ORDRE_CATEGORIES.map((c) => {
-              const touche = (equilibreJour[c] ?? 0) > 0;
-              return (
-                <View key={c} style={styles.equilibreItem}>
-                  <View
-                    style={[
-                      styles.equilibrePastille,
-                      {
-                        backgroundColor: touche ? couleurCat(c) : t.bgCard,
-                        borderColor: couleurCat(c),
-                      },
-                    ]}
-                  >
-                    <Text style={styles.equilibreIcone}>
-                      {ICONES_CATEGORIE[c]}
-                    </Text>
-                  </View>
-                  <Text style={[styles.equilibreLabel, { color: t.textMuted }]}>
-                    {equilibreJour[c] ?? 0}
+      {/* Domaines touchés aujourd'hui */}
+      {equilibreJour && (
+        <View style={styles.equilibre}>
+          {ORDRE_CATEGORIES.map((c) => {
+            const touche = (equilibreJour[c] ?? 0) > 0;
+            return (
+              <View key={c} style={styles.equilibreItem}>
+                <View
+                  style={[
+                    styles.equilibrePastille,
+                    {
+                      backgroundColor: touche ? couleurCat(c) : t.bgCard,
+                      borderColor: couleurCat(c),
+                    },
+                  ]}
+                >
+                  <Text style={styles.equilibreIcone}>
+                    {ICONES_CATEGORIE[c]}
                   </Text>
                 </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Section routines, groupées par moment */}
-        <View style={styles.titreRoutinesLigne}>
-          <Text
-            style={[
-              styles.titreBloc,
-              { color: t.textPrimary, marginBottom: 0 },
-            ]}
-          >
-            Routines
-          </Text>
-          <View style={styles.titreDroite}>
-            {routines.length > 0 && (
-              <Text style={[styles.compteur, { color: t.textMuted }]}>
-                {nbRoutinesFaites}/{routines.length}
-              </Text>
-            )}
-            <TouchableOpacity
-              style={[styles.boutonAjout, { backgroundColor: t.accent }]}
-              onPress={() => router.push("/mise-en-place")}
-              accessibilityLabel="Ajouter des routines"
-            >
-              <Text
-                style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}
-              >
-                +
-              </Text>
-            </TouchableOpacity>
-          </View>
+              </View>
+            );
+          })}
         </View>
-        {blocsAvecRoutines.length === 0 ? (
-          <TouchableOpacity
-            style={[styles.vide, { backgroundColor: t.bgCard }]}
-            onPress={() => router.push("/mise-en-place")}
-          >
-            <Text style={[styles.videTitre, { color: t.textPrimary }]}>
-              Aucune routine pour l'instant
+      )}
+
+      <View style={styles.titreLigne}>
+        <Text style={[styles.titreBloc, { color: t.textPrimary }]}>
+          Aujourd'hui
+        </Text>
+        <View style={styles.titreDroite}>
+          {routines.length > 0 && (
+            <Text style={[styles.compteur, { color: t.textMuted }]}>
+              {nbFaites}/{routines.length}
             </Text>
-            <Text style={[styles.videTexte, { color: t.textSecondary }]}>
-              Touche ici pour les mettre en place en quelques secondes.
+          )}
+          <TouchableOpacity
+            style={[styles.boutonAjout, { backgroundColor: t.accent }]}
+            onPress={() => router.push("/mise-en-place")}
+            accessibilityLabel="Ajouter des routines"
+          >
+            <Text style={[styles.boutonAjoutTexte, { color: t.textOnAccent }]}>
+              +
             </Text>
           </TouchableOpacity>
-        ) : (
-          blocsAvecRoutines.map((bloc) => (
-            <View key={bloc} style={styles.section}>
-              <Text style={[styles.sectionTitre, { color: t.accentText }]}>
-                {LIBELLES_BLOCS[bloc]}
-              </Text>
-              {parBloc[bloc].map((r) => (
+        </View>
+      </View>
+
+      {blocs.length === 0 ? (
+        <TouchableOpacity
+          style={[styles.vide, { backgroundColor: t.bgCard }]}
+          onPress={() => router.push("/mise-en-place")}
+        >
+          <Text style={[styles.videTitre, { color: t.textPrimary }]}>
+            Aucune routine pour l'instant
+          </Text>
+          <Text style={[styles.videTexte, { color: t.textSecondary }]}>
+            Touche ici pour les mettre en place en quelques secondes.
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        blocs.map((bloc) => (
+          <View key={bloc} style={styles.section}>
+            <Text style={[styles.sectionTitre, { color: t.accentText }]}>
+              {LIBELLES_BLOCS[bloc]}
+            </Text>
+            {parBloc[bloc].map((r) => {
+              const versions = versionsDe(r);
+              // Cochée : on montre ce qui a été fait. Sinon : la version du jour.
+              const v: Version =
+                r.faitAujourdhui && r.versionDuJour
+                  ? (r.versionDuJour as Version)
+                  : version;
+              const affichee = versions[v];
+              return (
                 <Swipeable
                   key={r.id}
                   renderRightActions={() => (
                     <View style={styles.actions}>
                       <TouchableOpacity
                         style={[
-                          styles.boutonSupprimer,
+                          styles.action,
                           { backgroundColor: t.accentText },
                         ]}
                         onPress={() =>
@@ -326,7 +314,7 @@ export default function Index() {
                       >
                         <Text
                           style={[
-                            styles.texteSupprimer,
+                            styles.actionTexte,
                             { color: t.textOnAccent },
                           ]}
                         >
@@ -334,15 +322,12 @@ export default function Index() {
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[
-                          styles.boutonSupprimer,
-                          { backgroundColor: t.danger },
-                        ]}
-                        onPress={() => onSupprimerRoutine(r.id, r.nom)}
+                        style={[styles.action, { backgroundColor: t.danger }]}
+                        onPress={() => onSupprimer(r)}
                       >
                         <Text
                           style={[
-                            styles.texteSupprimer,
+                            styles.actionTexte,
                             { color: t.textOnAccent },
                           ]}
                         >
@@ -361,7 +346,7 @@ export default function Index() {
                           : t.bgCard,
                       },
                     ]}
-                    onPress={() => onToggleRoutine(r.id, r.faitAujourdhui)}
+                    onPress={() => onToggle(r)}
                   >
                     <View
                       style={[
@@ -373,203 +358,52 @@ export default function Index() {
                         },
                       ]}
                     />
-                    <Text
-                      style={[
-                        styles.texteRoutine,
-                        {
-                          color: r.faitAujourdhui ? t.textMuted : t.textPrimary,
-                          textDecorationLine: r.faitAujourdhui
-                            ? "line-through"
-                            : "none",
-                        },
-                      ]}
-                    >
-                      {r.faitAujourdhui ? "✓ " : "○ "}
-                      {r.ancre_nom ? (
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.texteRoutine,
+                          {
+                            color: r.faitAujourdhui
+                              ? t.textMuted
+                              : t.textPrimary,
+                            textDecorationLine: r.faitAujourdhui
+                              ? "line-through"
+                              : "none",
+                          },
+                        ]}
+                      >
+                        {r.faitAujourdhui ? "✓ " : "○ "}
+                        {r.ancre_nom ? (
+                          <Text
+                            style={{ color: t.accentText, fontWeight: "600" }}
+                          >
+                            {r.ancre_position === "avant" ? "Avant" : "Après"}{" "}
+                            {r.ancre_nom.toLowerCase()} →{" "}
+                          </Text>
+                        ) : null}
+                        {affichee.nom}
+                      </Text>
+                      {v !== "normale" && versions.distincte[v] && (
                         <Text
-                          style={{ color: t.accentText, fontWeight: "600" }}
+                          style={[styles.versionTag, { color: t.textMuted }]}
                         >
-                          {r.ancre_position === "avant" ? "Avant" : "Après"}{" "}
-                          {r.ancre_nom.toLowerCase()} →{" "}
+                          version {v}
+                          {affichee.duree ? ` · ${affichee.duree} min` : ""}
                         </Text>
-                      ) : null}
-                      {r.nom}
-                    </Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 </Swipeable>
-              ))}
-            </View>
-          ))
-        )}
-
-        {/* Section tâches ponctuelles, triées par le moteur */}
-        <View style={styles.titreTachesLigne}>
-          <Text
-            style={[
-              styles.titreBloc,
-              { color: t.textPrimary, marginBottom: 0 },
-            ]}
-          >
-            Tâches
-          </Text>
-        </View>
-
-        {/* Noter une tâche en une ligne : l'appli devine le domaine et la trie */}
-        <View style={styles.ajoutRapide}>
-          <TextInput
-            style={[
-              styles.ajoutChamp,
-              {
-                backgroundColor: t.bgCard,
-                borderColor: t.border,
-                color: t.textPrimary,
-              },
-            ]}
-            placeholder="Une tâche à noter"
-            placeholderTextColor={t.textMuted}
-            value={nouvelleTache}
-            onChangeText={setNouvelleTache}
-            onSubmitEditing={onNoterTache}
-            returnKeyType="done"
-          />
-          <TouchableOpacity
-            style={[styles.ajoutBouton, { backgroundColor: t.accent }]}
-            onPress={onNoterTache}
-          >
-            <Text style={[styles.ajoutBoutonTexte, { color: t.textOnAccent }]}>
-              Noter
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.ajoutPied}>
-          {tacheNotee ? (
-            <Text
-              style={[styles.ajoutConfirmation, { color: t.textSecondary }]}
-            >
-              ✓ « {tacheNotee} » est notée.
-            </Text>
-          ) : (
-            <View />
-          )}
-          <TouchableOpacity
-            onPress={() => {
-              const n = nouvelleTache.trim();
-              setNouvelleTache("");
-              router.push(
-                n
-                  ? `/nouvelle-tache?nom=${encodeURIComponent(n)}`
-                  : "/nouvelle-tache",
               );
-            }}
-            hitSlop={8}
-          >
-            <Text style={[styles.ajoutOptions, { color: t.accentText }]}>
-              Plus d'options
-            </Text>
-          </TouchableOpacity>
-        </View>
-        {taches.length === 0 ? (
-          <Text style={[styles.tachesVide, { color: t.textMuted }]}>
-            Aucune tâche en cours.
-          </Text>
-        ) : (
-          taches.map((p) => (
-            <Swipeable
-              key={p.itemId}
-              renderRightActions={() => (
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.boutonSupprimerTache,
-                      { backgroundColor: t.accentText },
-                    ]}
-                    onPress={() =>
-                      router.push(`/nouvelle-tache?id=${p.itemId}`)
-                    }
-                  >
-                    <Text
-                      style={[styles.texteSupprimer, { color: t.textOnAccent }]}
-                    >
-                      Modifier
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.boutonSupprimerTache,
-                      { backgroundColor: t.danger },
-                    ]}
-                    onPress={() => onSupprimerTache(p.itemId, p.nom)}
-                  >
-                    <Text
-                      style={[styles.texteSupprimer, { color: t.textOnAccent }]}
-                    >
-                      Supprimer
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            >
-              <TouchableOpacity
-                style={[styles.carte, { backgroundColor: t.bgCard }]}
-                onPress={() => onCompleterTache(p.itemId, p.nom)}
-              >
-                <View style={styles.carteEntete}>
-                  <View
-                    style={[
-                      styles.puceRaison,
-                      { backgroundColor: t.bgHighlight },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.puceRaisonTexte, { color: t.accentText }]}
-                    >
-                      {p.exploration ? "🔄 " : ""}
-                      {p.raison}
-                    </Text>
-                  </View>
-                  {p.duree_min ? (
-                    <Text style={[styles.carteDuree, { color: t.textMuted }]}>
-                      {p.duree_min} min
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={[styles.carteNom, { color: t.textPrimary }]}>
-                  ○ {p.nom}
-                </Text>
-                {p.premiere_action ? (
-                  <Text
-                    style={[
-                      styles.cartePremiereAction,
-                      { color: t.textSecondary },
-                    ]}
-                  >
-                    Commencer par : {p.premiere_action}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            </Swipeable>
-          ))
-        )}
-      </ScrollView>
-
-      {annulable && (
-        <View
-          style={[styles.bandeauAnnuler, { backgroundColor: t.textPrimary }]}
-        >
-          <Text
-            style={[styles.bandeauTexte, { color: t.bgApp }]}
-            numberOfLines={1}
-          >
-            ✓ {annulable.nom}
-          </Text>
-          <TouchableOpacity onPress={onAnnulerTache} hitSlop={10}>
-            <Text style={[styles.bandeauAction, { color: t.bgApp }]}>
-              Annuler
-            </Text>
-          </TouchableOpacity>
-        </View>
+            })}
+          </View>
+        ))
       )}
-    </View>
+
+      <View style={{ marginTop: spacing.xl }}>
+        <CalendrierMois type="routine" titre="Routines" />
+      </View>
+    </ScrollView>
   );
 }
 
@@ -589,22 +423,64 @@ const styles = StyleSheet.create({
   },
   statTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
 
+  energie: {
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  energieTitre: {
+    fontSize: typography.body,
+    fontWeight: "600",
+    marginBottom: spacing.sm,
+  },
+  energieChoix: { flexDirection: "row", gap: spacing.sm },
+  energieBouton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  energieBoutonTexte: { fontSize: typography.small, fontWeight: "600" },
+  energieAide: {
+    fontSize: typography.tiny,
+    marginTop: spacing.sm,
+    lineHeight: 16,
+  },
+
   equilibre: {
     flexDirection: "row",
     justifyContent: "space-around",
     marginVertical: spacing.md,
   },
-  equilibreItem: { alignItems: "center", gap: 4 },
+  equilibreItem: { alignItems: "center" },
   equilibrePastille: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: radius.pill,
     borderWidth: 2,
     justifyContent: "center",
     alignItems: "center",
   },
-  equilibreIcone: { fontSize: 18 },
-  equilibreLabel: { fontSize: typography.tiny, fontWeight: "600" },
+  equilibreIcone: { fontSize: 17 },
+
+  titreLigne: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  titreBloc: { fontSize: typography.h2, fontWeight: "600" },
+  titreDroite: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  compteur: { fontSize: typography.bodySmall, fontWeight: "600" },
+  boutonAjout: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  boutonAjoutTexte: { fontSize: 22, lineHeight: 24, fontWeight: "500" },
 
   section: { marginBottom: spacing.lg },
   sectionTitre: {
@@ -622,100 +498,19 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   pastilleCat: { width: 10, height: 10, borderRadius: 5 },
-  texteRoutine: { fontSize: typography.body, flex: 1 },
+  texteRoutine: { fontSize: typography.body },
+  versionTag: { fontSize: typography.tiny, marginTop: 3 },
 
-  titreBlocLigne: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-  },
-  titreBloc: {
-    fontSize: typography.h2,
-    fontWeight: "600",
-    marginBottom: spacing.md,
-  },
-  compteur: { fontSize: typography.bodySmall, fontWeight: "600" },
-  titreRoutinesLigne: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  titreDroite: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  titreTachesLigne: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  boutonAjout: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
+  actions: { flexDirection: "row" },
+  action: {
     justifyContent: "center",
     alignItems: "center",
-  },
-  boutonAjoutTexte: { fontSize: 22, lineHeight: 24, fontWeight: "500" },
-  ajoutRapide: { flexDirection: "row", gap: spacing.sm },
-  ajoutChamp: {
-    flex: 1,
-    borderWidth: 1,
+    width: 86,
     borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: typography.body,
-  },
-  ajoutBouton: {
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    justifyContent: "center",
-  },
-  ajoutBoutonTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
-  ajoutPied: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 6,
-    marginBottom: spacing.md,
-    minHeight: 18,
-  },
-  ajoutConfirmation: {
-    flex: 1,
-    fontSize: typography.small,
-    marginRight: spacing.md,
-  },
-  ajoutOptions: { fontSize: typography.small, fontWeight: "600" },
-  tachesVide: { fontSize: typography.small, fontStyle: "italic" },
-
-  carte: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  carteEntete: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: spacing.sm,
+    marginLeft: 4,
   },
-  puceRaison: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  puceRaisonTexte: {
-    fontSize: typography.tiny,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  carteDuree: { fontSize: typography.small },
-  carteNom: { fontSize: typography.h3, fontWeight: "600" },
-  cartePremiereAction: {
-    fontSize: typography.small,
-    marginTop: 6,
-    lineHeight: 19,
-  },
+  actionTexte: { fontWeight: "600", fontSize: typography.small },
 
   vide: {
     borderRadius: radius.lg,
@@ -728,42 +523,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   videTexte: { fontSize: typography.small, lineHeight: 19 },
-
-  actions: { flexDirection: "row" },
-  boutonSupprimer: {
-    justifyContent: "center",
-    alignItems: "center",
-    width: 86,
-    borderRadius: radius.md,
-    marginBottom: spacing.sm,
-    marginLeft: 4,
-  },
-  texteSupprimer: { fontWeight: "600", fontSize: typography.small },
-  boutonSupprimerTache: {
-    justifyContent: "center",
-    alignItems: "center",
-    width: 86,
-    borderRadius: radius.lg,
-    marginBottom: spacing.md,
-    marginLeft: 4,
-  },
-  bandeauAnnuler: {
-    position: "absolute",
-    left: spacing.xl,
-    right: spacing.xl,
-    bottom: spacing.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  bandeauTexte: { flex: 1, fontSize: typography.bodySmall },
-  bandeauAction: {
-    fontSize: typography.bodySmall,
-    fontWeight: "700",
-    textDecorationLine: "underline",
-  },
 });

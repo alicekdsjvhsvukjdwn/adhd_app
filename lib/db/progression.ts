@@ -212,6 +212,8 @@ export async function tachesFaites(p: Periode): Promise<TacheFaite[]> {
 export async function intensiteJours(
   debut: string,
   fin: string,
+  /** Restreindre aux routines ou aux tâches (calendriers de chaque onglet). */
+  filtre?: "routine" | "tache",
 ): Promise<Record<string, number | null>> {
   const db = await getDatabase();
   const aujourdhui = getAujourdhui();
@@ -245,7 +247,12 @@ export async function intensiteJours(
     const faites = faitesParJour.get(j) ?? { routines: 0, taches: 0 };
     const partRoutines =
       attendu > 0 ? Math.min(1, faites.routines / attendu) : 0;
-    const score = Math.min(1, partRoutines + 0.25 * faites.taches);
+    const score =
+      filtre === "routine"
+        ? partRoutines
+        : filtre === "tache"
+          ? Math.min(1, 0.25 * faites.taches) // 1 tâche = niveau 1 … 4 et plus = niveau 4
+          : Math.min(1, partRoutines + 0.25 * faites.taches);
     resultat[j] = score === 0 ? 0 : Math.max(1, Math.ceil(score * 4));
   }
   return resultat;
@@ -432,4 +439,33 @@ export async function mesureAdaptation(jours = 14): Promise<MesureAdaptation> {
     suggestionsDecidees: s?.n ?? 0,
     suggestionsAcceptees: s?.acceptees ?? 0,
   };
+}
+
+/** Ce qui a été fait un jour donné, pour un type d'item (récap d'un calendrier). */
+export async function faitsDuJour(
+  date: string,
+  type: "routine" | "tache",
+): Promise<
+  { nom: string; categorie: Categorie | null; version: string | null }[]
+> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    nom: string;
+    categorie: string | null;
+    template_id: string | null;
+    version: string | null;
+  }>(
+    `SELECT i.nom, i.categorie, i.template_id, c.version
+     FROM completions c
+     JOIN items i ON i.id = c.item_id
+     WHERE c.date = ? AND i.type = ? AND c.statut IN ('complet', 'partiel')
+     ORDER BY c.heure, c.id`,
+    date,
+    type,
+  );
+  return rows.map((r) => ({
+    nom: r.nom,
+    categorie: categorieEffective(r.categorie, r.template_id),
+    version: r.version,
+  }));
 }

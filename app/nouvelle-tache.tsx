@@ -13,6 +13,7 @@ import {
 import type { Categorie } from "../lib/catalogue";
 import { dateLocale, decalerJours, jourDeCreation } from "../lib/dates";
 import { addItem, getItem, modifierItem } from "../lib/db";
+import { enregistrerEtapes, getEtapes } from "../lib/db/etapes";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -20,6 +21,7 @@ import {
   ORDRE_CATEGORIES,
   useCouleurCategorie,
 } from "../lib/theme-categories";
+import { versionsDe } from "../lib/versions";
 
 /**
  * Écran d'ajout unique : une tâche (une fois) ou une routine (régulièrement).
@@ -155,6 +157,20 @@ export default function Ajouter() {
   const [moment, setMoment] = useState<string | null>("matin");
   const [jours, setJours] = useState<number[]>(TOUS_LES_JOURS);
 
+  // Routine : versions selon l'énergie
+  const [versionCourte, setVersionCourte] = useState("");
+  const [versionLongue, setVersionLongue] = useState("");
+  const [suggestionsVersions, setSuggestionsVersions] = useState<{
+    courte: string | null;
+    longue: string | null;
+  }>({ courte: null, longue: null });
+
+  // Tâche : étapes
+  const [etapes, setEtapes] = useState<
+    { id?: number; nom: string; faite?: number }[]
+  >([]);
+  const [nouvelleEtape, setNouvelleEtape] = useState("");
+
   const [enregistrement, setEnregistrement] = useState(false);
   const [chargement, setChargement] = useState(idModifie !== null);
 
@@ -179,6 +195,25 @@ export default function Ajouter() {
         setEcheance(item.echeance);
         setMoment(item.moment === "indifferent" ? null : item.moment);
         setJours(joursDe(item.recurrence, item.cree_le));
+        setVersionCourte(item.version_courte ?? "");
+        setVersionLongue(item.version_longue ?? "");
+        // Ce que proposerait le catalogue, affiché en exemple dans les champs vides
+        const duCatalogue = versionsDe({
+          ...item,
+          version_courte: null,
+          version_longue: null,
+        });
+        setSuggestionsVersions({
+          courte: duCatalogue.distincte.courte ? duCatalogue.courte.nom : null,
+          longue: duCatalogue.distincte.longue ? duCatalogue.longue.nom : null,
+        });
+        setEtapes(
+          (await getEtapes(item.id)).map((e) => ({
+            id: e.id,
+            nom: e.nom,
+            faite: e.faite,
+          })),
+        );
       }
       setChargement(false);
     })();
@@ -211,16 +246,30 @@ export default function Ajouter() {
           ...(changeDeType ? { statut: "actif" as const } : {}),
           ...(mode === "tache"
             ? { importance, echeance, recurrence: null }
-            : { recurrence: recurrenceDe(jours), moment }),
+            : {
+                recurrence: recurrenceDe(jours),
+                moment,
+                version_courte: versionCourte.trim() || null,
+                version_longue: versionLongue.trim() || null,
+              }),
         });
+        if (mode === "tache") await enregistrerEtapes(idModifie, etapes);
       } else if (mode === "tache") {
-        await addItem({ ...commun, type: "tache", importance, echeance });
+        const id = await addItem({
+          ...commun,
+          type: "tache",
+          importance,
+          echeance,
+        });
+        if (etapes.length > 0) await enregistrerEtapes(id, etapes);
       } else {
         await addItem({
           ...commun,
           type: "routine",
           recurrence: recurrenceDe(jours),
           moment,
+          version_courte: versionCourte.trim() || null,
+          version_longue: versionLongue.trim() || null,
         });
       }
       router.back();
@@ -401,6 +450,74 @@ export default function Ajouter() {
                   />
                 )}
             </View>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Étapes (facultatif)
+            </Text>
+            <Text
+              style={[
+                styles.aide,
+                { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm },
+              ]}
+            >
+              Pour une grosse tâche : des petits morceaux à cocher un par un.
+              Chaque étape rapporte des points, et finir le tout donne un bonus.
+            </Text>
+            {etapes.map((e, i) => (
+              <View
+                key={e.id ?? `n${i}`}
+                style={[styles.etape, { backgroundColor: t.bgCard }]}
+              >
+                <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
+                  {e.faite ? "✓" : i + 1}
+                </Text>
+                <Text style={[styles.etapeNom, { color: t.textPrimary }]}>
+                  {e.nom}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setEtapes(etapes.filter((_, k) => k !== i))}
+                  hitSlop={10}
+                >
+                  <Text style={[styles.etapeRetirer, { color: t.textMuted }]}>
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <View style={styles.etapeAjout}>
+              <TextInput
+                style={[styleInput, { flex: 1 }]}
+                placeholder={
+                  etapes.length === 0
+                    ? "Ex : trouver le formulaire"
+                    : "Étape suivante"
+                }
+                placeholderTextColor={t.textMuted}
+                value={nouvelleEtape}
+                onChangeText={setNouvelleEtape}
+                onSubmitEditing={() => {
+                  if (!nouvelleEtape.trim()) return;
+                  setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
+                  setNouvelleEtape("");
+                }}
+                blurOnSubmit={false}
+                returnKeyType="next"
+              />
+              <TouchableOpacity
+                style={[styles.etapeBouton, { backgroundColor: t.accent }]}
+                onPress={() => {
+                  if (!nouvelleEtape.trim()) return;
+                  setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
+                  setNouvelleEtape("");
+                }}
+              >
+                <Text
+                  style={[styles.etapeBoutonTexte, { color: t.textOnAccent }]}
+                >
+                  +
+                </Text>
+              </TouchableOpacity>
+            </View>
           </>
         ) : (
           <>
@@ -463,6 +580,43 @@ export default function Ajouter() {
             >
               {resumeJours(jours)}
             </Text>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Selon ton énergie (facultatif)
+            </Text>
+            <Text
+              style={[
+                styles.aide,
+                { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm },
+              ]}
+            >
+              La version affichée change avec ton énergie du jour. Les trois
+              rapportent les mêmes points.
+            </Text>
+            <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
+              🪫 Version courte, quand l'énergie est basse
+            </Text>
+            <TextInput
+              style={styleInput}
+              placeholder={
+                suggestionsVersions.courte ?? "Ex : deux minutes seulement"
+              }
+              placeholderTextColor={t.textMuted}
+              value={versionCourte}
+              onChangeText={setVersionCourte}
+              returnKeyType="done"
+            />
+            <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
+              ⚡ Version longue, quand l'énergie est haute
+            </Text>
+            <TextInput
+              style={styleInput}
+              placeholder={suggestionsVersions.longue ?? "Ex : vingt minutes"}
+              placeholderTextColor={t.textMuted}
+              value={versionLongue}
+              onChangeText={setVersionLongue}
+              returnKeyType="done"
+            />
           </>
         )}
 
@@ -601,6 +755,36 @@ const styles = StyleSheet.create({
   },
   jourTexte: { fontSize: typography.small, fontWeight: "600" },
   aide: { fontSize: typography.tiny, marginTop: 6, lineHeight: 17 },
+  sousLabel: {
+    fontSize: typography.small,
+    marginTop: spacing.sm,
+    marginBottom: 6,
+  },
+  etape: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    marginBottom: 6,
+    gap: spacing.md,
+  },
+  etapeNumero: {
+    width: 18,
+    textAlign: "center",
+    fontSize: typography.small,
+    fontWeight: "600",
+  },
+  etapeNom: { flex: 1, fontSize: typography.bodySmall },
+  etapeRetirer: { fontSize: 16 },
+  etapeAjout: { flexDirection: "row", gap: spacing.sm },
+  etapeBouton: {
+    width: 46,
+    borderRadius: radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  etapeBoutonTexte: { fontSize: 22, fontWeight: "500" },
   bouton: {
     marginTop: spacing.xxl,
     padding: spacing.lg,
