@@ -1,6 +1,8 @@
 // Lancer : npm test
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { requeteModification } from "../lib/modification-item.ts";
 import { ordreJourDifficile } from "../lib/moteur-regles.ts";
 import { organiserRoutines, trancheDeHeure } from "../lib/routines-maintenant.ts";
 
@@ -99,6 +101,58 @@ test("tâche unique : sinon la plus petite (≤ 15 min) la mieux classée, sans 
   ];
   const ordre = ordreJourDifficile(classement, () => false);
   assert.deepEqual(ordre.map((t) => t.itemId), [3, 1, 2, 4]);
+});
+
+test("changer le moment repère : complétions passées intactes, nouvelle section", () => {
+  // Colonnes utiles des vraies tables (migration 2, ancres.ts) ; la requête est la vraie.
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    CREATE TABLE items (id INTEGER PRIMARY KEY, nom TEXT, type TEXT, moment TEXT,
+      ancre_id INTEGER, ancre_position TEXT, nb_completions INTEGER, maj_le TEXT);
+    CREATE TABLE completions (id INTEGER PRIMARY KEY, item_id INTEGER, date TEXT,
+      statut TEXT, heure REAL, version TEXT);
+    CREATE TABLE ancres (id INTEGER PRIMARY KEY, nom TEXT, moment TEXT, active INTEGER);
+    INSERT INTO ancres VALUES (1, 'Café', 'matin', 1), (2, 'Dîner', 'soir', 1);
+    INSERT INTO items VALUES (7, 'Lire 5 pages', 'routine', 'matin', 1, 'apres', 2, '2026-09-01');
+    INSERT INTO completions VALUES
+      (1, 7, '2026-09-29', 'complet', 8.5, 'normale'),
+      (2, 7, '2026-09-30', 'complet', 9.0, 'courte');
+  `);
+  const avant = db.prepare("SELECT * FROM completions ORDER BY id").all();
+
+  const routine = () =>
+    db
+      .prepare(
+        `SELECT i.moment, a.moment AS ancre_moment, i.ancre_position, i.nb_completions
+         FROM items i LEFT JOIN ancres a ON a.id = i.ancre_id WHERE i.id = 7`,
+      )
+      .get();
+  const section = () =>
+    organiserRoutines([{ ...routine(), faitAujourdhui: false, effort: null }], 9, false)[0].cle;
+  assert.equal(section(), "matin");
+
+  const q = requeteModification(
+    7,
+    { ancre_id: 2, ancre_position: "avant", nb_completions: 0 },
+    "2026-10-01T10:00:00Z",
+  );
+  db.prepare(q.sql).run(...q.params);
+
+  assert.deepEqual(db.prepare("SELECT * FROM completions ORDER BY id").all(), avant);
+  assert.equal(section(), "soir");
+  assert.equal(routine().ancre_position, "avant");
+  // Un champ hors liste (nb_completions) n'est jamais écrit.
+  assert.equal(routine().nb_completions, 2);
+
+  // Retirer le moment repère : la routine revient à son moment déclaré.
+  const q2 = requeteModification(7, { ancre_id: null, ancre_position: null }, "2026-10-01T10:01:00Z");
+  db.prepare(q2.sql).run(...q2.params);
+  assert.equal(section(), "matin");
+  assert.deepEqual(db.prepare("SELECT * FROM completions ORDER BY id").all(), avant);
+});
+
+test("aucune modification sans champ autorisé", () => {
+  assert.equal(requeteModification(1, { nb_completions: 3 }, "x"), null);
 });
 
 test("tâche unique : sinon la première du classement ; liste vide sans tâche", () => {

@@ -17,6 +17,7 @@ import {
     addItem,
     annulerCompletion,
     completer,
+    confirmationSuppression,
     deleteItem,
 } from "../../lib/db";
 import {
@@ -123,7 +124,8 @@ export default function Taches() {
   };
 
   const onSupprimer = (p: Proposition) => {
-    Alert.alert("Supprimer cette tâche ?", p.nom, [
+    const { titre, message } = confirmationSuppression("tache", p.nom);
+    Alert.alert(titre, message, [
       { text: "Garder", style: "cancel" },
       {
         text: "Supprimer",

@@ -146,29 +146,33 @@ export async function equilibreParCategorie(
   return eq;
 }
 
-/** Routines actives rangées par domaine, pour voir ce qui manque. */
+export type RoutineResumee = { id: number; nom: string };
+
+/** Toutes les routines actives (prévues aujourd'hui ou non), rangées par domaine. */
 export async function routinesParCategorie(): Promise<{
-  parCategorie: Record<Categorie, string[]>;
-  sansDomaine: string[];
+  parCategorie: Record<Categorie, RoutineResumee[]>;
+  sansDomaine: RoutineResumee[];
 }> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<{
+    id: number;
     nom: string;
     categorie: string | null;
     template_id: string | null;
   }>(
-    `SELECT nom, categorie, template_id FROM items
+    `SELECT id, nom, categorie, template_id FROM items
      WHERE type = 'routine' AND statut = 'actif'
      ORDER BY nom`,
   );
   const parCategorie = Object.fromEntries(
-    CATEGORIES.map((c) => [c, [] as string[]]),
-  ) as Record<Categorie, string[]>;
-  const sansDomaine: string[] = [];
+    CATEGORIES.map((c) => [c, [] as RoutineResumee[]]),
+  ) as Record<Categorie, RoutineResumee[]>;
+  const sansDomaine: RoutineResumee[] = [];
   for (const r of rows) {
     const c = categorieEffective(r.categorie, r.template_id);
-    if (c) parCategorie[c].push(r.nom);
-    else sansDomaine.push(r.nom);
+    const resume = { id: r.id, nom: r.nom };
+    if (c) parCategorie[c].push(resume);
+    else sansDomaine.push(resume);
   }
   return { parCategorie, sansDomaine };
 }

@@ -57,7 +57,8 @@ Chaque famille du catalogue porte sa justification et, quand elle existe, sa sou
 app/
   (tabs)/          Onglets : index (Routines), taches, recompenses, progression, profil
   _layout.tsx      Démarrage : initialisation de la base, écoute des notifications
-  nouvelle-tache.tsx   Ajouter / modifier une tâche ou une routine
+  nouvelle-tache.tsx   Ajouter / modifier / supprimer une tâche ou une routine
+  mes-routines.tsx     Toutes les routines par domaine, suggestion d'ajustement
   onboarding.tsx, mise-en-place.tsx   Mise en place guidée (premier lancement, puis depuis Profil)
   problemes.tsx, ancres.tsx, rappels.tsx, reglages.tsx
   scene.tsx        Essai de scène en pixel art, hors navigation
@@ -65,8 +66,9 @@ components/        MiseEnPlace, CalendrierMois, BilanJournee, CarteSuggestion, C
 hooks/             useRoutines
 lib/
   dates.ts         Toutes les dates de calendrier, en heure locale
-  versions.ts      Versions courte / normale / longue d'une routine
-  moteur-regles.ts, sauvegarde-format.ts   Logique pure, testée par npm test (tests/)
+  versions.ts      Versions d'une routine (courte les jours difficiles)
+  moteur-regles.ts, routines-maintenant.ts, modification-item.ts, sauvegarde-format.ts
+                   Logique pure, testée par npm test (tests/)
   theme.ts, theme-categories.ts
   catalogue/       Difficultés et familles de routines, en TypeScript
   db/              Accès aux données, moteur, suggestions, récompenses, migrations
@@ -150,12 +152,13 @@ Une seule table pour tout ce que la personne dépose.
 
 | Écran                  | Rôle                                                                                    |
 | ---------------------- | --------------------------------------------------------------------------------------- |
-| **Routines**           | Énergie du jour et routines prévues aujourd'hui, dans la version adaptée               |
+| **Routines**           | Que faire maintenant : les routines du jour, rangées par moment, et « Jour difficile » |
 | **Tâches**             | Saisie en une ligne, tâches triées par le moteur, étapes des grosses tâches             |
 | **Récompenses**        | Solde de points, récompenses personnelles, achats                                       |
 | **Progression**        | Ce qui avance : taux, domaines, tâches faites, état selon le moment, calendrier, année  |
 | **Profil**             | Idées de routines, moments repères, rappels, réglages, sauvegarde, réinitialisation     |
-| Ajouter / Modifier     | Saisie d'une tâche ou d'une routine, et correction                                      |
+| Ajouter / Modifier     | Saisie d'une tâche ou d'une routine, correction, suppression                            |
+| Mes routines           | Toutes les routines actives par domaine, suggestion d'ajustement, modifier, supprimer   |
 | Mise en place guidée   | Choix de routines à partir des difficultés (voir `docs/mise-en-place-guidee.md`)        |
 
 Au premier lancement, la mise en place guidée sert d'onboarding. Elle reste accessible depuis Profil → Idées de routines.
@@ -166,18 +169,21 @@ Les routines et les tâches ne sont pas mélangées : les routines se font toute
 
 ### 5.1 Routines
 
-De haut en bas :
+L'écran ne répond qu'à « que dois-je faire maintenant ? ». De haut en bas :
 
-1. **Série, niveau et solde de points**, selon l'intensité de gamification choisie. Le solde mène à Récompenses.
-2. **Suggestion d'ajustement**, s'il y en a une (voir 10).
-3. **Ton énergie aujourd'hui** : basse, normale ou haute, choisie à la main. Elle choisit seulement la version affichée des routines (voir 5.4) ; le tri des tâches n'en dépend pas.
-4. **Pastilles d'équilibre** : une par domaine, colorée dès qu'une complétion a eu lieu dans ce domaine aujourd'hui.
-5. **Aujourd'hui** : les routines prévues ce jour-là, regroupées en Matin, Après-midi, Soir et À tout moment, avec un compteur (ex. 2/5). Une routine cochée reste visible, barrée, sous le nom de la version faite.
-6. **Si l'énergie revient** : quand l'énergie est basse, les routines exigeantes non faites sont rangées à part, sans pression.
-7. **Calendrier du mois** des routines.
-8. **Tes routines par domaine** : les routines actives rangées par domaine, avec un lien vers la mise en place quand un domaine est vide.
+1. **En-tête** : « Routines » et « + » (formulaire court en mode routine).
+2. **Jour difficile** : un interrupteur valable pour la journée seulement (voir 5.5).
+3. **Série de N jours · N faites** : la série si les points et la série sont activés et qu'elle vaut au moins 1 ; « N faites » dès qu'une routine est faite, même sans points. Jamais de compteur « faites / prévues ».
+4. **Les routines prévues aujourd'hui, par moment** : Matin, Après-midi, Soir, À tout moment (le moment repère prime sur le moment déclaré). Le moment en cours (matin avant 12 h, après-midi jusqu'à 18 h, soir ensuite) et « À tout moment » sont dépliés ; les autres tiennent sur une ligne, « Matin · 3 routines », et se déplient d'un tap. Un moment passé se présente exactement comme un moment à venir : pas de mot de reproche.
+5. **Gérer mes routines** : lien vers l'écran du même nom, avec « · 1 suggestion » en texte neutre quand une suggestion attend (jamais en jour difficile).
 
-Actions : toucher pour cocher ou décocher ; glisser vers la gauche pour modifier ou supprimer (avec confirmation) ; « + » pour ajouter une routine.
+**Une ligne de routine** : une case à cocher, l'action en gros (la version du jour), le déclencheur en petit gris (« Après le café ») s'il y en a un. Rien d'autre. Toucher coche ou décoche, avec un retour haptique ; ce qui est fait est grisé et descend en bas de son moment.
+
+Sans routine, une carte mène à la mise en place guidée. Modifier et supprimer se font depuis « Mes routines ».
+
+### 5.1 bis Mes routines
+
+Toutes les routines actives, prévues aujourd'hui ou non, rangées par domaine, avec « Rien pour l'instant · Trouver une idée » pour un domaine vide et un groupe « Sans domaine ». La suggestion d'ajustement s'y affiche (voir 10), sauf un jour difficile. Toucher une routine ouvre sa modification ; la glisser vers la gauche propose de la supprimer, avec confirmation.
 
 ### 5.2 Tâches
 
@@ -193,18 +199,26 @@ Après avoir coché une tâche ou une étape, un bandeau « Annuler » reste aff
 Un seul écran, avec un choix en haut : **Une fois** (tâche) ou **Régulièrement** (routine). Seul le nom est obligatoire. Pour une tâche, le formulaire court ne montre que le nom ; pour une routine, le nom, le moment et les jours. Tout le reste est dans « Plus d'options », ouvert d'office en modification.
 
 - Tâche : importance (essentiel, utile, bonus), échéance (aucune, aujourd'hui, demain, dans 3 jours, 1 semaine, 2 semaines), étapes.
-- Routine : moment (matin, après-midi, soir, à tout moment), jours de la semaine, difficulté (facile, moyenne, exigeante), versions courte et longue.
+- Routine : moment (matin, après-midi, soir, à tout moment), jours de la semaine, difficulté (facile, moyenne, exigeante), version courte, moment repère (« Aucun » ou un moment repère actif, avant ou après, « après » par défaut ; un lien mène à « Mes moments repères » s'il n'y en a aucun).
 - Commun : domaine, durée estimée, première petite action.
 
 Une tâche n'a pas de difficulté : son coût se lit dans sa durée estimée, si elle est donnée.
 
-En modification, les champs sont pré-remplis et le type peut changer (une tâche devient une routine en gardant son historique).
+En modification, les champs sont pré-remplis et le type peut changer (une tâche devient une routine en gardant son historique). Un bouton « Supprimer cette routine / tâche » est visible en bas, avec confirmation. Changer le moment repère ne touche qu'à l'item : les complétions passées restent, et la routine se range au moment de son nouveau repère.
 
-### 5.4 Versions selon l'énergie
+**Supprimer** (depuis Mes routines, l'écran de modification ou l'onglet Tâches) efface l'item, ses complétions et ses étapes. Les points gagnés restent (aucun point n'est retiré, voir 12). Comme Progression et la série se calculent à partir des complétions et des routines existantes, l'item disparaît aussi des jours passés, et la série peut baisser si c'était la seule chose faite un jour donné. Le message de confirmation dit tout cela, le même partout (`confirmationSuppression`, `lib/db/items.ts`) : « « … » et son historique seront effacés. Elle disparaîtra aussi des jours passés dans Progression, et ta série peut changer. Tes points restent. »
 
-Chaque routine a trois versions. La normale est la routine telle qu'elle est. La courte et la longue sont celles écrites par la personne ; à défaut, pour une routine du catalogue, la courte est le niveau le plus simple de la famille et la longue le niveau au-dessus. Sinon, c'est la normale qui est reprise.
+### 5.4 Versions d'une routine
 
-Énergie basse → version courte ; normale → normale ; haute → longue. Les trois versions rapportent les mêmes points.
+La normale est la routine telle qu'elle est. La courte est celle écrite par la personne ; à défaut, pour une routine du catalogue, le niveau le plus simple de la famille ; sinon, la normale. Un jour difficile, la courte s'affiche ; sinon, la normale. Les deux rapportent les mêmes points.
+
+La version longue n'est plus saisie ni affichée. Celles déjà écrites restent en base, et l'enregistrement d'une routine les réécrit telles quelles.
+
+### 5.5 Jour difficile
+
+Un interrupteur sur l'écran Routines, stocké dans `meta` pour la journée : le lendemain, il repart désactivé. Chaque activation et désactivation est enregistrée dans `event_log` (`jour_difficile_active`, `jour_difficile_desactive`), ce qui garde l'historique des jours difficiles.
+
+Effets : toutes les routines en version courte ; les routines exigeantes non faites rangées dans « Si l'énergie revient », repliée ; pas de suggestion d'ajustement.
 
 ---
 
@@ -316,7 +330,7 @@ L'appli observe, propose, et la personne décide. Aucun changement visible n'est
 
 Règles d'affichage :
 
-- une seule suggestion à la fois, sur l'onglet Routines, avec les données qui la justifient (« Faite 2 fois sur 14 ces deux dernières semaines ») ;
+- une seule suggestion à la fois, dans « Mes routines » (l'écran Routines n'en montre qu'un repère neutre, « · 1 suggestion », sur le lien), jamais un jour difficile, avec les données qui la justifient (« Faite 2 fois sur 14 ces deux dernières semaines ») ;
 - au plus une décision par jour ;
 - une suggestion acceptée ou écartée (« Pas maintenant ») ne revient pas avant 14 jours ;
 - priorité : aider ce qui ne tient pas, puis caler les horaires, puis faire avancer ;
@@ -371,7 +385,8 @@ Principes :
 | Trois tâches à l'écran, le reste masqué                    | Liste complète                           | Choisir dans une longue liste coûte exactement l'énergie qui manque                              |
 | Routines et tâches dans deux onglets                       | Le même écran, en deux blocs             | _À compléter_                                                                                    |
 | Mise en place par les difficultés                          | Choix d'un profil, formulaire            | Reconnaître sa situation dans une liste coûte bien moins que la formuler                         |
-| Trois versions d'une routine selon l'énergie, mêmes points | Une seule version                        | Faire la version courte un jour d'énergie basse, c'est réussir sa journée                        |
+| Interrupteur « Jour difficile » (version courte), mêmes points | Sélecteur d'énergie à 3 niveaux      | Une seule décision par jour, et faire la version courte un jour difficile, c'est réussir sa journée |
+| Écran Routines limité à « que faire maintenant »           | Statistiques, domaines et calendrier sur le même écran | Tout le reste détourne de l'action ; la gestion va dans « Mes routines »            |
 | Moteur explicable (score par composantes, raison affichée) | Modèle appris opaque                     | Confiance, débogage, et fonctionnement dès le premier jour                                       |
 | Poids fixés à la main                                      | Poids appris                             | Pas assez de données au début ; l'observation corrige les composantes                            |
 | Bilan de la journée en un tap, facultatif, dans Progression | Check-in à trois questions, proposé jusqu'à 3 fois par jour | Chaque question coûte de l'attention ; un tri qui dépendrait des réponses pénaliserait ceux qui ne répondent pas |
@@ -392,6 +407,11 @@ Pistes explorées puis mises de côté : un monde en pixel art à explorer (dép
 - La mesure de l'effet du tri n'a pas de point de comparaison.
 - Les rares complétions enregistrées entre minuit et 2 h du matin avant le passage à l'heure locale restent comptées la veille.
 - Aucun test auprès d'utilisateurs autres que la conceptrice.
+
+**Points ouverts, à traiter à l'étape 6 (Progression)**
+
+- **Arrêter plutôt que supprimer** : proposer d'arrêter une routine (`archiverItem`, déjà présent) en gardant son passé. Il faut pour cela que Progression compte les routines arrêtées sur les jours où elles existaient (aujourd'hui `routinesSuivies` ne lit que les routines actives) et que la série soit calculée indépendamment de l'existence actuelle des routines.
+- **Tâches supprimées dans « Ce que l'appli apprend »** : leurs propositions passées restent dans `decision_log` et comptent comme « proposées, pas faites ». Les exclure du calcul, ou les marquer.
 
 **Perspectives**
 
