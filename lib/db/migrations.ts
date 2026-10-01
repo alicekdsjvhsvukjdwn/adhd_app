@@ -4,6 +4,12 @@ import { getDatabase } from "./client";
  * Migrations versionnées via PRAGMA user_version.
  * Chaque migration s'exécute une seule fois, dans l'ordre, en transaction.
  * Pour en ajouter une : append dans MIGRATIONS, ne jamais modifier les précédentes.
+ *
+ * Sauvegardes (lib/db/sauvegarde.ts) : une sauvegarde plus ancienne est
+ * restaurée colonne par colonne dans le schéma actuel. Une nouvelle colonne
+ * NOT NULL doit donc avoir un DEFAULT, et une migration qui transforme des
+ * données (comme la 5) doit garder les anciennes colonnes lisibles, sinon
+ * les sauvegardes d'avant ne se restaurent plus.
  */
 
 type Migration = {

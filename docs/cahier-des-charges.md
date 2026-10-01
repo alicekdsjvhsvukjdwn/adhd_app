@@ -66,6 +66,7 @@ hooks/             useRoutines
 lib/
   dates.ts         Toutes les dates de calendrier, en heure locale
   versions.ts      Versions courte / normale / longue d'une routine
+  score-etat.ts, sauvegarde-format.ts   Logique pure, testée par npm test (tests/)
   theme.ts, theme-categories.ts
   catalogue/       Difficultés et familles de routines, en TypeScript
   db/              Accès aux données, moteur, suggestions, récompenses, migrations
@@ -352,7 +353,7 @@ Principes :
 - aucun point retiré quand une série s'arrête ; seule l'annulation immédiate d'une complétion reprend ses points ;
 - pas de récompense aléatoire, pas de notification culpabilisante ;
 - les invitations (check-in, suggestions) sont toujours refusables, et un refus est respecté ;
-- les données restent sur le téléphone ;
+- les données restent sur le téléphone, sauf si la personne exporte une sauvegarde : le fichier contient tout, check-ins et rappels de traitement compris, et l'écran le dit ;
 - Profil et la mise en place donnent un accès direct au 3114 ; l'appli rappelle un traitement sans jamais donner de dose ni d'horaire médical.
 
 ---
@@ -362,6 +363,7 @@ Principes :
 - **Moments repères** : rattacher une routine avant ou après un moment déjà ancré dans la journée (le café, le brossage de dents…).
 - **Rappel quotidien** : une notification à l'heure choisie.
 - **Mise en place guidée** : choisir une ou deux difficultés, recevoir des routines minuscules adaptées, les rattacher à un moment repère. Détail dans `docs/mise-en-place-guidee.md`.
+- **Sauvegarde** (Profil → Mes données) : « Exporter » écrit toutes les tables dans un fichier JSON, avec la version du schéma, et ouvre la feuille de partage. « Restaurer » fait choisir un fichier, le valide entièrement avant de toucher à la base, demande confirmation, puis remplace toutes les données en une seule transaction (tout ou rien) et recale le rappel quotidien. Une sauvegarde d'une version plus récente de l'appli est refusée ; une plus ancienne est reprise colonne par colonne. Format et validation : `lib/sauvegarde-format.ts`.
 - **Réinitialisation** : supprime la base, annule les rappels et relance l'initialisation, comme une première installation.
 
 ---

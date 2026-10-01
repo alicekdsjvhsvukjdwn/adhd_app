@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
+import { CarteSauvegarde } from "../../components/CarteSauvegarde";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Entree = {
@@ -67,6 +68,8 @@ export default function Profil() {
             </Text>
           </TouchableOpacity>
         ))}
+
+        <CarteSauvegarde />
 
         <BoutonReinitialiser />
 

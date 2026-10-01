@@ -44,7 +44,8 @@
       "expo-status-bar",
       "expo-web-browser",
       "expo-sqlite",
-      "expo-asset"
+      "expo-asset",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

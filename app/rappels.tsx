@@ -17,12 +17,11 @@ import {
     setConfigRappel,
 } from "../lib/db";
 import {
-    annulerRappelQuotidien,
     construireContenuRappel,
     demanderPermissionNotifications,
     envoyerNotificationTest,
     permissionAccordee,
-    programmerRappelQuotidien,
+    reprogrammerRappel,
 } from "../lib/notifications";
 
 const HEURES_PROPOSEES = [7, 8, 9, 12, 14, 17, 18, 19, 20, 21, 22];
@@ -46,23 +45,6 @@ export default function RappelsScreen() {
     }, [charger]),
   );
 
-  const reprogrammerSiActif = async (nouvConfig: ConfigRappel) => {
-    if (!nouvConfig.actif) {
-      await annulerRappelQuotidien();
-      return;
-    }
-    const routines = await getRoutinesAvecStatutDuJour();
-    const contenu = construireContenuRappel(routines) ?? {
-      title: "Rappel de tes routines",
-      body: "C'est le moment de faire le point sur ta journée.",
-    };
-    await programmerRappelQuotidien(
-      nouvConfig.heure,
-      nouvConfig.minute,
-      contenu,
-    );
-  };
-
   const onToggleActif = async (nouveauEtat: boolean) => {
     if (nouveauEtat && !permission) {
       // On demande la permission avant de pouvoir activer
@@ -72,7 +54,7 @@ export default function RappelsScreen() {
     const nouvConfig = { ...config!, actif: nouveauEtat };
     await setConfigRappel(nouvConfig);
     setConfigLocal(nouvConfig);
-    await reprogrammerSiActif(nouvConfig);
+    await reprogrammerRappel(nouvConfig);
   };
 
   const onConfirmerPermission = async () => {
@@ -83,7 +65,7 @@ export default function RappelsScreen() {
       const nouvConfig = { ...config, actif: true };
       await setConfigRappel(nouvConfig);
       setConfigLocal(nouvConfig);
-      await reprogrammerSiActif(nouvConfig);
+      await reprogrammerRappel(nouvConfig);
     } else if (!accordee) {
       Alert.alert(
         "Permission refusée",
@@ -97,7 +79,7 @@ export default function RappelsScreen() {
     const nouvConfig = { ...config, heure, minute: 0 };
     await setConfigRappel(nouvConfig);
     setConfigLocal(nouvConfig);
-    await reprogrammerSiActif(nouvConfig);
+    await reprogrammerRappel(nouvConfig);
   };
 
   const onTester = async () => {

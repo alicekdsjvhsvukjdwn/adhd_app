@@ -1,6 +1,11 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { logEvent, RoutineAvecStatut } from "./db";
+import {
+  ConfigRappel,
+  getRoutinesAvecStatutDuJour,
+  logEvent,
+  RoutineAvecStatut,
+} from "./db";
 
 // Configuration globale : comment les notifications s'affichent quand l'app est ouverte
 Notifications.setNotificationHandler({
@@ -114,6 +119,23 @@ export async function programmerRappelQuotidien(
   });
 
   await logEvent("rappel_programme", null, { heure, minute });
+}
+
+/**
+ * Met le rappel en accord avec la config : programmé si actif, annulé sinon.
+ * Appelé par l'écran Rappels et après une restauration de sauvegarde.
+ */
+export async function reprogrammerRappel(config: ConfigRappel) {
+  if (!config.actif) {
+    await annulerRappelQuotidien();
+    return;
+  }
+  const routines = await getRoutinesAvecStatutDuJour();
+  const contenu = construireContenuRappel(routines) ?? {
+    title: "Rappel de tes routines",
+    body: "C'est le moment de faire le point sur ta journée.",
+  };
+  await programmerRappelQuotidien(config.heure, config.minute, contenu);
 }
 
 /**
