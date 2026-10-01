@@ -25,6 +25,9 @@ export type TypeEvenement =
   // interrupteur « Jour difficile » : garde l'historique des jours difficiles
   | "jour_difficile_active"
   | "jour_difficile_desactive"
+  // « Je commence » : début et sortie exacte d'une session
+  | "session_demarree"
+  | "session_terminee"
   // notifications
   | "notification_recue"
   | "notification_tapee"

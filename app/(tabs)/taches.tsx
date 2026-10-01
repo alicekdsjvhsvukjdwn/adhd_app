@@ -176,6 +176,28 @@ export default function Taches() {
   const maintenant = jourDifficile ? [] : classement.filter((p) => p.propose);
   const plusTard = jourDifficile ? [] : classement.filter((p) => !p.propose);
 
+  /** Bouton discret : sur la première carte, ou la carte unique d'un jour difficile. */
+  const boutonJeCommence = (p: Proposition) => {
+    const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
+    return (
+      <TouchableOpacity
+        style={[styles.jeCommence, { borderColor: t.border }]}
+        onPress={() =>
+          router.push(
+            prochaine
+              ? `/je-commence?id=${p.itemId}&etape=${prochaine.id}`
+              : `/je-commence?id=${p.itemId}`,
+          )
+        }
+        hitSlop={6}
+      >
+        <Text style={[styles.jeCommenceTexte, { color: t.accentText }]}>
+          ▶ Je commence
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   const carteJourDifficile = (p: Proposition) => {
     const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
     return (
@@ -215,6 +237,7 @@ export default function Taches() {
             ) : null}
           </TouchableOpacity>
         )}
+        {boutonJeCommence(p)}
       </View>
     );
   };
@@ -309,7 +332,7 @@ export default function Taches() {
           </Text>
         )}
 
-        {maintenant.map((p) => {
+        {maintenant.map((p, rang) => {
           const liste = etapes[p.itemId] ?? [];
           const faites = liste.filter((e) => e.faite === 1).length;
           const suivante = liste.find((e) => e.faite === 0);
@@ -427,6 +450,7 @@ export default function Taches() {
                     </Text>
                   </>
                 )}
+                {rang === 0 && boutonJeCommence(p)}
               </View>
             </Swipeable>
           );
@@ -550,6 +574,15 @@ const styles = StyleSheet.create({
   },
   lien: { fontSize: typography.small, fontWeight: "600" },
   uneAutre: { alignSelf: "flex-start", paddingVertical: spacing.sm },
+  jeCommence: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+  },
+  jeCommenceTexte: { fontSize: typography.small, fontWeight: "600" },
 
   section: {
     fontSize: typography.h2,

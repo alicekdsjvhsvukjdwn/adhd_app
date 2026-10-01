@@ -34,7 +34,7 @@ Projet personnel, conçu et développé seule, qui sert de support à un dossier
 | Le TDAH touche surtout les fonctions exécutives et le passage à l'acte, plus que le savoir. Il faut mettre l'information là où l'action a lieu. | Barkley, _Taking Charge of Adult ADHD_ (2021) | Écran d'action unique, rappels, première petite action affichée |
 | Aversion au délai : ce qui est immédiat l'emporte sur ce qui est lointain.                                                                      | Sonuga-Barke (2003), modèle à double voie     | Échéances rapprochées, récompense immédiate à la complétion     |
 | Le blocage est au démarrage. Une première action minuscule le lève.                                                                             | Solanto et al. (2010), thérapie métacognitive | Champ « première petite action » sur chaque routine et tâche    |
-| Réduire les distractions en amont, organiser, planifier.                                                                                        | Safren et al. (2010), TCC du TDAH de l'adulte | Découpage des tâches en étapes, tri automatique                 |
+| Réduire les distractions en amont, organiser, planifier.                                                                                        | Safren et al. (2010), TCC du TDAH de l'adulte | Découpage en étapes, minuteur « Je commence », tri automatique  |
 | Les intentions de mise en œuvre (« quand X, alors Y ») augmentent nettement le passage à l'acte.                                                | Gollwitzer & Sheeran (2006), méta-analyse     | Moments repères (ancres)                                        |
 | Rythme circadien souvent décalé chez l'adulte avec TDAH.                                                                                        | Kooij & Bijlenga (2013) ; Kooij et al. (2019) | Routines de sommeil, prise en compte du moment de la journée    |
 | Mesures courtes et répétées dans la journée plutôt qu'un bilan rétrospectif.                                                                    | Méthode d'échantillonnage d'expérience (EMA)  | Bilan de la journée en un tap, facultatif                       |
@@ -59,6 +59,7 @@ app/
   _layout.tsx      Démarrage : initialisation de la base, écoute des notifications
   nouvelle-tache.tsx   Ajouter / modifier / supprimer une tâche ou une routine
   mes-routines.tsx     Toutes les routines par domaine, suggestion d'ajustement
+  je-commence.tsx      Une tâche (ou une étape) et un minuteur
   onboarding.tsx, mise-en-place.tsx   Mise en place guidée (premier lancement, puis depuis Profil)
   problemes.tsx, ancres.tsx, rappels.tsx, reglages.tsx
   scene.tsx        Essai de scène en pixel art, hors navigation
@@ -67,7 +68,7 @@ hooks/             useRoutines
 lib/
   dates.ts         Toutes les dates de calendrier, en heure locale
   versions.ts      Versions d'une routine (courte les jours difficiles)
-  moteur-regles.ts, routines-maintenant.ts, modification-item.ts, sauvegarde-format.ts
+  moteur-regles.ts, routines-maintenant.ts, modification-item.ts, minuteur.ts, sauvegarde-format.ts
                    Logique pure, testée par npm test (tests/)
   theme.ts, theme-categories.ts
   catalogue/       Difficultés et familles de routines, en TypeScript
@@ -144,7 +145,7 @@ Une seule table pour tout ce que la personne dépose.
 | `preferences`  | Intensité de la gamification, ton, rigidité horaire, onboarding fait            |
 | `meta`         | Valeurs techniques, dont l'énergie choisie pour la journée                      |
 | `event_log`    | Journal des événements (ajouts, complétions, notifications…)                    |
-| `sessions`     | Héritée de l'onglet Pause, plus alimentée                                       |
+| `sessions`     | Créneaux de « Je commence » (type `creneau`) : durée prévue, durée réelle, minuteur allé au bout ou non. Les types `focus` et `regulation` viennent de l'ancien onglet Pause |
 
 ---
 
@@ -159,6 +160,7 @@ Une seule table pour tout ce que la personne dépose.
 | **Profil**             | Idées de routines, moments repères, rappels, réglages, sauvegarde, réinitialisation     |
 | Ajouter / Modifier     | Saisie d'une tâche ou d'une routine, correction, suppression                            |
 | Mes routines           | Toutes les routines actives par domaine, suggestion d'ajustement, modifier, supprimer   |
+| Je commence            | Une tâche (ou sa prochaine étape) et un minuteur, ouvert depuis Tâches                  |
 | Mise en place guidée   | Choix de routines à partir des difficultés (voir `docs/mise-en-place-guidee.md`)        |
 
 Au premier lancement, la mise en place guidée sert d'onboarding. Elle reste accessible depuis Profil → Idées de routines.
@@ -194,6 +196,8 @@ Toutes les routines actives, prévues aujourd'hui ou non, rangées par domaine, 
 
 Après avoir coché une tâche ou une étape, un bandeau « Annuler » reste affiché 6 secondes.
 
+Un bouton discret « ▶ Je commence » (voir 5.6) est sur la première carte de « À faire maintenant », et seulement sur elle.
+
 **Un jour difficile**, « À faire maintenant » devient « Une seule chose » : une seule tâche, et « Plus tard » est masqué (la ligne « Noter » et le calendrier restent). La tâche est choisie ainsi, sans priorité aux échéances (`ordreJourDifficile`, `lib/moteur-regles.ts`) :
 
 1. la tâche découpée la mieux classée qui a encore une étape à faire ; on n'en montre que la prochaine étape ;
@@ -226,7 +230,26 @@ La version longue n'est plus saisie ni affichée. Celles déjà écrites restent
 
 Un interrupteur sur l'écran Routines, stocké dans `meta` pour la journée : le lendemain, il repart désactivé. Chaque activation et désactivation est enregistrée dans `event_log` (`jour_difficile_active`, `jour_difficile_desactive`), ce qui garde l'historique des jours difficiles.
 
-Effets : toutes les routines en version courte ; les routines exigeantes non faites rangées dans « Si l'énergie revient », repliée ; une seule tâche dans l'onglet Tâches, avec « Une autre » (voir 5.2) ; pas de suggestion d'ajustement.
+Effets : toutes les routines en version courte ; les routines exigeantes non faites rangées dans « Si l'énergie revient », repliée ; une seule tâche dans l'onglet Tâches, avec « Une autre » et « Je commence » (voir 5.2) ; pas de suggestion d'ajustement.
+
+### 5.6 Je commence
+
+Ouvert par le bouton « ▶ Je commence » d'une carte de Tâches. Il porte sur la tâche, ou sur sa prochaine étape si elle est découpée.
+
+1. **Avant** : le nom (et la première action), « Combien de temps ? » en puces (5, 15, 25 min, plus la durée de la tâche si elle est autre), préchoisi sur la durée de la tâche, sinon **5 minutes, « juste pour voir »**. Puis « Commencer ».
+2. **Pendant** : le temps restant en grand, une barre qui avance, « C'est fait » et « J'arrête là ». Une fois le temps passé : « Le temps est passé. » et les trois sorties.
+
+**Le minuteur** se calcule toujours à partir de l'heure de départ : temps restant = fin prévue − maintenant. Rien n'est décompté ; l'écran est seulement redessiné chaque seconde, et recalculé au retour au premier plan. Verrouiller le téléphone ou changer d'appli ne fausse rien. Une **notification de fin** est programmée à l'heure prévue si la permission est déjà accordée (elle n'est jamais demandée ici), annulée si on sort avant, déplacée si on prolonge.
+
+**Trois sorties**, aucune présentée comme un échec :
+
+- **C'est fait** : la tâche est terminée (ou l'étape cochée), avec les points habituels ; sans effet si c'était déjà fait ailleurs.
+- **Encore un peu** : 5 minutes de plus, à partir de maintenant si la fin est passée, de la fin prévue sinon.
+- **J'arrête là** : la tâche reste à faire. « C'est noté. La tâche t'attendra. »
+
+Quitter l'écran pendant le minuteur clôt la session comme un arrêt.
+
+**Données** : une session de type `creneau` (durée choisie, durée réelle, minuteur allé au bout ou non), exclue des calculs d'estimation, qui ne lisent que les sessions `focus` : un créneau n'est pas une estimation, et un arrêt rapide dure 0 minute. La sortie exacte est journalisée dans `event_log` (`session_terminee`) : `sortie` (`fait`, `arret`, `retour`), minutes passées, minuteur allé au bout ou non, nombre de prolongations. **Pas de points pour la session** : seule la tâche ou l'étape cochée rapporte.
 
 ---
 
@@ -361,7 +384,7 @@ Ces indicateurs disent si les propositions sont suivies, pas si le tri aide mieu
 
 ## 12. Gamification et éthique
 
-- **Points** : 10 par routine faite (quelle que soit sa version) ou tâche terminée, 5 par étape d'une grosse tâche et 10 de bonus quand toutes sont faites. Le bilan de la journée ne rapporte rien. Niveau = points gagnés au total ÷ 100, arrondi à l'inférieur, + 1.
+- **Points** : 10 par routine faite (quelle que soit sa version) ou tâche terminée, 5 par étape d'une grosse tâche et 10 de bonus quand toutes sont faites. Le bilan de la journée et les sessions « Je commence » ne rapportent rien : ce sont des outils, pas des moyens de gagner des points. Niveau = points gagnés au total ÷ 100, arrondi à l'inférieur, + 1.
 - **Récompenses** : la personne crée ses propres récompenses réelles (un café, un épisode…) avec un prix en points ; des idées sont proposées, calibrées sur environ 60 points par jour. Solde = points gagnés − achats. Dépenser ne fait jamais baisser le niveau. Un achat peut être annulé le jour même.
 - **Série** : nombre de jours consécutifs avec au moins une complétion. Tant que la journée n'est pas finie, la série de la veille est conservée.
 - **Intensité réglable** dans Profil → Réglages : aucune (ni points ni série), discrète (série seule), complète.

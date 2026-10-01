@@ -1,7 +1,12 @@
+import type { Sortie } from "../minuteur";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
-export type TypeSession = "focus" | "regulation";
+/**
+ * 'creneau' = « Je commence » : un créneau pour se lancer, pas une estimation.
+ * Il est exclu des calculs d'estimation (qui ne lisent que 'focus').
+ */
+export type TypeSession = "focus" | "regulation" | "creneau";
 
 export type Session = {
   id: number;
@@ -44,22 +49,30 @@ export async function demarrerSession(params: {
 }
 
 /**
- * Clôt une session. `terminee` distingue « allée au bout du minuteur »
- * de « arrêtée avant » — l'arrêt anticipé n'est pas un échec, mais
- * c'est une information utile au moteur.
+ * Clôt une session. `alleeAuBout` (colonne terminee) dit si le minuteur est
+ * arrivé à zéro ; `sortie` dit ce que la personne a choisi. Aucun des deux
+ * n'est un verdict : rien de tout ça n'est affiché.
+ *
+ * Pas de points : « Je commence » est un outil. Seule la tâche ou l'étape
+ * cochée rapporte, comme d'habitude.
  */
 export async function terminerSession(
   sessionId: number,
-  reelleMin: number,
-  terminee: boolean,
+  bilan: {
+    reelleMin: number;
+    alleeAuBout: boolean;
+    sortie: Sortie;
+    prolongations: number;
+  },
 ) {
   const db = await getDatabase();
+  const { reelleMin, alleeAuBout } = bilan;
 
   await db.runAsync(
     "UPDATE sessions SET fin = ?, reelle_min = ?, terminee = ? WHERE id = ?",
     new Date().toISOString(),
     reelleMin,
-    terminee ? 1 : 0,
+    alleeAuBout ? 1 : 0,
     sessionId,
   );
 
@@ -77,15 +90,17 @@ export async function terminerSession(
     );
   }
 
-  const { addPoints } = await import("./stats");
-  await addPoints(5);
-
   const { logEvent } = await import("./events");
   await logEvent("session_terminee", session?.item_id ?? null, {
     type: session?.type ?? null,
     estimationMin: session?.estimation_min ?? null,
     reelleMin: Math.round(reelleMin),
-    terminee,
+    alleeAuBout,
+    // 'fait' | 'arret' (J'arrête là) | 'retour' (écran quitté)
+    sortie: bilan.sortie,
+    fait: bilan.sortie === "fait",
+    prolongee: bilan.prolongations > 0,
+    prolongations: bilan.prolongations,
   });
 }
 

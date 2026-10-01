@@ -138,6 +138,32 @@ export async function reprogrammerRappel(config: ConfigRappel) {
   await programmerRappelQuotidien(config.heure, config.minute, contenu);
 }
 
+const ID_FIN_MINUTEUR = "fin-minuteur";
+
+/**
+ * Prévient à la fin du minuteur de « Je commence », seulement si la
+ * permission est déjà accordée : on ne la demande pas au moment de se lancer.
+ */
+export async function programmerFinMinuteur(fin: Date, minutes: number) {
+  if (!(await permissionAccordee())) return;
+  await annulerFinMinuteur();
+  await Notifications.scheduleNotificationAsync({
+    identifier: ID_FIN_MINUTEUR,
+    content: {
+      title: "Le temps est passé",
+      body: `Les ${minutes} minutes sont passées. Continuer ou t'arrêter, les deux vont bien.`,
+      sound: "default",
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fin },
+  });
+}
+
+export async function annulerFinMinuteur() {
+  await Notifications.cancelScheduledNotificationAsync(ID_FIN_MINUTEUR).catch(
+    () => {},
+  );
+}
+
 /**
  * Annule le rappel quotidien.
  */
