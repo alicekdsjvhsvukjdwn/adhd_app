@@ -194,6 +194,14 @@ Toutes les routines actives, prévues aujourd'hui ou non, rangées par domaine, 
 
 Après avoir coché une tâche ou une étape, un bandeau « Annuler » reste affiché 6 secondes.
 
+**Un jour difficile**, « À faire maintenant » devient « Une seule chose » : une seule tâche, et « Plus tard » est masqué (la ligne « Noter » et le calendrier restent). La tâche est choisie ainsi, sans priorité aux échéances (`ordreJourDifficile`, `lib/moteur-regles.ts`) :
+
+1. la tâche découpée la mieux classée qui a encore une étape à faire ; on n'en montre que la prochaine étape ;
+2. sinon, la tâche de 15 minutes ou moins la mieux classée ;
+3. sinon, la première du classement.
+
+« Une autre » passe à la tâche suivante du classement, et revient à la première après la dernière. Rien n'est enregistré : le choix repart de la règle à chaque retour sur l'onglet et après chaque tâche ou étape cochée. Une tâche découpée, même atteinte par « Une autre », ne montre que sa prochaine étape.
+
 ### 5.3 Ajouter / Modifier
 
 Un seul écran, avec un choix en haut : **Une fois** (tâche) ou **Régulièrement** (routine). Seul le nom est obligatoire. Pour une tâche, le formulaire court ne montre que le nom ; pour une routine, le nom, le moment et les jours. Tout le reste est dans « Plus d'options », ouvert d'office en modification.
@@ -218,7 +226,7 @@ La version longue n'est plus saisie ni affichée. Celles déjà écrites restent
 
 Un interrupteur sur l'écran Routines, stocké dans `meta` pour la journée : le lendemain, il repart désactivé. Chaque activation et désactivation est enregistrée dans `event_log` (`jour_difficile_active`, `jour_difficile_desactive`), ce qui garde l'historique des jours difficiles.
 
-Effets : toutes les routines en version courte ; les routines exigeantes non faites rangées dans « Si l'énergie revient », repliée ; pas de suggestion d'ajustement.
+Effets : toutes les routines en version courte ; les routines exigeantes non faites rangées dans « Si l'énergie revient », repliée ; une seule tâche dans l'onglet Tâches, avec « Une autre » (voir 5.2) ; pas de suggestion d'ajustement.
 
 ---
 

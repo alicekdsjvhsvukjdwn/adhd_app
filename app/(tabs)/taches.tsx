@@ -28,7 +28,9 @@ import {
     getEtapesPour,
     type Etape,
 } from "../../lib/db/etapes";
+import { estJourDifficile } from "../../lib/db/jour-difficile";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
+import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Annulable =
@@ -42,6 +44,9 @@ export default function Taches() {
   const [classement, setClassement] = useState<Proposition[]>([]);
   const [etapes, setEtapes] = useState<Record<number, Etape[]>>({});
   const [voirPlusTard, setVoirPlusTard] = useState(false);
+  const [jourDifficile, setJourDifficile] = useState(false);
+  // « Une autre » : rang dans l'ordre du jour difficile. Rien n'est enregistré.
+  const [rangUneAutre, setRangUneAutre] = useState(0);
 
   const [nouvelleTache, setNouvelleTache] = useState("");
   const [tacheNotee, setTacheNotee] = useState<string | null>(null);
@@ -61,6 +66,8 @@ export default function Taches() {
     const toutes = await genererPropositions();
     setClassement(toutes);
     setEtapes(await getEtapesPour(toutes.map((p) => p.itemId)));
+    setJourDifficile(await estJourDifficile());
+    setRangUneAutre(0);
   }, []);
 
   useFocusEffect(
@@ -159,8 +166,58 @@ export default function Taches() {
     </View>
   );
 
-  const maintenant = classement.filter((p) => p.propose);
-  const plusTard = classement.filter((p) => !p.propose);
+  // Jour difficile : une seule tâche (voir ordreJourDifficile), le reste attend.
+  const ordre = jourDifficile
+    ? ordreJourDifficile(classement, (id) =>
+        (etapes[id] ?? []).some((e) => e.faite === 0),
+      )
+    : [];
+  const unique = ordre.length > 0 ? ordre[rangUneAutre % ordre.length] : null;
+  const maintenant = jourDifficile ? [] : classement.filter((p) => p.propose);
+  const plusTard = jourDifficile ? [] : classement.filter((p) => !p.propose);
+
+  const carteJourDifficile = (p: Proposition) => {
+    const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
+    return (
+      <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+        {prochaine ? (
+          <>
+            {/* Tâche découpée : seulement sa prochaine étape */}
+            <Text style={[styles.premiere, { color: t.textMuted, marginTop: 0 }]}>
+              {p.nom}
+            </Text>
+            <TouchableOpacity
+              onPress={() => onEtape(p, prochaine)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: false }}
+            >
+              <Text style={[styles.nom, { color: t.textPrimary }]}>
+                ○ {prochaine.nom}
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            onPress={() => onTerminer(p)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: false }}
+          >
+            <Text style={[styles.nom, { color: t.textPrimary }]}>○ {p.nom}</Text>
+            {p.premiere_action ? (
+              <Text style={[styles.premiere, { color: t.textSecondary }]}>
+                Commencer par : {p.premiere_action}
+              </Text>
+            ) : null}
+            {p.duree_min ? (
+              <Text style={[styles.premiere, { color: t.textMuted }]}>
+                {p.duree_min} min
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
@@ -219,15 +276,34 @@ export default function Taches() {
             hitSlop={8}
           >
             <Text style={[styles.lien, { color: t.accentText }]}>
-              Plus d'options
+              Plus d&apos;options
             </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={[styles.section, { color: t.textPrimary }]}>
-          À faire maintenant
+          {jourDifficile ? "Une seule chose" : "À faire maintenant"}
         </Text>
-        {maintenant.length === 0 && (
+        {jourDifficile && unique && (
+          <>
+            <Text style={[styles.vide, { color: t.textMuted, marginTop: 0 }]}>
+              Jour difficile : le reste attend.
+            </Text>
+            {carteJourDifficile(unique)}
+            {ordre.length > 1 && (
+              <TouchableOpacity
+                onPress={() => setRangUneAutre(rangUneAutre + 1)}
+                hitSlop={8}
+                style={styles.uneAutre}
+              >
+                <Text style={[styles.lien, { color: t.accentText }]}>
+                  Une autre
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+        {(jourDifficile ? !unique : maintenant.length === 0) && (
           <Text style={[styles.vide, { color: t.textMuted }]}>
             Aucune tâche en cours.
           </Text>
@@ -373,7 +449,7 @@ export default function Taches() {
             </TouchableOpacity>
             {!voirPlusTard && (
               <Text style={[styles.vide, { color: t.textMuted }]}>
-                L'appli les proposera au bon moment.
+                L&apos;appli les proposera au bon moment.
               </Text>
             )}
             {voirPlusTard &&
@@ -473,6 +549,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   lien: { fontSize: typography.small, fontWeight: "600" },
+  uneAutre: { alignSelf: "flex-start", paddingVertical: spacing.sm },
 
   section: {
     fontSize: typography.h2,
