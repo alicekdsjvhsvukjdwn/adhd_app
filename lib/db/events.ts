@@ -20,8 +20,11 @@ export type TypeEvenement =
   | "routine_ajoutee"
   | "routine_supprimee"
   | "routine_modifiee"
-  // check-in d'état
+  // bilan de la journée (et anciens check-ins)
   | "etat_enregistre"
+  // interrupteur « Jour difficile » : garde l'historique des jours difficiles
+  | "jour_difficile_active"
+  | "jour_difficile_desactive"
   // notifications
   | "notification_recue"
   | "notification_tapee"

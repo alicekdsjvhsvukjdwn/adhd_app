@@ -68,6 +68,12 @@ export function versionsDe(r: RoutineVersionnable): Versions {
   };
 }
 
+/** Un jour difficile, toutes les routines en version courte ; sinon la normale. */
+export function versionDuJour(jourDifficile: boolean): Version {
+  return jourDifficile ? "courte" : "normale";
+}
+
+/** Remplacée par versionDuJour au sous-commit suivant (écran Routines). */
 export function versionPourEnergie(niveau: Niveau | null): Version {
   if (niveau === 1) return "courte";
   if (niveau === 3) return "longue";

@@ -10,7 +10,7 @@ import { getAujourdhui } from "./completions";
  * humeur à NULL). Les anciens check-ins complets restent dans la même table.
  */
 
-export type Tranche = "matin" | "apres_midi" | "soir";
+export { trancheDeHeure, type Tranche } from "../routines-maintenant";
 export type Niveau = 1 | 2 | 3;
 
 export type Etat = {
@@ -27,12 +27,6 @@ export type Etat = {
 
 export function heureLocale(d = new Date()): number {
   return d.getHours() + d.getMinutes() / 60;
-}
-
-export function trancheDeHeure(h: number): Tranche {
-  if (h < 12) return "matin";
-  if (h < 18) return "apres_midi";
-  return "soir";
 }
 
 /** Bilan déjà donné aujourd'hui, ou null. */

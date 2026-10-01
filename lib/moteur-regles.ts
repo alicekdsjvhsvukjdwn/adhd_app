@@ -31,6 +31,31 @@ export function scoreTotal(c: ComposantesScore): number {
   );
 }
 
+/** Durée en dessous de laquelle une tâche passe pour petite un jour difficile. */
+export const DUREE_COURTE_MIN = 15;
+
+/**
+ * Ordre de passage de la tâche unique d'un jour difficile.
+ * La première est celle affichée :
+ *   1. la tâche découpée la mieux classée qui a encore une étape à faire
+ *      (on n'en montre que la prochaine étape) ;
+ *   2. sinon, la tâche de 15 min ou moins la mieux classée ;
+ *   3. sinon, la première du classement.
+ * Les suivantes, pour « Une autre », gardent l'ordre du classement.
+ * Aucune priorité aux échéances : un jour difficile, on vise petit.
+ */
+export function ordreJourDifficile<T extends { itemId: number; duree_min: number | null }>(
+  classement: T[],
+  aEncoreUneEtape: (itemId: number) => boolean,
+): T[] {
+  const choisie =
+    classement.find((t) => aEncoreUneEtape(t.itemId)) ??
+    classement.find((t) => t.duree_min != null && t.duree_min <= DUREE_COURTE_MIN) ??
+    classement[0];
+  if (!choisie) return [];
+  return [choisie, ...classement.filter((t) => t !== choisie)];
+}
+
 /** Raison affichée quand aucune composante ne se distingue. */
 export const RAISON_PAR_DEFAUT = "À faire quand tu peux";
 
