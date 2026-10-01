@@ -10,7 +10,7 @@ C. Conception des mécaniques de jeu — streaks non punitifs, récompenses vari
 II. Fondations techniques
 A. Environnement — React Native/Expo, VS Code, Git/GitHub. (fait)
 B. Persistance et CRUD — SQLite local, routines + historique par date. (fait)
-C. Architecture logicielle — découpage lib/db.ts en fichiers par domaine, hook useRoutines(), state manager (Zustand). (à faire — priorité actuelle)
+C. Architecture logicielle — découpage lib/db.ts en fichiers par domaine, hook useRoutines(). (fait ; pas de state manager pour l'instant)
 III. Couche adaptative
 A. Collecte de signaux comportementaux — table event_log (type, routine, timestamp, contexte).
 B. Moteur de règles et de scoring — score composite pondéré par routine (taux de complétion récent, tendance, écart horaire, variance jour/semaine) plutôt que règles binaires.
@@ -32,4 +32,5 @@ Conclusion — Perspectives (hors scope V1)
 
 Clustering multi-utilisateurs, backend partagé, étude longitudinale sur l'efficacité réelle des adaptations.
 
-Étape en cours : II.C (refactor architecture)
+Fait : II, III (event_log, moteur de tri, suggestions à valider), IV.A–D (rappels, mise en place guidée, récompenses, module Tâches).
+Étape en cours : V.A–B (robustesse, tests unitaires sur la logique pure).

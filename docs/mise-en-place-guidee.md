@@ -80,8 +80,8 @@ Toucher une troisième difficulté affiche : « Deux pour commencer. Retire-en u
 
 ### Réutilisation
 
-- Le « + » à côté de « Routines » rouvre le même parcours, avec les difficultés déjà choisies marquées.
-- Les difficultés choisies sont enregistrées : elles serviront à mettre en avant les astuces correspondantes dans Infos, et à choisir quoi proposer quand l'appli suggère d'ajouter une routine.
+- Profil → Idées de routines rouvre le même parcours, avec les difficultés déjà choisies marquées. On y arrive aussi depuis l'onglet Routines quand il est vide ou qu'un domaine n'a aucune routine.
+- Les difficultés choisies sont enregistrées : elles serviront à choisir quoi proposer quand l'appli suggère d'ajouter une routine.
 
 ---
 
@@ -168,7 +168,7 @@ L'appli rappelle de prendre un traitement, elle ne donne jamais d'indication de 
 | Je me décourage vite           | Le soir, noter une chose réussie (soir, 1 min)                | Se parler comme à un ami : une phrase prête à relire (à tout moment, 1 min) |
 | J'ai du mal à me détendre      | 5 minutes sans écran (soir, 5 min)                            | Une activité calme choisie à l'avance (soir, 10 min)                        |
 
-Choisir « Tout me semble trop d'un coup » affiche aussi, discrètement, un lien vers la carte « Si ça ne va vraiment pas » de l'onglet Infos.
+Choisir « Tout me semble trop d'un coup » affiche aussi, discrètement, le 3114 (« Si ça ne va vraiment pas »).
 
 #### 🎨 Ce qui compte pour moi — domaine Compétences
 
