@@ -1,4 +1,5 @@
 import type { Categorie } from "../catalogue";
+import { clamp01, scoreEtat } from "../score-etat";
 import { categorieEffective, equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
@@ -54,8 +55,6 @@ const HORIZON_URGENCE_J = 14;
 /** Nombre de propositions ignorées à partir duquel la négligence sature. */
 const SEUIL_NEGLIGENCE = 5;
 
-const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
-
 type CandidatRow = {
   id: number;
   nom: string;
@@ -63,7 +62,6 @@ type CandidatRow = {
   categorie: string | null;
   template_id: string | null;
   importance: number;
-  effort: number | null;
   duree_min: number | null;
   premiere_action: string | null;
   echeance: string | null;
@@ -97,13 +95,6 @@ async function dernierEtatEnergie(): Promise<number | null> {
   return niveau;
 }
 
-/** Effort perçu de l'item, ramené dans [0, 1]. Neutre (0.5) si rien de connu. */
-function effortNormalise(c: CandidatRow): number {
-  if (c.effort != null) return clamp01((c.effort - 1) / 2); // effort 1..3
-  if (c.duree_min != null) return clamp01(c.duree_min / 60); // 1 h = plein effort
-  return 0.5;
-}
-
 function scoreUrgence(echeance: string | null): number {
   if (!echeance) return 0; // une routine quotidienne n'a pas d'échéance
   const jours = Math.floor(
@@ -124,14 +115,6 @@ function scoreMoment(c: CandidatRow, heureActuelle: number): number {
   if (heureIdeale == null) return 0.5; // sans repère : ni favorisé ni pénalisé
   const ecart = Math.abs(heureActuelle - heureIdeale);
   return clamp01(1 - ecart / FENETRE_MOMENT_H);
-}
-
-function scoreEtat(c: CandidatRow, energie: number | null): number {
-  const energieNorm = energie == null ? 0.5 : clamp01((energie - 1) / 2);
-  const effort = effortNormalise(c);
-  // Tant que l'effort tient dans la capacité du moment, score plein.
-  // Au-delà, on pénalise l'écart : énergie basse => on écarte les gros items.
-  return clamp01(1 - Math.max(0, effort - energieNorm));
 }
 
 /** Phrase courte « pourquoi celui-là », tirée de la composante dominante. */
@@ -164,7 +147,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
 
   const candidats = await db.getAllAsync<CandidatRow>(
     `SELECT i.id, i.nom, i.type, i.categorie, i.template_id,
-            i.importance, i.effort, i.duree_min,
+            i.importance, i.duree_min,
             i.premiere_action, i.echeance, i.heure_reelle_moy,
             i.nb_propositions_sans_action,
             i.fenetre_debut_h, i.fenetre_fin_h,
@@ -195,7 +178,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
       importance: clamp01((c.importance - 1) / 2), // 1..3 => 0, .5, 1
       moment: scoreMoment(c, heureActuelle),
       equilibre: cat ? equilibre[cat] : 0.5,
-      etat: scoreEtat(c, energie),
+      etat: scoreEtat(c.duree_min, energie),
       negligence: clamp01(c.nb_propositions_sans_action / SEUIL_NEGLIGENCE),
     };
     const score =

@@ -245,7 +245,8 @@ export default function Ajouter() {
     try {
       const commun = {
         nom: nom.trim(),
-        effort,
+        // La difficulté ne sert qu'aux routines (« Si l'énergie revient »).
+        effort: mode === "routine" ? effort : null,
         categorie,
         duree_min: duree,
         premiere_action: premiereAction.trim() || null,
@@ -415,56 +416,8 @@ export default function Ajouter() {
           returnKeyType="done"
         />
 
-        {mode === "tache" ? (
-          <>
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Importance
-            </Text>
-            <View style={styles.ligneChoix}>
-              {IMPORTANCES.map((i) => (
-                <Choix
-                  key={i.valeur}
-                  actif={importance === i.valeur}
-                  libelle={i.libelle}
-                  onPress={() => setImportance(i.valeur)}
-                />
-              ))}
-            </View>
-
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Pour quand ?
-            </Text>
-            <View style={styles.ligneChoix}>
-              {ECHEANCES.map((e) => (
-                <Choix
-                  key={e.libelle}
-                  actif={
-                    e.jours === null
-                      ? echeance === null
-                      : echeance === dateDansJours(e.jours)
-                  }
-                  libelle={e.libelle}
-                  onPress={() =>
-                    setEcheance(
-                      e.jours === null ? null : dateDansJours(e.jours),
-                    )
-                  }
-                />
-              ))}
-              {echeance !== null &&
-                !ECHEANCES.some(
-                  (e) =>
-                    e.jours !== null && dateDansJours(e.jours) === echeance,
-                ) && (
-                  <Choix
-                    actif
-                    libelle={dateCourte(echeance)}
-                    onPress={() => {}}
-                  />
-                )}
-            </View>
-          </>
-        ) : (
+        {/* Tâche : seul le titre est à l'écran, le reste est dans « Plus d'options » */}
+        {mode === "routine" && (
           <>
             <Text style={[styles.label, { color: t.textSecondary }]}>
               À quel moment de la journée ?
@@ -528,25 +481,6 @@ export default function Ajouter() {
           </>
         )}
 
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Difficulté
-        </Text>
-        <View style={styles.ligneChoix}>
-          {DIFFICULTES.map((d) => (
-            <Choix
-              key={d.valeur}
-              actif={effort === d.valeur}
-              libelle={d.libelle}
-              onPress={() => setEffort(d.valeur)}
-            />
-          ))}
-        </View>
-        <Text style={[styles.aide, { color: t.textMuted }]}>
-          {mode === "routine"
-            ? "Quand ton énergie est basse, les routines exigeantes passent à part, sans pression."
-            : "L'appli propose les tâches faciles en premier quand ton énergie est basse."}
-        </Text>
-
         {!plusOptions ? (
           <TouchableOpacity
             style={[styles.plusOptions, { borderColor: t.border }]}
@@ -557,14 +491,62 @@ export default function Ajouter() {
             </Text>
             <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
               {mode === "routine"
-                ? "Versions selon l'énergie, domaine, durée, première action"
-                : "Étapes, domaine, durée, première action"}
+                ? "Difficulté, versions selon l'énergie, domaine, durée, première action"
+                : "Importance, échéance, étapes, domaine, durée, première action"}
             </Text>
           </TouchableOpacity>
         ) : (
           <>
             {mode === "tache" ? (
               <>
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Importance
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {IMPORTANCES.map((i) => (
+                    <Choix
+                      key={i.valeur}
+                      actif={importance === i.valeur}
+                      libelle={i.libelle}
+                      onPress={() => setImportance(i.valeur)}
+                    />
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Pour quand ?
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {ECHEANCES.map((e) => (
+                    <Choix
+                      key={e.libelle}
+                      actif={
+                        e.jours === null
+                          ? echeance === null
+                          : echeance === dateDansJours(e.jours)
+                      }
+                      libelle={e.libelle}
+                      onPress={() =>
+                        setEcheance(
+                          e.jours === null ? null : dateDansJours(e.jours),
+                        )
+                      }
+                    />
+                  ))}
+                  {echeance !== null &&
+                    !ECHEANCES.some(
+                      (e) =>
+                        e.jours !== null &&
+                        dateDansJours(e.jours) === echeance,
+                    ) && (
+                      <Choix
+                        actif
+                        libelle={dateCourte(echeance)}
+                        onPress={() => {}}
+                      />
+                    )}
+                </View>
+
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Étapes (facultatif)
                 </Text>
@@ -647,6 +629,24 @@ export default function Ajouter() {
               </>
             ) : (
               <>
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Difficulté
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {DIFFICULTES.map((d) => (
+                    <Choix
+                      key={d.valeur}
+                      actif={effort === d.valeur}
+                      libelle={d.libelle}
+                      onPress={() => setEffort(d.valeur)}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.aide, { color: t.textMuted }]}>
+                  Quand ton énergie est basse, les routines exigeantes passent
+                  à part, sans pression.
+                </Text>
+
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Selon ton énergie (facultatif)
                 </Text>

@@ -191,11 +191,13 @@ Après avoir coché une tâche ou une étape, un bandeau « Annuler » reste aff
 
 ### 5.3 Ajouter / Modifier
 
-Un seul écran, avec un choix en haut : **Une fois** (tâche) ou **Régulièrement** (routine). Seul le nom est obligatoire ; le formulaire est court par défaut et s'ouvre entièrement en modification.
+Un seul écran, avec un choix en haut : **Une fois** (tâche) ou **Régulièrement** (routine). Seul le nom est obligatoire. Pour une tâche, le formulaire court ne montre que le nom ; pour une routine, le nom, le moment et les jours. Tout le reste est dans « Plus d'options », ouvert d'office en modification.
 
 - Tâche : importance (essentiel, utile, bonus), échéance (aucune, aujourd'hui, demain, dans 3 jours, 1 semaine, 2 semaines), étapes.
-- Routine : moment (matin, après-midi, soir, à tout moment), jours de la semaine, versions courte et longue.
-- Commun : domaine, difficulté (facile, moyenne, exigeante), durée estimée, première petite action.
+- Routine : moment (matin, après-midi, soir, à tout moment), jours de la semaine, difficulté (facile, moyenne, exigeante), versions courte et longue.
+- Commun : domaine, durée estimée, première petite action.
+
+Une tâche n'a pas de difficulté : son coût se lit dans sa durée estimée, si elle est donnée.
 
 En modification, les champs sont pré-remplis et le type peut changer (une tâche devient une routine en gardant son historique).
 
@@ -222,7 +224,7 @@ Chaque tâche reçoit un score entre 0 et 1, somme pondérée de six composantes
 | Importance | 0,25  | Importance déclarée : 1 → 0 ; 2 → 0,5 ; 3 → 1                                                                                                                           |
 | Moment     | 0,20  | Proximité entre l'heure actuelle et le bon moment de la tâche (heure réelle observée en priorité, sinon moment déclaré). Nulle au-delà de 4 h d'écart ; 0,5 sans repère |
 | Équilibre  | 0,20  | 1 si le domaine a été délaissé ces 7 derniers jours, 0 s'il est sur-servi, 0,5 si neutre                                                                                |
-| État       | 0,15  | Adéquation entre la difficulté de la tâche (sinon sa durée) et l'énergie du jour : celle choisie sur Routines, sinon le dernier check-in. Une énergie basse écarte les tâches coûteuses |
+| État       | 0,15  | Adéquation entre la durée estimée de la tâche (1 h ou plus = coût plein ; neutre sans durée) et l'énergie du jour : celle choisie sur Routines, sinon le dernier check-in. Une énergie basse écarte les tâches coûteuses |
 | Urgence    | 0,12  | 0 sans échéance, monte à l'approche de l'échéance (horizon de 14 jours), 1 en retard                                                                                    |
 | Négligence | 0,08  | Nombre de jours où la tâche a été proposée sans être faite, saturé à 5                                                                                                  |
 
