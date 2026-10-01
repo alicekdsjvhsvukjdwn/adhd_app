@@ -2,9 +2,9 @@ import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
 /**
- * Énergie qui choisit la version des routines aujourd'hui :
- * le choix fait à la main s'il existe, sinon le dernier check-in du jour,
- * sinon rien (version normale).
+ * Énergie qui choisit la version des routines aujourd'hui : le choix fait
+ * à la main sur l'onglet Routines, sinon rien (version normale).
+ * Le bilan de la journée n'est jamais lu ici.
  */
 
 async function assurerMeta() {
@@ -18,7 +18,7 @@ const cle = () => `energie_routines:${getAujourdhui()}`;
 
 export async function energieDuJour(): Promise<{
   niveau: 1 | 2 | 3 | null;
-  source: "choix" | "checkin" | null;
+  source: "choix" | null;
 }> {
   await assurerMeta();
   const db = await getDatabase();
@@ -28,12 +28,6 @@ export async function energieDuJour(): Promise<{
   );
   if (choix)
     return { niveau: Number(choix.valeur) as 1 | 2 | 3, source: "choix" };
-
-  const etat = await db.getFirstAsync<{ energie: number }>(
-    "SELECT energie FROM etat WHERE date = ? ORDER BY horodatage DESC LIMIT 1",
-    getAujourdhui(),
-  );
-  if (etat) return { niveau: etat.energie as 1 | 2 | 3, source: "checkin" };
   return { niveau: null, source: null };
 }
 

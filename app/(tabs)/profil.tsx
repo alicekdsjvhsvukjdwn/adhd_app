@@ -34,11 +34,6 @@ const ENTREES: Entree[] = [
     route: "/rappels",
   },
   {
-    titre: "Comment je vais",
-    description: "Le point énergie, concentration, humeur.",
-    route: "/etat",
-  },
-  {
     titre: "Réglages",
     description: "Points et séries affichés sur l'accueil.",
     route: "/reglages",

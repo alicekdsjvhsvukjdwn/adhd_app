@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { BilanJournee } from "../../components/BilanJournee";
 import { annulerCompletion, getAujourdhui } from "../../lib/db/completions";
 import {
   avanceePeriode,
@@ -421,6 +422,8 @@ export default function Progression() {
       <Text style={[styles.titre, { color: t.textPrimary }]}>
         Ce qui avance
       </Text>
+
+      <BilanJournee />
 
       {/* Sélecteur de période */}
       <View style={[styles.selecteur, { backgroundColor: t.bgCard }]}>

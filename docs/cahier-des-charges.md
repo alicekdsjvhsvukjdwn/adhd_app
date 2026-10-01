@@ -12,7 +12,7 @@ Les applications de suivi d'habitudes demandent à l'utilisateur de faire lui-m�
 
 ### 1.2 La thèse
 
-**L'utilisateur dépose, l'appli décide.** La personne note ce qu'elle a à faire en quelques secondes. Une couche cachée trie et priorise à sa place, en tenant compte de l'importance, de l'échéance, du moment de la journée, de son énergie et de l'équilibre entre les domaines de sa vie. L'écran principal ne montre que ce qui compte maintenant.
+**L'utilisateur dépose, l'appli décide.** La personne note ce qu'elle a à faire en quelques secondes. Une couche cachée trie et priorise à sa place, en tenant compte de l'importance, de l'échéance, du moment de la journée et de l'équilibre entre les domaines de sa vie, sans rien lui demander de plus. L'écran principal ne montre que ce qui compte maintenant.
 
 ### 1.3 Objectifs
 
@@ -37,7 +37,7 @@ Projet personnel, conçu et développé seule, qui sert de support à un dossier
 | Réduire les distractions en amont, organiser, planifier.                                                                                        | Safren et al. (2010), TCC du TDAH de l'adulte | Découpage des tâches en étapes, tri automatique                 |
 | Les intentions de mise en œuvre (« quand X, alors Y ») augmentent nettement le passage à l'acte.                                                | Gollwitzer & Sheeran (2006), méta-analyse     | Moments repères (ancres)                                        |
 | Rythme circadien souvent décalé chez l'adulte avec TDAH.                                                                                        | Kooij & Bijlenga (2013) ; Kooij et al. (2019) | Routines de sommeil, prise en compte du moment de la journée    |
-| Mesures courtes et répétées dans la journée plutôt qu'un bilan rétrospectif.                                                                    | Méthode d'échantillonnage d'expérience (EMA)  | Check-in d'état, jusqu'à 3 fois par jour                        |
+| Mesures courtes et répétées dans la journée plutôt qu'un bilan rétrospectif.                                                                    | Méthode d'échantillonnage d'expérience (EMA)  | Bilan de la journée en un tap, facultatif                       |
 
 Chaque famille du catalogue porte sa justification et, quand elle existe, sa source.
 
@@ -59,14 +59,14 @@ app/
   _layout.tsx      Démarrage : initialisation de la base, écoute des notifications
   nouvelle-tache.tsx   Ajouter / modifier une tâche ou une routine
   onboarding.tsx, mise-en-place.tsx   Mise en place guidée (premier lancement, puis depuis Profil)
-  etat.tsx, problemes.tsx, ancres.tsx, rappels.tsx, reglages.tsx
+  problemes.tsx, ancres.tsx, rappels.tsx, reglages.tsx
   scene.tsx        Essai de scène en pixel art, hors navigation
-components/        MiseEnPlace, CalendrierMois, BandeauEtat, CarteSuggestion, BoutonReinitialiser
+components/        MiseEnPlace, CalendrierMois, BilanJournee, CarteSuggestion, CarteSauvegarde, BoutonReinitialiser
 hooks/             useRoutines
 lib/
   dates.ts         Toutes les dates de calendrier, en heure locale
   versions.ts      Versions courte / normale / longue d'une routine
-  score-etat.ts, sauvegarde-format.ts   Logique pure, testée par npm test (tests/)
+  moteur-regles.ts, sauvegarde-format.ts   Logique pure, testée par npm test (tests/)
   theme.ts, theme-categories.ts
   catalogue/       Difficultés et familles de routines, en TypeScript
   db/              Accès aux données, moteur, suggestions, récompenses, migrations
@@ -89,6 +89,7 @@ Les tables principales sont créées par des migrations versionnées (`PRAGMA us
 | 7       | `difficultes` (choisies à la mise en place)                                         |
 | 8       | Versions courte et longue des routines, version faite, `etapes` des tâches          |
 | 9       | `recompenses` et `achats`                                                           |
+| 10      | `etat` : concentration et humeur facultatives (bilan de la journée)                  |
 
 La table `sessions` n'est plus alimentée depuis la suppression de l'onglet Pause ; elle est conservée, car on ne modifie pas une migration passée.
 
@@ -131,7 +132,7 @@ Une seule table pour tout ce que la personne dépose.
 | `completions`  | Une ligne par item et par jour : statut (complet, partiel), heure, durée réelle, version faite |
 | `etapes`       | Étapes d'une grosse tâche, dans l'ordre, faites ou non                          |
 | `decision_log` | Ce que le moteur a proposé, avec le score et le détail de ses composantes       |
-| `etat`         | Check-ins : date, heure exacte, énergie, concentration, humeur (1 à 3)          |
+| `etat`         | Bilans de la journée (énergie seule) et anciens check-ins (énergie, concentration, humeur, 1 à 3), avec l'heure exacte |
 | `suggestions`  | Décisions prises sur les ajustements proposés (acceptée, refusée)               |
 | `difficultes`  | Difficultés choisies à la mise en place                                         |
 | `recompenses`  | Récompenses réelles choisies par la personne, avec leur prix en points          |
@@ -153,10 +154,9 @@ Une seule table pour tout ce que la personne dépose.
 | **Tâches**             | Saisie en une ligne, tâches triées par le moteur, étapes des grosses tâches             |
 | **Récompenses**        | Solde de points, récompenses personnelles, achats                                       |
 | **Progression**        | Ce qui avance : taux, domaines, tâches faites, état selon le moment, calendrier, année  |
-| **Profil**             | Idées de routines, moments repères, rappels, check-in, réglages, réinitialisation       |
+| **Profil**             | Idées de routines, moments repères, rappels, réglages, sauvegarde, réinitialisation     |
 | Ajouter / Modifier     | Saisie d'une tâche ou d'une routine, et correction                                      |
 | Mise en place guidée   | Choix de routines à partir des difficultés (voir `docs/mise-en-place-guidee.md`)        |
-| Check-in               | Trois questions : énergie, concentration, humeur                                        |
 
 Au premier lancement, la mise en place guidée sert d'onboarding. Elle reste accessible depuis Profil → Idées de routines.
 
@@ -169,24 +169,22 @@ Les routines et les tâches ne sont pas mélangées : les routines se font toute
 De haut en bas :
 
 1. **Série, niveau et solde de points**, selon l'intensité de gamification choisie. Le solde mène à Récompenses.
-2. **Invitation au check-in**, si elle est due (voir 8).
-3. **Suggestion d'ajustement**, s'il y en a une (voir 10).
-4. **Ton énergie aujourd'hui** : basse, normale ou haute. Sans choix, le dernier check-in du jour est repris. L'énergie choisit la version affichée des routines (voir 5.4) et oriente le tri des tâches.
-5. **Pastilles d'équilibre** : une par domaine, colorée dès qu'une complétion a eu lieu dans ce domaine aujourd'hui.
-6. **Aujourd'hui** : les routines prévues ce jour-là, regroupées en Matin, Après-midi, Soir et À tout moment, avec un compteur (ex. 2/5). Une routine cochée reste visible, barrée, sous le nom de la version faite.
-7. **Si l'énergie revient** : quand l'énergie est basse, les routines exigeantes non faites sont rangées à part, sans pression.
-8. **Calendrier du mois** des routines.
-9. **Tes routines par domaine** : les routines actives rangées par domaine, avec un lien vers la mise en place quand un domaine est vide.
+2. **Suggestion d'ajustement**, s'il y en a une (voir 10).
+3. **Ton énergie aujourd'hui** : basse, normale ou haute, choisie à la main. Elle choisit seulement la version affichée des routines (voir 5.4) ; le tri des tâches n'en dépend pas.
+4. **Pastilles d'équilibre** : une par domaine, colorée dès qu'une complétion a eu lieu dans ce domaine aujourd'hui.
+5. **Aujourd'hui** : les routines prévues ce jour-là, regroupées en Matin, Après-midi, Soir et À tout moment, avec un compteur (ex. 2/5). Une routine cochée reste visible, barrée, sous le nom de la version faite.
+6. **Si l'énergie revient** : quand l'énergie est basse, les routines exigeantes non faites sont rangées à part, sans pression.
+7. **Calendrier du mois** des routines.
+8. **Tes routines par domaine** : les routines actives rangées par domaine, avec un lien vers la mise en place quand un domaine est vide.
 
 Actions : toucher pour cocher ou décocher ; glisser vers la gauche pour modifier ou supprimer (avec confirmation) ; « + » pour ajouter une routine.
 
 ### 5.2 Tâches
 
-1. **Rappel de l'énergie du jour** et de son effet sur le tri, avec un lien pour la changer.
-2. **Noter en une ligne** : le nom suffit, le domaine est deviné par mots-clés. « Plus d'options » ouvre l'écran complet.
-3. **À faire maintenant** : les propositions du moteur (voir 6), avec la raison du choix, la durée et la première action. Une tâche sans étapes propose « Découper en étapes » ; une tâche découpée affiche ses étapes, une barre de progression et l'étape suivante en gras.
-4. **Plus tard** : le reste du classement, replié par défaut.
-5. **Calendrier du mois** des tâches.
+1. **Noter en une ligne** : le nom suffit, le domaine est deviné par mots-clés. « Plus d'options » ouvre l'écran complet.
+2. **À faire maintenant** : les propositions du moteur (voir 6), avec la raison du choix, la durée et la première action. Une tâche sans étapes propose « Découper en étapes » ; une tâche découpée affiche ses étapes, une barre de progression et l'étape suivante en gras.
+3. **Plus tard** : le reste du classement, replié par défaut.
+4. **Calendrier du mois** des tâches.
 
 Après avoir coché une tâche ou une étape, un bandeau « Annuler » reste affiché 6 secondes.
 
@@ -225,7 +223,7 @@ Chaque tâche reçoit un score entre 0 et 1, somme pondérée de six composantes
 | Importance | 0,25  | Importance déclarée : 1 → 0 ; 2 → 0,5 ; 3 → 1                                                                                                                           |
 | Moment     | 0,20  | Proximité entre l'heure actuelle et le bon moment de la tâche (heure réelle observée en priorité, sinon moment déclaré). Nulle au-delà de 4 h d'écart ; 0,5 sans repère |
 | Équilibre  | 0,20  | 1 si le domaine a été délaissé ces 7 derniers jours, 0 s'il est sur-servi, 0,5 si neutre                                                                                |
-| État       | 0,15  | Adéquation entre la durée estimée de la tâche (1 h ou plus = coût plein ; neutre sans durée) et l'énergie du jour : celle choisie sur Routines, sinon le dernier check-in. Une énergie basse écarte les tâches coûteuses |
+| État       | 0,15  | Constante à 0,5 : le moteur ne lit aucune énergie (ni bilan, ni choix à la main). Le poids est gardé pour que les scores restent comparables à ceux déjà enregistrés ; une constante ne change pas l'ordre du classement |
 | Urgence    | 0,12  | 0 sans échéance, monte à l'approche de l'échéance (horizon de 14 jours), 1 en retard                                                                                    |
 | Négligence | 0,08  | Nombre de jours où la tâche a été proposée sans être faite, saturé à 5                                                                                                  |
 
@@ -237,7 +235,7 @@ Les poids sont fixés à la main, ce qui permet au système de fonctionner dès 
 - Au-delà : les deux meilleures, plus une place d'**exploration** réservée à la tâche la plus négligée parmi les autres. L'écran n'est jamais figé et aucune tâche ne disparaît pour toujours.
 - Le reste du classement est rangé dans « Plus tard », replié.
 
-Chaque carte affiche la raison de sa présence, tirée de la composante qui pèse le plus (« Échéance proche », « Pour varier les domaines », « Revient dans la boucle »…).
+Chaque carte affiche la raison de sa présence, tirée de la composante qui pèse le plus (« Échéance proche », « Pour varier les domaines », « Revient dans la boucle »…). La composante État, constante, n'est jamais une raison ; si aucune composante ne pèse, la carte dit « À faire quand tu peux ».
 
 ### 6.4 Équilibre entre domaines
 
@@ -249,7 +247,7 @@ Au premier lancement de chaque jour, pour chaque jour révolu depuis le dernier 
 
 ### 6.6 Journal des décisions
 
-Les propositions de la première ouverture de chaque jour sont enregistrées dans `decision_log`, avec le score, le détail des composantes, le rang et l'énergie du moment. Ce journal sert à déboguer le tri et à mesurer s'il est suivi.
+Les propositions de la première ouverture de chaque jour sont enregistrées dans `decision_log`, avec le score, le détail des composantes et le rang (la colonne d'énergie reste vide depuis que le moteur n'en lit plus). Ce journal sert à déboguer le tri et à mesurer s'il est suivi.
 
 ---
 
@@ -270,19 +268,16 @@ Le catalogue couvre les six domaines (42 familles). Chaque famille propose plusi
 
 ---
 
-## 8. Check-in d'état
+## 8. Bilan de la journée
 
-Trois questions à trois niveaux : énergie, concentration, humeur.
+En haut de Progression : « Comment était ta journée ? », trois choix en un tap (Difficile, Moyenne, Bonne).
 
-| Règle                                               | Valeur                                          |
-| --------------------------------------------------- | ----------------------------------------------- |
-| Invitations par jour                                | 3 au maximum                                    |
-| Écart minimal entre deux invitations                | 3 heures                                        |
-| Pause après un refus (croix)                        | 1 heure                                         |
-| Nouveau check-in à moins de 30 minutes du précédent | Corrige le précédent au lieu d'en ajouter un    |
-| Points                                              | +5 pour chacun des 3 premiers check-ins du jour |
+- Facultatif : pas d'invitation, pas de rappel, pas de points.
+- Un seul bilan par jour : toucher un autre choix remplace le premier.
+- Enregistré dans `etat` avec l'énergie seule (concentration et humeur vides) et l'heure du tap.
+- **Jamais lu par le moteur ni par l'affichage des routines** : sans bilan, rien ne change.
 
-L'heure exacte est enregistrée. Le moment de la journée (matin avant 12 h, après-midi jusqu'à 18 h, soir ensuite) est déduit à l'affichage. Le moteur utilise le check-in le plus récent de la journée ; celui de la veille n'est jamais utilisé.
+Les anciens check-ins à trois questions (énergie, concentration, humeur) restent en base. Seuls eux alimentent les jauges « Comment tu vas, selon le moment » et le récapitulatif d'un jour : un bilan ne dit rien d'un moment précis.
 
 ---
 
@@ -301,7 +296,8 @@ Une règle unique, partagée par l'accueil et Progression, dit si une routine es
 - **Taux global** : routines faites ÷ routines attendues sur la période (une complétion partielle compte pour moitié).
 - **Anneaux par domaine** : même calcul par domaine, avec le nombre de tâches faites dans ce domaine.
 - **Tâches faites** : liste avec date et domaine. Toucher une tâche permet de la remettre à faire si elle a été cochée par erreur.
-- **Comment tu vas, selon le moment** : jauges d'énergie, de concentration et d'humeur par moment de la journée, uniquement pour les moments où la personne a répondu. La période annoncée suit les données réelles (« Aujourd'hui », « Ces deux derniers jours », « Ces 12 derniers jours »). La phrase de conclusion ne compare deux moments que s'ils ont chacun au moins 2 réponses, et seulement si leurs jauges diffèrent.
+- **Comment était ta journée ?** : le bilan du jour (voir 8), en haut de l'écran.
+- **Comment tu vas, selon le moment** : jauges d'énergie, de concentration et d'humeur par moment de la journée, calculées sur les anciens check-ins complets seulement, et uniquement pour les moments où la personne a répondu. La période annoncée suit les données réelles (« Aujourd'hui », « Ces deux derniers jours », « Ces 12 derniers jours »). La phrase de conclusion ne compare deux moments que s'ils ont chacun au moins 2 réponses, et seulement si leurs jauges diffèrent.
 - **Ce que l'appli apprend** : voir 11.
 - **Calendrier du mois** : chaque jour coloré selon son intensité, de 0 à 4. Score du jour = part des routines attendues faites + 0,25 par tâche terminée, plafonné à 1. Toucher un jour ouvre son récapitulatif : taux, barres par domaine, check-ins avec leur heure, liste de ce qui a été fait (jamais de ce qui manque).
 - **Année** : une ligne par mois, une case par jour, même échelle. Les jours antérieurs à la première utilisation restent neutres.
@@ -343,7 +339,7 @@ Ces indicateurs disent si les propositions sont suivies, pas si le tri aide mieu
 
 ## 12. Gamification et éthique
 
-- **Points** : 10 par routine faite (quelle que soit sa version) ou tâche terminée, 5 par étape d'une grosse tâche et 10 de bonus quand toutes sont faites, 5 par check-in (3 premiers du jour). Niveau = points gagnés au total ÷ 100, arrondi à l'inférieur, + 1.
+- **Points** : 10 par routine faite (quelle que soit sa version) ou tâche terminée, 5 par étape d'une grosse tâche et 10 de bonus quand toutes sont faites. Le bilan de la journée ne rapporte rien. Niveau = points gagnés au total ÷ 100, arrondi à l'inférieur, + 1.
 - **Récompenses** : la personne crée ses propres récompenses réelles (un café, un épisode…) avec un prix en points ; des idées sont proposées, calibrées sur environ 60 points par jour. Solde = points gagnés − achats. Dépenser ne fait jamais baisser le niveau. Un achat peut être annulé le jour même.
 - **Série** : nombre de jours consécutifs avec au moins une complétion. Tant que la journée n'est pas finie, la série de la veille est conservée.
 - **Intensité réglable** dans Profil → Réglages : aucune (ni points ni série), discrète (série seule), complète.
@@ -352,7 +348,7 @@ Principes :
 
 - aucun point retiré quand une série s'arrête ; seule l'annulation immédiate d'une complétion reprend ses points ;
 - pas de récompense aléatoire, pas de notification culpabilisante ;
-- les invitations (check-in, suggestions) sont toujours refusables, et un refus est respecté ;
+- les suggestions sont toujours refusables, et un refus est respecté ; le bilan de la journée n'est jamais demandé ;
 - les données restent sur le téléphone, sauf si la personne exporte une sauvegarde : le fichier contient tout, check-ins et rappels de traitement compris, et l'écran le dit ;
 - Profil et la mise en place donnent un accès direct au 3114 ; l'appli rappelle un traitement sans jamais donner de dose ni d'horaire médical.
 
@@ -378,7 +374,7 @@ Principes :
 | Trois versions d'une routine selon l'énergie, mêmes points | Une seule version                        | Faire la version courte un jour d'énergie basse, c'est réussir sa journée                        |
 | Moteur explicable (score par composantes, raison affichée) | Modèle appris opaque                     | Confiance, débogage, et fonctionnement dès le premier jour                                       |
 | Poids fixés à la main                                      | Poids appris                             | Pas assez de données au début ; l'observation corrige les composantes                            |
-| Check-in selon le temps écoulé, 3 fois par jour au plus    | Créneaux fixes matin / soir              | La bascule à heure fixe posait la question au mauvais moment                                     |
+| Bilan de la journée en un tap, facultatif, dans Progression | Check-in à trois questions, proposé jusqu'à 3 fois par jour | Chaque question coûte de l'attention ; un tri qui dépendrait des réponses pénaliserait ceux qui ne répondent pas |
 | Affichage de l'état selon les données disponibles          | Colonnes fixes matin / après-midi / soir | Ne pas afficher ce que les données ne permettent pas de dire                                     |
 | Anneaux par domaine                                        | Camembert                                | Le camembert montre une répartition, déjà visible sur l'accueil ; les anneaux montrent l'avancée |
 | Suggestions à valider                                      | Ajustements automatiques                 | Un changement visible imposé casse la confiance                                                  |

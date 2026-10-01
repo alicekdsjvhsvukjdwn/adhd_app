@@ -29,7 +29,6 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
   { action: "Une tâche terminée", points: "+10" },
   { action: "Une étape d'une grosse tâche", points: "+5" },
   { action: "Toutes les étapes finies", points: "+10 de bonus" },
-  { action: "Un check-in (les 3 premiers du jour)", points: "+5" },
 ];
 
 /** Idées de départ, prix calibrés sur ~60 points gagnés par jour. */

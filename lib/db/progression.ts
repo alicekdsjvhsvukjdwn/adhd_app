@@ -291,7 +291,9 @@ export async function etatSelonMoment(jours = 30): Promise<EtatSelonMoment> {
     focus: number;
     humeur: number;
   }>(
-    "SELECT date, heure, energie, focus, humeur FROM etat WHERE date >= ?",
+    // Check-ins complets seulement : un bilan de la journée ne dit rien
+    // d'un moment précis (et n'a ni concentration ni humeur).
+    "SELECT date, heure, energie, focus, humeur FROM etat WHERE date >= ? AND focus IS NOT NULL",
     debut,
   );
   if (rows.length === 0) {
@@ -379,7 +381,7 @@ export async function recapJour(date: string): Promise<RecapJour> {
 
   const checkins = await db.getAllAsync<CheckinJour>(
     `SELECT heure, energie, focus, humeur
-     FROM etat WHERE date = ? ORDER BY heure`,
+     FROM etat WHERE date = ? AND focus IS NOT NULL ORDER BY heure`,
     date,
   );
 

@@ -1,11 +1,17 @@
 import type { Categorie } from "../catalogue";
-import { clamp01, scoreEtat } from "../score-etat";
+import {
+  clamp01,
+  ETAT_NEUTRE,
+  raisonDominante,
+  scoreTotal,
+} from "../moteur-regles";
 import { categorieEffective, equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { logDecisions, type Composantes, type Decision } from "./decisions";
-import { energieDuJour } from "./energie";
 import { traiterNegligence } from "./negligence";
+
+export { POIDS } from "../moteur-regles";
 
 /**
  * Le moteur de tri : "l'utilisateur dépose, l'appli décide".
@@ -20,17 +26,10 @@ import { traiterNegligence } from "./negligence";
  * (démarrage à froid). L'observation accumulée (heure_reelle_moy,
  * nb_propositions_sans_action, équilibre des catégories...) corrige
  * ensuite les composantes, pas les poids.
+ *
+ * Aucune énergie n'est lue : ni bilan de la journée, ni choix à la main.
+ * Le tri marche de la même façon que la personne réponde ou non.
  */
-
-/** Poids de départ. Somme = 1, donc le score reste dans [0, 1]. */
-export const POIDS = {
-  importance: 0.25,
-  moment: 0.2,
-  equilibre: 0.2,
-  etat: 0.15,
-  urgence: 0.12,
-  negligence: 0.08,
-} as const;
 
 /** Nombre de places affichées sur l'écran Aujourd'hui. */
 const TOP = 3;
@@ -85,16 +84,6 @@ export type Proposition = {
   raison: string;
 };
 
-/**
- * Énergie du check-in le plus récent de la journée.
- * Celle d'hier ne dit rien de maintenant : sans check-in du jour, neutre.
- */
-async function dernierEtatEnergie(): Promise<number | null> {
-  // Le choix fait à la main sur l'onglet Routines prime, puis le check-in du jour.
-  const { niveau } = await energieDuJour();
-  return niveau;
-}
-
 function scoreUrgence(echeance: string | null): number {
   if (!echeance) return 0; // une routine quotidienne n'a pas d'échéance
   const jours = Math.floor(
@@ -117,20 +106,6 @@ function scoreMoment(c: CandidatRow, heureActuelle: number): number {
   return clamp01(1 - ecart / FENETRE_MOMENT_H);
 }
 
-/** Phrase courte « pourquoi celui-là », tirée de la composante dominante. */
-function raisonDominante(comp: Composantes): string {
-  const contributions: [number, string][] = [
-    [comp.urgence * POIDS.urgence, "Échéance proche"],
-    [comp.importance * POIDS.importance, "Important pour toi"],
-    [comp.moment * POIDS.moment, "C'est le bon moment"],
-    [comp.equilibre * POIDS.equilibre, "Pour varier les domaines"],
-    [comp.etat * POIDS.etat, "Adapté à ton énergie"],
-    [comp.negligence * POIDS.negligence, "Pas fait depuis un moment"],
-  ];
-  contributions.sort((a, b) => b[0] - a[0]);
-  return contributions[0][1];
-}
-
 /**
  * Calcule le classement complet des items actifs non faits aujourd'hui.
  * Renvoie TOUT le classement : `propose` marque le top affiché,
@@ -142,7 +117,6 @@ export async function genererPropositions(): Promise<Proposition[]> {
 
   const date = getAujourdhui();
   const heureActuelle = new Date().getHours() + new Date().getMinutes() / 60;
-  const energie = await dernierEtatEnergie();
   const equilibre = await equilibreParCategorie(7);
 
   const candidats = await db.getAllAsync<CandidatRow>(
@@ -178,17 +152,10 @@ export async function genererPropositions(): Promise<Proposition[]> {
       importance: clamp01((c.importance - 1) / 2), // 1..3 => 0, .5, 1
       moment: scoreMoment(c, heureActuelle),
       equilibre: cat ? equilibre[cat] : 0.5,
-      etat: scoreEtat(c.duree_min, energie),
+      etat: ETAT_NEUTRE,
       negligence: clamp01(c.nb_propositions_sans_action / SEUIL_NEGLIGENCE),
     };
-    const score =
-      composantes.urgence * POIDS.urgence +
-      composantes.importance * POIDS.importance +
-      composantes.moment * POIDS.moment +
-      composantes.equilibre * POIDS.equilibre +
-      composantes.etat * POIDS.etat +
-      composantes.negligence * POIDS.negligence;
-    return { c, composantes, score };
+    return { c, composantes, score: scoreTotal(composantes) };
   });
 
   notes.sort((a, b) => b.score - a.score);
@@ -200,7 +167,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
     notes.forEach((n, i) => {
       propositions.push(construire(n, i + 1, true, false));
     });
-    await journaliserSiPremierDuJour(propositions, energie);
+    await journaliserSiPremierDuJour(propositions);
     return propositions;
   }
 
@@ -230,7 +197,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
       propositions.push(construire(n, TOP + 1 + i, false, false)),
     );
 
-  await journaliserSiPremierDuJour(propositions, energie);
+  await journaliserSiPremierDuJour(propositions);
   return propositions;
 }
 
@@ -264,10 +231,7 @@ function construire(
  * Éviter de réécrire à chaque focus d'écran garde le decision_log lisible
  * et la métrique de taux de réussite juste.
  */
-async function journaliserSiPremierDuJour(
-  propositions: Proposition[],
-  energie: number | null,
-) {
+async function journaliserSiPremierDuJour(propositions: Proposition[]) {
   const db = await getDatabase();
   const dejaFait = await db.getFirstAsync<{ n: number }>(
     "SELECT COUNT(*) AS n FROM decision_log WHERE date = ?",
@@ -287,5 +251,6 @@ async function journaliserSiPremierDuJour(
       raison: p.raison,
     }));
 
-  if (aLogger.length > 0) await logDecisions(aLogger, energie);
+  // etat_energie reste vide : le moteur ne lit plus d'énergie.
+  if (aLogger.length > 0) await logDecisions(aLogger, null);
 }

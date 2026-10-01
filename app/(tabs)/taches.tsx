@@ -19,7 +19,6 @@ import {
     completer,
     deleteItem,
 } from "../../lib/db";
-import { energieDuJour } from "../../lib/db/energie";
 import {
     BONUS_FIN,
     POINTS_ETAPE,
@@ -42,7 +41,6 @@ export default function Taches() {
   const [classement, setClassement] = useState<Proposition[]>([]);
   const [etapes, setEtapes] = useState<Record<number, Etape[]>>({});
   const [voirPlusTard, setVoirPlusTard] = useState(false);
-  const [energie, setEnergie] = useState<1 | 2 | 3 | null>(null);
 
   const [nouvelleTache, setNouvelleTache] = useState("");
   const [tacheNotee, setTacheNotee] = useState<string | null>(null);
@@ -62,7 +60,6 @@ export default function Taches() {
     const toutes = await genererPropositions();
     setClassement(toutes);
     setEtapes(await getEtapesPour(toutes.map((p) => p.itemId)));
-    setEnergie((await energieDuJour()).niveau);
   }, []);
 
   useFocusEffect(
@@ -171,25 +168,6 @@ export default function Taches() {
         contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }}
       >
         <Text style={[styles.titre, { color: t.textPrimary }]}>Tâches</Text>
-
-        {/* L'énergie choisie sur Routines oriente aussi le tri des tâches */}
-        <TouchableOpacity
-          style={[styles.energie, { backgroundColor: t.bgCard }]}
-          onPress={() => router.push("/")}
-        >
-          <Text style={[styles.energieTexte, { color: t.textSecondary }]}>
-            {energie === 1
-              ? "🪫 Énergie basse : les tâches exigeantes sont écartées en priorité."
-              : energie === 3
-                ? "⚡ Énergie haute : les tâches exigeantes ne sont plus écartées."
-                : energie === 2
-                  ? "🔋 Énergie normale."
-                  : "Indique ton énergie sur l'onglet Routines pour adapter les tâches."}
-          </Text>
-          <Text style={[styles.energieLien, { color: t.accentText }]}>
-            Changer
-          </Text>
-        </TouchableOpacity>
 
         {/* Noter en une ligne : l'appli devine le domaine et trie */}
         <View style={styles.ajout}>
@@ -465,16 +443,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
 
-  energie: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.md,
-  },
-  energieTexte: { flex: 1, fontSize: typography.small, lineHeight: 18 },
-  energieLien: { fontSize: typography.small, fontWeight: "600" },
   ajout: { flexDirection: "row", gap: spacing.sm },
   champ: {
     flex: 1,

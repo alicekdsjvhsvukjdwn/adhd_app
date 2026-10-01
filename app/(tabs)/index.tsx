@@ -9,7 +9,6 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { BandeauEtat } from "../../components/BandeauEtat";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { useRoutines } from "../../hooks/useRoutines";
@@ -78,7 +77,7 @@ export default function Routines() {
 
   const [energie, setEnergie] = useState<{
     niveau: Niveau | null;
-    source: "choix" | "checkin" | null;
+    source: "choix" | null;
   }>({ niveau: null, source: null });
   const [equilibreJour, setEquilibreJour] = useState<Record<
     Categorie,
@@ -246,11 +245,9 @@ export default function Routines() {
   };
 
   const sousTitreEnergie =
-    energie.source === "checkin"
-      ? `D'après ton dernier check-in. ${EXPLICATION_VERSION[version]}`
-      : energie.source === "choix"
-        ? EXPLICATION_VERSION[version]
-        : "Choisis-la pour adapter tes routines : version courte, normale ou longue.";
+    energie.source === "choix"
+      ? EXPLICATION_VERSION[version]
+      : "Choisis-la pour adapter tes routines : version courte, normale ou longue.";
 
   return (
     <ScrollView
@@ -278,8 +275,6 @@ export default function Routines() {
           )}
         </View>
       )}
-
-      <BandeauEtat />
 
       <CarteSuggestion
         onDecision={async () => {

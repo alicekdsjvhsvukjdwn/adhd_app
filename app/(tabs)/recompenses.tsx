@@ -382,7 +382,7 @@ export default function Recompenses() {
                 </View>
               ))}
               <Text style={[styles.reglesNote, { color: t.textMuted }]}>
-                Avec 3 routines, 2 tâches et 2 check-ins, on gagne environ 60
+                Avec 3 routines et 3 tâches, on gagne environ 60
                 points par jour : un café vaut une journée, un ciné une semaine.
                 Ton niveau dépend du total gagné, il ne baisse jamais quand tu
                 dépenses.

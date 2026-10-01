@@ -376,6 +376,40 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 10,
+    nom: "bilan de la journée : concentration et humeur facultatives",
+    run: async (db) => {
+      // Le bilan n'enregistre que l'énergie. SQLite ne sait pas retirer un
+      // NOT NULL : on recopie la table, comme pour la migration 5.
+      await db.execAsync(`
+        CREATE TABLE etat_v3 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+
+          -- heure locale décimale (14.5 = 14 h 30)
+          heure REAL NOT NULL,
+
+          -- 1 = bas, 2 = moyen, 3 = haut
+          energie INTEGER NOT NULL,
+          -- NULL pour un bilan de la journée (énergie seule)
+          focus INTEGER,
+          humeur INTEGER,
+
+          horodatage TEXT NOT NULL
+        );
+
+        INSERT INTO etat_v3 (id, date, heure, energie, focus, humeur, horodatage)
+        SELECT id, date, heure, energie, focus, humeur, horodatage FROM etat;
+
+        DROP TABLE etat;
+        ALTER TABLE etat_v3 RENAME TO etat;
+
+        CREATE INDEX idx_etat_date ON etat(date);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
