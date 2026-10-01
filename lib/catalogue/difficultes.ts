@@ -18,7 +18,7 @@ export type Difficulte = {
   routines: string[];
   /** Fait partie des 8 affichées d'abord. */
   frequente?: boolean;
-  /** Afficher un lien discret vers l'aide de l'onglet Infos. */
+  /** Afficher discrètement le 3114 (« Si ça ne va vraiment pas »). */
   lienAide?: boolean;
 };
 

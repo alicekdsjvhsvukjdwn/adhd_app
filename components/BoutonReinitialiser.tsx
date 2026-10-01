@@ -16,7 +16,7 @@ export function BoutonReinitialiser() {
   const confirmer = () => {
     Alert.alert(
       "Tout effacer ?",
-      "Routines, tâches, historique, check-ins, points et réglages seront supprimés, et l'appli repartira de zéro. C'est définitif.\n\nPour seulement changer de profil en gardant tes données, utilise plutôt « Refaire l'onboarding ».",
+      "Routines, tâches, historique, check-ins, points et réglages seront supprimés, et l'appli repartira de zéro. C'est définitif.\n\nPour seulement choisir d'autres routines en gardant tes données, passe plutôt par « Idées de routines ».",
       [
         { text: "Annuler", style: "cancel" },
         {
