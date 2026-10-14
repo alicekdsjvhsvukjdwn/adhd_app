@@ -13,7 +13,7 @@ import { BandeauEtat } from "../../components/BandeauEtat";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import type { Categorie } from "../../lib/catalogue";
-import { annulerCompletion, completer, getPreferences } from "../../lib/db";
+import { annulerCompletion, completer } from "../../lib/db";
 import { routinesParCategorie } from "../../lib/db/categories";
 import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
@@ -74,7 +74,7 @@ function blocDeRoutine(r: RoutineAvecStatut): string {
 }
 
 export default function Routines() {
-  const { routines, stats, preferences, supprimer, recharger } = useRoutines();
+  const { routines, stats, supprimer, recharger } = useRoutines();
   const router = useRouter();
   const t = useTheme();
   const couleurCat = useCouleurCategorie();
@@ -88,15 +88,6 @@ export default function Routines() {
     parCategorie: Record<Categorie, string[]>;
     sansDomaine: string[];
   } | null>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const prefs = await getPreferences();
-        if (!prefs.onboardingFait) router.replace("/onboarding");
-      })();
-    }, [router]),
-  );
 
   const chargerAnnexes = useCallback(async () => {
     setEnergie(await energieDuJour());
@@ -258,23 +249,19 @@ export default function Routines() {
     >
       <Text style={[styles.titre, { color: t.textPrimary }]}>Routines</Text>
 
-      {stats && preferences && preferences.gamification !== "aucune" && (
+      {stats && (
         <View style={[styles.bandeauStats, { backgroundColor: t.bgHighlight }]}>
           <Text style={[styles.statTexte, { color: t.accentText }]}>
             🔥 {stats.currentStreak} j
           </Text>
-          {preferences.gamification === "complete" && (
-            <>
-              <Text style={[styles.statTexte, { color: t.accentText }]}>
-                Niveau {stats.niveau}
-              </Text>
-              <TouchableOpacity onPress={() => router.push("/recompenses")}>
-                <Text style={[styles.statTexte, { color: t.accentText }]}>
-                  🎁 {solde ?? 0} pts
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <Text style={[styles.statTexte, { color: t.accentText }]}>
+            Niveau {stats.niveau}
+          </Text>
+          <TouchableOpacity onPress={() => router.push("/recompenses")}>
+            <Text style={[styles.statTexte, { color: t.accentText }]}>
+              🎁 {solde ?? 0} pts
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 

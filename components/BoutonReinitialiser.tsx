@@ -16,7 +16,7 @@ export function BoutonReinitialiser() {
   const confirmer = () => {
     Alert.alert(
       "Tout effacer ?",
-      "Routines, tâches, historique, check-ins, points et réglages seront supprimés, et l'appli repartira de zéro. C'est définitif.\n\nPour seulement choisir d'autres routines en gardant tes données, passe plutôt par « Idées de routines ».",
+      "Routines, tâches, listes, historique, check-ins, points et récompenses seront supprimés. C'est définitif.",
       [
         { text: "Annuler", style: "cancel" },
         {
@@ -26,7 +26,7 @@ export function BoutonReinitialiser() {
             setEnCours(true);
             try {
               await toutReinitialiser();
-              router.replace("/onboarding");
+              router.replace("/");
             } catch (e) {
               setEnCours(false);
               Alert.alert("La réinitialisation a échoué", String(e));
@@ -39,10 +39,7 @@ export function BoutonReinitialiser() {
 
   return (
     <TouchableOpacity
-      style={[
-        styles.carte,
-        { backgroundColor: t.bgCard, borderColor: t.danger },
-      ]}
+      style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.danger }]}
       onPress={confirmer}
       disabled={enCours}
     >
