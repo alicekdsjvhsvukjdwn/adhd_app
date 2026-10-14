@@ -4,12 +4,6 @@ import { getDatabase } from "./client";
  * Migrations versionnées via PRAGMA user_version.
  * Chaque migration s'exécute une seule fois, dans l'ordre, en transaction.
  * Pour en ajouter une : append dans MIGRATIONS, ne jamais modifier les précédentes.
- *
- * Sauvegardes (lib/db/sauvegarde.ts) : une sauvegarde plus ancienne est
- * restaurée colonne par colonne dans le schéma actuel. Une nouvelle colonne
- * NOT NULL doit donc avoir un DEFAULT, et une migration qui transforme des
- * données (comme la 5) doit garder les anciennes colonnes lisibles, sinon
- * les sauvegardes d'avant ne se restaurent plus.
  */
 
 type Migration = {
@@ -379,34 +373,31 @@ const MIGRATIONS: Migration[] = [
 
   {
     version: 10,
-    nom: "bilan de la journée : concentration et humeur facultatives",
+    nom: "listes de tâches",
     run: async (db) => {
-      // Le bilan n'enregistre que l'énergie. SQLite ne sait pas retirer un
-      // NOT NULL : on recopie la table, comme pour la migration 5.
+      // Listes (Quotidien, Travail…) : un rangement des tâches, distinct des
+      // domaines bien-être (sommeil, corps…) qui servent à l'équilibre.
       await db.execAsync(`
-        CREATE TABLE etat_v3 (
+        CREATE TABLE listes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          date TEXT NOT NULL,
-
-          -- heure locale décimale (14.5 = 14 h 30)
-          heure REAL NOT NULL,
-
-          -- 1 = bas, 2 = moyen, 3 = haut
-          energie INTEGER NOT NULL,
-          -- NULL pour un bilan de la journée (énergie seule)
-          focus INTEGER,
-          humeur INTEGER,
-
-          horodatage TEXT NOT NULL
+          nom TEXT NOT NULL,
+          icone TEXT,
+          ordre INTEGER NOT NULL DEFAULT 0,
+          cree_le TEXT NOT NULL
         );
 
-        INSERT INTO etat_v3 (id, date, heure, energie, focus, humeur, horodatage)
-        SELECT id, date, heure, energie, focus, humeur, horodatage FROM etat;
+        ALTER TABLE items ADD COLUMN liste_id INTEGER;
 
-        DROP TABLE etat;
-        ALTER TABLE etat_v3 RENAME TO etat;
+        INSERT INTO listes (nom, icone, ordre, cree_le) VALUES
+          ('Quotidien', '🏠', 0, datetime('now')),
+          ('Travail', '💼', 1, datetime('now')),
+          ('Administratif', '📬', 2, datetime('now')),
+          ('Compétences', '🎨', 3, datetime('now')),
+          ('Perso', '💛', 4, datetime('now'));
 
-        CREATE INDEX idx_etat_date ON etat(date);
+        -- Les tâches existantes rejoignent Quotidien
+        UPDATE items SET liste_id = (SELECT id FROM listes WHERE nom = 'Quotidien')
+        WHERE type = 'tache';
       `);
     },
   },
