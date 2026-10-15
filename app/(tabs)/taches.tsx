@@ -13,7 +13,10 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import { BarresObjectif } from "../../components/BarresObjectif";
 import { CalendrierMois } from "../../components/CalendrierMois";
+import { PlusMoins } from "../../components/PlusMoins";
+import { ZoneNote } from "../../components/ZoneNote";
 import { deviner } from "../../lib/catalogue";
 import {
   addItem,
@@ -39,10 +42,16 @@ import {
   modifierListe,
   supprimerListe,
   type Liste,
+  definirObjectif,
+  suiviObjectif,
+  type SuiviObjectif,
 } from "../../lib/db/listes";
+import { getAujourdhui } from "../../lib/db/completions";
+import { libelleCompte, type Periode } from "../../lib/regles-taches";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
+import { CLES_COULEURS, useCouleurListe } from "../../lib/theme-listes";
 
 type Annulable =
   | { type: "tache"; id: number; texte: string }
@@ -63,7 +72,20 @@ export default function Taches() {
   const [filtre, setFiltre] = useState<number | null>(null);
   const [gestion, setGestion] = useState(false);
   const [noms, setNoms] = useState<Record<number, string>>({});
+  const [icones, setIcones] = useState<Record<number, string>>({});
   const [nouvelleListe, setNouvelleListe] = useState("");
+  // Carnet : zone de note ouverte après avoir coché une tâche.
+  const [noteOuverte, setNoteOuverte] = useState<{
+    itemId: number;
+    nom: string;
+    date: string;
+  } | null>(null);
+  // Objectif de la liste affichée
+  const [suivi, setSuivi] = useState<SuiviObjectif | null>(null);
+  const [editionObjectif, setEditionObjectif] = useState<{
+    cible: number;
+    periode: Periode;
+  } | null>(null);
 
   const [nouvelleTache, setNouvelleTache] = useState("");
   const [tacheNotee, setTacheNotee] = useState<string | null>(null);
@@ -80,14 +102,18 @@ export default function Taches() {
   );
 
   const charger = useCallback(async () => {
+    // Le mode du jour d'abord : il est lu en une requête, alors que le
+    // classement (négligence, score, journal) prend du temps. En revenant
+    // sur l'onglet après avoir changé l'énergie, la bonne vue s'applique tout de suite.
+    setJourDifficile(await estJourDifficile());
+    setRangUneAutre(0);
     const toutes = await genererPropositions();
     setClassement(toutes);
     setEtapes(await getEtapesPour(toutes.map((p) => p.itemId)));
-    setJourDifficile(await estJourDifficile());
-    setRangUneAutre(0);
     const l = await getListes();
     setListes(l);
     setNoms(Object.fromEntries(l.map((x) => [x.id, x.nom])));
+    setIcones(Object.fromEntries(l.map((x) => [x.id, x.icone ?? ""])));
     setFiltre((f) => (f !== null && !l.some((x) => x.id === f) ? null : f));
   }, []);
 
@@ -106,6 +132,7 @@ export default function Taches() {
   const onNoter = async () => {
     const nom = nouvelleTache.trim();
     if (!nom) return;
+    setNoteOuverte(null);
     await addItem({
       nom,
       type: "tache",
@@ -123,14 +150,17 @@ export default function Taches() {
   const onTerminer = async (p: Proposition) => {
     await completer(p.itemId, "complet");
     proposerAnnulation({ type: "tache", id: p.itemId, texte: `✓ ${p.nom}` });
+    setNoteOuverte({ itemId: p.itemId, nom: p.nom, date: getAujourdhui() });
     await charger();
   };
 
   const onEtape = async (p: Proposition, e: Etape) => {
+    setNoteOuverte(null);
     if (e.faite === 1) {
       await decocherEtape(e.id);
     } else {
       const derniere = await cocherEtape(e.id);
+      if (derniere) setNoteOuverte({ itemId: p.itemId, nom: p.nom, date: getAujourdhui() });
       proposerAnnulation({
         type: "etape",
         etapeId: e.id,
@@ -147,6 +177,7 @@ export default function Taches() {
     if (minuteurAnnuler.current) clearTimeout(minuteurAnnuler.current);
     const a = annulable;
     setAnnulable(null);
+    setNoteOuverte(null);
     if (a.type === "tache") await annulerCompletion(a.id);
     else await decocherEtape(a.etapeId);
     await charger();
@@ -167,8 +198,16 @@ export default function Taches() {
     ]);
   };
 
+  const historique = (p: Proposition) => router.push(`/historique?id=${p.itemId}`);
+
   const actions = (p: Proposition) => (
     <View style={styles.actions}>
+      <TouchableOpacity
+        style={[styles.action, { backgroundColor: t.textMuted }]}
+        onPress={() => historique(p)}
+      >
+        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>Historique</Text>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[styles.action, { backgroundColor: t.accentText }]}
         onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
@@ -184,8 +223,49 @@ export default function Taches() {
     </View>
   );
 
+  const couleurListe = useCouleurListe();
   const listeActive = listes.find((l) => l.id === filtre) ?? null;
+  /** Liseré de la carte : la couleur de sa liste. */
+  const bordure = (p: Proposition) =>
+    couleurListe(listes.find((l) => l.id === p.liste_id)?.couleur ?? null).fond;
+  /** Icône de la liste devant le titre, en vue « Toutes » (dans une liste, elle est déjà en titre). */
+  const icone = (p: Proposition) => {
+    const l = listes.find((x) => x.id === p.liste_id);
+    return filtre === null && l?.icone ? `${l.icone} ` : "";
+  };
   const nomListe = (id: number | null) => listes.find((l) => l.id === id);
+
+  // Objectif de la liste affichée, recalculé quand on coche.
+  useEffect(() => {
+    let actif = true;
+    setEditionObjectif(null);
+    if (!listeActive) {
+      setSuivi(null);
+      return;
+    }
+    suiviObjectif(listeActive).then((s) => {
+      if (actif) setSuivi(s);
+    });
+    return () => {
+      actif = false;
+    };
+  }, [listeActive, classement]);
+
+  const zoneNote = noteOuverte && (
+    <ZoneNote
+      key={`${noteOuverte.itemId}-${noteOuverte.date}`}
+      itemId={noteOuverte.itemId}
+      date={noteOuverte.date}
+      titre={`✓ ${noteOuverte.nom} · une note ? (facultatif)`}
+      onFerme={() => setNoteOuverte(null)}
+    />
+  );
+
+  const enregistrerObjectif = async (cible: number | null, periode: Periode) => {
+    if (!listeActive) return;
+    await definirObjectif(listeActive.id, cible, periode);
+    await charger();
+  };
 
   /** Bouton discret : sur la première carte, ou la carte unique d'un jour difficile. */
   const boutonJeCommence = (p: Proposition) => {
@@ -212,7 +292,7 @@ export default function Taches() {
   const carteJourDifficile = (p: Proposition) => {
     const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
     return (
-      <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+      <View style={[styles.carte, styles.carteListe, { backgroundColor: t.bgCard, borderLeftColor: bordure(p) }]}>
         {prochaine ? (
           <>
             {/* Tâche découpée : seulement sa prochaine étape */}
@@ -235,7 +315,7 @@ export default function Taches() {
             accessibilityRole="checkbox"
             accessibilityState={{ checked: false }}
           >
-            <Text style={[styles.nom, { color: t.textPrimary }]}>○ {p.nom}</Text>
+            <Text style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Text>
             {p.premiere_action ? (
               <Text style={[styles.premiere, { color: t.textSecondary }]}>
                 Commencer par : {p.premiere_action}
@@ -259,7 +339,13 @@ export default function Taches() {
           const suivante = liste.find((e) => e.faite === 0);
           return (
             <Swipeable key={p.itemId} renderRightActions={() => actions(p)}>
-              <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+              <View
+                style={[
+                  styles.carte,
+                  styles.carteListe,
+                  { backgroundColor: t.bgCard, borderLeftColor: bordure(p) },
+                ]}
+              >
                 <View style={styles.carteEntete}>
                   <View style={[styles.raison, { backgroundColor: t.bgHighlight }]}>
                     <Text style={[styles.raisonTexte, { color: t.accentText }]}>
@@ -274,11 +360,20 @@ export default function Taches() {
                     {p.duree_min ? `${filtre === null && nomListe(p.liste_id) ? " · " : ""}${p.duree_min} min` : ""}
                   </Text>
                 </View>
+                {p.compte && (
+                  <Text style={[styles.compte, { color: t.accentText }]}>
+                    {libelleCompte(p.compte.fait, p.compte.cible, p.compte.periode)}
+                  </Text>
+                )}
 
                 {liste.length === 0 ? (
                   <>
-                    <TouchableOpacity onPress={() => onTerminer(p)}>
-                      <Text style={[styles.nom, { color: t.textPrimary }]}>○ {p.nom}</Text>
+                    <TouchableOpacity
+                      onPress={() => onTerminer(p)}
+                      onLongPress={() => historique(p)}
+                      accessibilityHint="Appui long : historique"
+                    >
+                      <Text style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Text>
                       {p.premiere_action ? (
                         <Text style={[styles.premiere, { color: t.textSecondary }]}>
                           Commencer par : {p.premiere_action}
@@ -296,7 +391,12 @@ export default function Taches() {
                   </>
                 ) : (
                   <>
-                    <Text style={[styles.nom, { color: t.textPrimary }]}>{p.nom}</Text>
+                    <TouchableOpacity
+                      onLongPress={() => historique(p)}
+                      accessibilityHint="Appui long : historique"
+                    >
+                      <Text style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Text>
+                    </TouchableOpacity>
                     <View style={styles.progressionLigne}>
                       <View style={[styles.barre, { backgroundColor: t.bgApp }]}>
                         <View
@@ -385,9 +485,17 @@ export default function Taches() {
           contentContainerStyle={styles.filtres}
           style={{ marginBottom: spacing.md, flexGrow: 0 }}
         >
-          {[{ id: null as number | null, nom: "Toutes", icone: null as string | null }, ...listes].map(
+          {[
+            { id: null as number | null, nom: "Toutes", icone: null as string | null, couleur: null as string | null },
+            ...listes,
+          ].map(
             (l) => {
               const actif = filtre === l.id;
+              // « Toutes » garde l'accent ; une liste prend sa couleur.
+              const c =
+                l.id === null
+                  ? { fond: t.accent, texte: t.textOnAccent }
+                  : couleurListe(l.couleur);
               const n =
                 l.id === null
                   ? classement.length
@@ -395,19 +503,24 @@ export default function Taches() {
               return (
                 <TouchableOpacity
                   key={l.id ?? "toutes"}
-                  onPress={() => setFiltre(l.id)}
+                  onPress={() => {
+                    setNoteOuverte(null);
+                    setFiltre(l.id);
+                  }}
                   style={[
                     styles.filtre,
                     {
-                      backgroundColor: actif ? t.accent : t.bgCard,
-                      borderColor: actif ? t.accent : t.border,
+                      backgroundColor: actif ? c.fond : t.bgCard,
+                      borderColor: l.id === null && !actif ? t.border : c.fond,
                     },
                   ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: actif }}
                 >
                   <Text
                     style={[
                       styles.filtreTexte,
-                      { color: actif ? t.textOnAccent : t.textSecondary },
+                      { color: actif ? c.texte : t.textSecondary },
                     ]}
                   >
                     {l.icone ? `${l.icone} ` : ""}
@@ -483,6 +596,88 @@ export default function Taches() {
               {listeActive?.icone ? `${listeActive.icone} ` : ""}
               {listeActive?.nom}
             </Text>
+            {suivi && (
+              <BarresObjectif suivi={suivi} couleur={couleurListe(listeActive?.couleur ?? null).fond} />
+            )}
+            <View style={styles.liensListe}>
+              <TouchableOpacity
+                onPress={() =>
+                  setEditionObjectif(
+                    editionObjectif
+                      ? null
+                      : {
+                          cible: listeActive?.objectif ?? 3,
+                          periode: listeActive?.objectif_periode ?? "semaine",
+                        },
+                  )
+                }
+                hitSlop={8}
+              >
+                <Text style={[styles.lien, { color: t.accentText }]}>
+                  🎯 {listeActive?.objectif ? "Changer l'objectif" : "Fixer un objectif"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => listeActive && router.push(`/historique?liste=${listeActive.id}`)}
+                hitSlop={8}
+              >
+                <Text style={[styles.lien, { color: t.accentText }]}>📓 Carnet</Text>
+              </TouchableOpacity>
+            </View>
+            {editionObjectif && (
+              <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+                <Text style={[styles.premiere, { color: t.textSecondary, marginTop: 0 }]}>
+                  Tâches à faire dans cette liste
+                </Text>
+                <View style={styles.objectifLigne}>
+                  <PlusMoins
+                    valeur={String(editionObjectif.cible)}
+                    libelle="Objectif"
+                    onPas={(sens) =>
+                      setEditionObjectif((o) => o && { ...o, cible: Math.max(1, o.cible + sens) })
+                    }
+                  />
+                  {(["semaine", "mois"] as Periode[]).map((per) => (
+                    <TouchableOpacity
+                      key={per}
+                      onPress={() => setEditionObjectif({ ...editionObjectif, periode: per })}
+                      style={[
+                        styles.filtre,
+                        {
+                          backgroundColor: editionObjectif.periode === per ? t.accent : t.bgApp,
+                          borderColor: editionObjectif.periode === per ? t.accent : t.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filtreTexte,
+                          { color: editionObjectif.periode === per ? t.textOnAccent : t.textSecondary },
+                        ]}
+                      >
+                        par {per}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.liensListe}>
+                  {listeActive?.objectif ? (
+                    <TouchableOpacity onPress={() => enregistrerObjectif(null, "semaine")} hitSlop={8}>
+                      <Text style={[styles.lien, { color: t.danger }]}>Retirer l&apos;objectif</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View />
+                  )}
+                  <TouchableOpacity
+                    onPress={() => enregistrerObjectif(editionObjectif.cible, editionObjectif.periode)}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.lien, { color: t.accentText }]}>Enregistrer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {zoneNote}
             {dansListe.length === 0 ? (
               <Text style={[styles.vide, { color: t.textMuted }]}>
                 Rien dans cette liste pour l'instant.
@@ -499,6 +694,7 @@ export default function Taches() {
         <Text style={[styles.section, { color: t.textPrimary }]}>
           {modeUnique ? "Une seule chose" : "À faire maintenant"}
         </Text>
+        {zoneNote}
         {modeUnique && unique && (
           <>
             <Text style={[styles.vide, { color: t.textMuted, marginTop: 0 }]}>
@@ -589,8 +785,25 @@ export default function Taches() {
           <Pressable style={[styles.gestion, { backgroundColor: t.bgApp }]}>
             <Text style={[styles.gestionTitre, { color: t.textPrimary }]}>Mes listes</Text>
             {listes.map((l) => (
-              <View key={l.id} style={styles.gestionLigne}>
-                <Text style={{ fontSize: 18 }}>{l.icone ?? "•"}</Text>
+              <View key={l.id} style={styles.gestionBloc}>
+              <View style={styles.gestionLigne}>
+                <TextInput
+                  style={[
+                    styles.gestionIcone,
+                    { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
+                  ]}
+                  value={icones[l.id] ?? ""}
+                  onChangeText={(v) => setIcones({ ...icones, [l.id]: v })}
+                  onEndEditing={async () => {
+                    const v = (icones[l.id] ?? "").trim();
+                    if (v !== (l.icone ?? "")) await modifierListe(l.id, l.nom, v || null, l.couleur);
+                    await charger();
+                  }}
+                  placeholder="•"
+                  placeholderTextColor={t.textMuted}
+                  maxLength={8}
+                  accessibilityLabel={`Icône de ${l.nom}`}
+                />
                 <TextInput
                   style={[
                     styles.gestionChamp,
@@ -600,7 +813,7 @@ export default function Taches() {
                   onChangeText={(v) => setNoms({ ...noms, [l.id]: v })}
                   onEndEditing={async () => {
                     const v = (noms[l.id] ?? "").trim();
-                    if (v && v !== l.nom) await modifierListe(l.id, v, l.icone);
+                    if (v && v !== l.nom) await modifierListe(l.id, v, l.icone, l.couleur);
                     await charger();
                   }}
                 />
@@ -635,6 +848,32 @@ export default function Taches() {
                 >
                   <Text style={[styles.gestionSupprimer, { color: t.danger }]}>✕</Text>
                 </TouchableOpacity>
+              </View>
+              <View style={styles.gestionCouleurs}>
+                {CLES_COULEURS.map((cle) => {
+                  const choisie = l.couleur === cle;
+                  return (
+                    <TouchableOpacity
+                      key={cle}
+                      onPress={async () => {
+                        await modifierListe(l.id, l.nom, l.icone, cle);
+                        await charger();
+                      }}
+                      style={[
+                        styles.gestionCouleur,
+                        {
+                          backgroundColor: couleurListe(cle).fond,
+                          borderColor: choisie ? t.textPrimary : "transparent",
+                        },
+                      ]}
+                      hitSlop={4}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: choisie }}
+                      accessibilityLabel={`Couleur ${cle} pour ${l.nom}`}
+                    />
+                  );
+                })}
+              </View>
               </View>
             ))}
             <View style={styles.gestionLigne}>
@@ -694,6 +933,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
   titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: spacing.lg },
 
+  compte: { fontSize: typography.small, fontWeight: "700", marginBottom: 4 },
+  liensListe: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  objectifLigne: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginVertical: spacing.sm,
+  },
   uneAutre: { alignSelf: "flex-start", paddingVertical: spacing.sm },
   jeCommence: {
     alignSelf: "flex-start",
@@ -762,6 +1014,18 @@ const styles = StyleSheet.create({
   vide: { fontSize: typography.small, fontStyle: "italic", marginBottom: spacing.sm },
 
   carte: { borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md },
+  carteListe: { borderLeftWidth: 4 },
+  gestionBloc: { marginBottom: spacing.md },
+  gestionIcone: {
+    width: 44,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: 8,
+    textAlign: "center",
+    fontSize: 18,
+  },
+  gestionCouleurs: { flexDirection: "row", gap: 10, marginLeft: 52 },
+  gestionCouleur: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
   carteEntete: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -1,3 +1,4 @@
+import { POINTS_ESSENTIELLES, POINTS_TOUTES } from "../regles-taches";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
@@ -27,6 +28,19 @@ export type Achat = {
 /** Ce que rapporte chaque action, tel que le code le calcule. */
 export const REGLES_POINTS: { action: string; points: string }[] = [
   { action: "Une routine faite, quelle que soit sa version", points: "+10" },
+  {
+    action: "Routine à étapes : toutes les essentielles faites",
+    points: `+${POINTS_ESSENTIELLES}`,
+  },
+  {
+    action: "Routine à étapes : toutes les étapes faites",
+    points: `+${POINTS_TOUTES - POINTS_ESSENTIELLES} de plus (${POINTS_TOUTES} en tout)`,
+  },
+  {
+    action: "Jour difficile : les essentielles d'une routine à étapes",
+    points: `+${POINTS_TOUTES}`,
+  },
+  { action: "Une tâche « x fois par semaine / par mois », à chaque fois", points: "+10" },
   { action: "Une tâche terminée", points: "+10" },
   { action: "Une étape d'une grosse tâche", points: "+5" },
   { action: "Toutes les étapes finies", points: "+10 de bonus" },

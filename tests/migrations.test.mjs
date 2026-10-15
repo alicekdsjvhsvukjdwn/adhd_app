@@ -20,13 +20,21 @@ test("migrations déjà appliquées sur le téléphone : jamais renommées", () 
   assert.equal(nom(11), "listes de tâches");
   assert.equal(nom(12), "sommeil");
   assert.equal(nom(13), "sport : callisthénie guidée");
+  assert.equal(nom(14), "routines à étapes et points par complétion");
+  assert.equal(nom(15), "objectifs de liste par semaine ou par mois");
+  assert.equal(nom(16), "carnet : notes des tâches faites");
+  assert.equal(nom(17), "couleur des listes");
 });
 
 test("migrations 12 et suivantes : toute colonne NOT NULL a un DEFAULT", () => {
   const debut = source.indexOf("version: 12,");
   const lignes = source.slice(debut).split("\n");
   const fautives = lignes.filter(
-    (l) => /NOT NULL/.test(l) && !/DEFAULT/.test(l) && !/PRIMARY KEY/.test(l),
+    // Définitions de colonnes seulement (« nom TYPE … NOT NULL »), pas « IS NOT NULL » d'une requête.
+    (l) =>
+      /^\s*(ADD COLUMN\s+)?\w+ (TEXT|INTEGER|REAL).*NOT NULL/.test(l.replace(/^\s*ALTER TABLE \w+ /, "")) &&
+      !/DEFAULT/.test(l) &&
+      !/PRIMARY KEY/.test(l),
   );
   assert.deepEqual(fautives, []);
 });

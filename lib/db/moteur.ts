@@ -1,5 +1,13 @@
 import type { Categorie } from "../catalogue";
 import {
+  debutPeriode,
+  finPeriode,
+  lireFrequence,
+  retardObjectif,
+  urgenceAvecRetard,
+  type Periode,
+} from "../regles-taches";
+import {
   clamp01,
   ETAT_NEUTRE,
   raisonDominante,
@@ -9,6 +17,7 @@ import { categorieEffective, equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { logDecisions, type Composantes, type Decision } from "./decisions";
+import { estJourDifficile } from "./jour-difficile";
 import { traiterNegligence } from "./negligence";
 
 export { POIDS } from "../moteur-regles";
@@ -70,11 +79,18 @@ type CandidatRow = {
   fenetre_fin_h: number | null;
   moment_effectif: string | null;
   liste_id: number | null;
+  recurrence: string | null;
+  /** Calculé après la requête, pour les tâches « x fois par période ». */
+  compte?: Proposition["compte"];
+  /** Nom de la liste quand son retard sur l'objectif fait l'urgence de la tâche. */
+  pourObjectif?: string;
 };
 
 export type Proposition = {
   itemId: number;
   liste_id: number | null;
+  /** Tâche « x fois par semaine / par mois » : où on en est sur la période. */
+  compte: { fait: number; cible: number; periode: Periode } | null;
   nom: string;
   premiere_action: string | null;
   duree_min: number | null;
@@ -126,7 +142,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
             i.importance, i.duree_min,
             i.premiere_action, i.echeance, i.heure_reelle_moy,
             i.nb_propositions_sans_action,
-            i.fenetre_debut_h, i.fenetre_fin_h, i.liste_id,
+            i.fenetre_debut_h, i.fenetre_fin_h, i.liste_id, i.recurrence,
             COALESCE(a.moment, i.moment) AS moment_effectif
      FROM items i
      LEFT JOIN ancres a ON a.id = i.ancre_id
@@ -139,7 +155,22 @@ export async function genererPropositions(): Promise<Proposition[]> {
 
   // Contrainte externe dure : hors de sa fenêtre horaire, un item
   // (ex : appeler un service ouvert 9 h-17 h) n'est pas proposable maintenant.
+  // Tâche « x fois par période » : proposée tant que le compte est sous
+  // l'objectif, puis plus rien jusqu'au lundi ou au 1er du mois.
+  for (const c of candidats) {
+    const f = lireFrequence(c.recurrence);
+    if (!f) continue;
+    const r = await db.getFirstAsync<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM completions WHERE item_id = ? AND date >= ? AND date <= ?",
+      c.id,
+      debutPeriode(date, f.periode),
+      finPeriode(date, f.periode),
+    );
+    c.compte = { fait: r?.n ?? 0, cible: f.cible, periode: f.periode };
+  }
+
   const proposables = candidats.filter((c) => {
+    if (c.compte && c.compte.fait >= c.compte.cible) return false;
     if (c.fenetre_debut_h != null && heureActuelle < c.fenetre_debut_h)
       return false;
     if (c.fenetre_fin_h != null && heureActuelle >= c.fenetre_fin_h)
@@ -147,15 +178,27 @@ export async function genererPropositions(): Promise<Proposition[]> {
     return true;
   });
 
+  const retards = await retardsDesListes(date);
+  // Un jour difficile, la tâche unique doit rester la plus petite, pas la plus en retard.
+  const jourDifficile = await estJourDifficile();
+
   const notes = proposables.map((c) => {
     const cat = categorieEffectiveLocale(c);
+    const urgenceEcheance = scoreUrgence(c.echeance);
+    const liste = c.liste_id !== null ? retards.get(c.liste_id) : undefined;
+    const urgence = liste && !jourDifficile
+      ? urgenceAvecRetard(urgenceEcheance, liste.retard)
+      : urgenceEcheance;
+    if (urgence > urgenceEcheance) c.pourObjectif = liste?.nom;
     const composantes: Composantes = {
-      urgence: scoreUrgence(c.echeance),
+      urgence,
       importance: clamp01((c.importance - 1) / 2), // 1..3 => 0, .5, 1
       moment: scoreMoment(c, heureActuelle),
       equilibre: cat ? equilibre[cat] : 0.5,
       etat: ETAT_NEUTRE,
       negligence: clamp01(c.nb_propositions_sans_action / SEUIL_NEGLIGENCE),
+      // Enregistré même un jour difficile (non appliqué), pour l'analyse.
+      ...(liste ? { retard_liste: liste.retard } : {}),
     };
     return { c, composantes, score: scoreTotal(composantes) };
   });
@@ -217,6 +260,7 @@ function construire(
   return {
     itemId: n.c.id,
     liste_id: n.c.liste_id,
+    compte: n.c.compte ?? null,
     nom: n.c.nom,
     premiere_action: n.c.premiere_action,
     duree_min: n.c.duree_min,
@@ -225,7 +269,7 @@ function construire(
     rang,
     propose,
     exploration,
-    raison: raisonDominante(n.composantes),
+    raison: raisonAvecObjectif(n),
   };
 }
 
@@ -256,4 +300,42 @@ async function journaliserSiPremierDuJour(propositions: Proposition[]) {
 
   // etat_energie reste vide : le moteur ne lit plus d'énergie.
   if (aLogger.length > 0) await logDecisions(aLogger, null);
+}
+
+/** « Échéance proche » qui vient en fait du retard d'une liste : on le dit. */
+function raisonAvecObjectif(n: { c: CandidatRow; composantes: Composantes }): string {
+  const raison = raisonDominante(n.composantes);
+  return raison === "Échéance proche" && n.c.pourObjectif
+    ? `Pour l'objectif de ${n.c.pourObjectif}`
+    : raison;
+}
+
+/** Retard de chaque liste qui a un objectif, sur la période en cours. */
+async function retardsDesListes(
+  date: string,
+): Promise<Map<number, { nom: string; retard: number }>> {
+  const db = await getDatabase();
+  const listes = await db.getAllAsync<{
+    id: number;
+    nom: string;
+    objectif: number;
+    objectif_periode: Periode;
+  }>(
+    "SELECT id, nom, objectif, objectif_periode FROM listes WHERE objectif IS NOT NULL AND objectif_periode IS NOT NULL",
+  );
+  const res = new Map<number, { nom: string; retard: number }>();
+  for (const l of listes) {
+    const r = await db.getFirstAsync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM completions c JOIN items i ON i.id = c.item_id
+       WHERE i.liste_id = ? AND i.type = 'tache' AND c.date >= ? AND c.date <= ?`,
+      l.id,
+      debutPeriode(date, l.objectif_periode),
+      date,
+    );
+    res.set(l.id, {
+      nom: l.nom,
+      retard: retardObjectif(r?.n ?? 0, l.objectif, date, l.objectif_periode),
+    });
+  }
+  return res;
 }

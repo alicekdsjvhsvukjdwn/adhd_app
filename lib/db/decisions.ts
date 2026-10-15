@@ -9,6 +9,12 @@ export type Composantes = {
   equilibre: number;
   etat: number;
   negligence: number;
+  /**
+   * Retard de la liste sur son objectif (0 à 1), pour l'analyse. Hors poids :
+   * il ne compte qu'à travers l'urgence (plafonné), et pas un jour difficile.
+   * Absent si la liste n'a pas d'objectif.
+   */
+  retard_liste?: number;
 };
 
 export type Decision = {

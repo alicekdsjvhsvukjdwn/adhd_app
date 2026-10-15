@@ -1,5 +1,6 @@
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
+import { recalculerPointsEtapesDuJour } from "./etapes";
 import { changerJourDifficile } from "./jour-difficile";
 
 /**
@@ -44,4 +45,6 @@ export async function choisirEnergie(niveau: 1 | 2 | 3): Promise<void> {
     String(niveau),
   );
   await changerJourDifficile(niveau === 1);
+  // Les routines à étapes déjà cochées suivent le barème du nouvel état.
+  await recalculerPointsEtapesDuJour();
 }

@@ -24,6 +24,14 @@ import {
 } from "../lib/db";
 import { enregistrerEtapes, getEtapes } from "../lib/db/etapes";
 import { getListes, type Liste } from "../lib/db/listes";
+import { PlusMoins } from "../components/PlusMoins";
+import {
+  ecrireFrequence,
+  lireFrequence,
+  POINTS_ESSENTIELLES,
+  POINTS_TOUTES,
+  type Periode,
+} from "../lib/regles-taches";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -195,7 +203,8 @@ export default function Ajouter() {
     liste?: string;
   }>();
   const idModifie = params.id ? Number(params.id) : null;
-  const [typeInitial, setTypeInitial] = useState<Mode | null>(null);
+  // Type en base au chargement : une tâche « x fois par semaine » s'édite sous « Régulièrement ».
+  const [typeInitial, setTypeInitial] = useState<"routine" | "tache" | null>(null);
 
   const [mode, setMode] = useState<Mode>(
     params.type === "routine" ? "routine" : "tache",
@@ -212,6 +221,9 @@ export default function Ajouter() {
   // Routine
   const [moment, setMoment] = useState<string | null>("matin");
   const [jours, setJours] = useState<number[]>(TOUS_LES_JOURS);
+  // Régulièrement : certains jours (routine) ou x fois par semaine / par mois (tâche).
+  const [frequence, setFrequence] = useState<"jours" | Periode>("jours");
+  const [cible, setCible] = useState(3);
 
   // Tâche : liste (Quotidien, Travail…) ; sans précision, la première.
   const [listes, setListes] = useState<Liste[]>([]);
@@ -234,7 +246,7 @@ export default function Ajouter() {
 
   // Tâche : étapes
   const [etapes, setEtapes] = useState<
-    { id?: number; nom: string; faite?: number }[]
+    { id?: number; nom: string; faite?: number; essentielle?: number }[]
   >([]);
   const [nouvelleEtape, setNouvelleEtape] = useState("");
 
@@ -251,9 +263,13 @@ export default function Ajouter() {
     (async () => {
       const item = await getItem(idModifie);
       if (item) {
-        const m: Mode = item.type === "routine" ? "routine" : "tache";
-        setMode(m);
-        setTypeInitial(m);
+        const freq = item.type === "tache" ? lireFrequence(item.recurrence) : null;
+        setMode(item.type === "routine" || freq ? "routine" : "tache");
+        setTypeInitial(item.type === "routine" ? "routine" : "tache");
+        if (freq) {
+          setFrequence(freq.periode);
+          setCible(freq.cible);
+        }
         setNom(item.nom);
         setCategorie(
           item.categorie && CATEGORIES_VALIDES.includes(item.categorie)
@@ -289,6 +305,7 @@ export default function Ajouter() {
             id: e.id,
             nom: e.nom,
             faite: e.faite,
+            essentielle: e.essentielle,
           })),
         );
       }
@@ -309,35 +326,58 @@ export default function Ajouter() {
     (a) => a.active === 1 || a.id === ancreId,
   );
 
+  const periodique = mode === "routine" && frequence !== "jours";
+  const typeEffectif: "routine" | "tache" =
+    mode === "routine" && !periodique ? "routine" : "tache";
+
   const valide =
-    nom.trim().length > 0 && (mode === "tache" || jours.length > 0);
+    nom.trim().length > 0 && (typeEffectif === "tache" || jours.length > 0);
 
   const basculerJour = (j: number) =>
     setJours((actuels) =>
       actuels.includes(j) ? actuels.filter((x) => x !== j) : [...actuels, j],
     );
 
+  const sansEssentielle =
+    typeEffectif === "routine" &&
+    etapes.length > 0 &&
+    !etapes.some((e) => e.essentielle !== 0);
+
   const onAjouter = async () => {
     if (!valide || enregistrement) return;
+    if (sansEssentielle) {
+      Alert.alert(
+        "Il faut au moins une étape essentielle",
+        "Une routine à étapes est faite quand ses étapes essentielles le sont. Passe au moins une étape en « Essentielle » (touche « Bonus » à côté de son nom), ou retire les étapes.",
+      );
+      return;
+    }
     setEnregistrement(true);
     try {
       const commun = {
         nom: nom.trim(),
         // La difficulté ne sert qu'aux routines (« Si l'énergie revient »).
-        effort: mode === "routine" ? effort : null,
+        effort: typeEffectif === "routine" ? effort : null,
         categorie,
         duree_min: duree,
         premiere_action: premiereAction.trim() || null,
       };
       if (idModifie !== null) {
         // Passer d'une tâche à une routine (ou l'inverse) : l'item redevient actif.
-        const changeDeType = typeInitial !== null && typeInitial !== mode;
+        const changeDeType = typeInitial !== null && typeInitial !== typeEffectif;
         await modifierItem(idModifie, {
           ...commun,
-          type: mode,
+          type: typeEffectif,
           ...(changeDeType ? { statut: "actif" as const } : {}),
-          ...(mode === "tache"
-            ? { importance, echeance, recurrence: null, liste_id: listeId }
+          ...(typeEffectif === "tache"
+            ? {
+                importance,
+                echeance: periodique ? null : echeance,
+                recurrence: periodique
+                  ? ecrireFrequence({ periode: frequence as Periode, cible })
+                  : null,
+                liste_id: listeId,
+              }
             : {
                 recurrence: recurrenceDe(jours),
                 moment,
@@ -347,18 +387,21 @@ export default function Ajouter() {
                 ancre_position: ancreId !== null ? ancrePosition : null,
               }),
         });
-        if (mode === "tache") await enregistrerEtapes(idModifie, etapes);
-      } else if (mode === "tache") {
+        await enregistrerEtapes(idModifie, etapes);
+      } else if (typeEffectif === "tache") {
         const id = await addItem({
           ...commun,
           type: "tache",
           importance,
-          echeance,
+          echeance: periodique ? null : echeance,
+          recurrence: periodique
+            ? ecrireFrequence({ periode: frequence as Periode, cible })
+            : null,
           liste_id: listeId,
         });
         if (etapes.length > 0) await enregistrerEtapes(id, etapes);
       } else {
-        await addItem({
+        const id = await addItem({
           ...commun,
           type: "routine",
           recurrence: recurrenceDe(jours),
@@ -368,6 +411,7 @@ export default function Ajouter() {
           ancre_id: ancreId,
           ancre_position: ancreId !== null ? ancrePosition : null,
         });
+        if (etapes.length > 0) await enregistrerEtapes(id, etapes);
       }
       router.back();
     } finally {
@@ -401,6 +445,102 @@ export default function Ajouter() {
       </View>
     );
   }
+
+  const ajouterEtape = () => {
+    if (!nouvelleEtape.trim()) return;
+    setEtapes([...etapes, { nom: nouvelleEtape.trim(), essentielle: 1 }]);
+    setNouvelleEtape("");
+  };
+
+  /**
+   * Étapes : d'une grosse tâche (cochées une fois), ou d'une routine
+   * (recochées chaque jour, essentielles ou bonus).
+   */
+  const editeurEtapes = () => {
+    const pourRoutine = typeEffectif === "routine";
+    return (
+      <>
+        <Text style={[styles.label, { color: t.textSecondary }]}>
+          Étapes (facultatif)
+        </Text>
+        <Text
+          style={[
+            styles.aide,
+            { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm },
+          ]}
+        >
+          {pourRoutine
+            ? `Des petits pas, recochés chaque jour. Les essentielles faites : +${POINTS_ESSENTIELLES} ; tout fait : ${POINTS_TOUTES} en tout. Un jour difficile, les essentielles suffisent pour ${POINTS_TOUTES}.`
+            : "Pour une grosse tâche : des petits morceaux à cocher un par un. Chaque étape rapporte des points, et finir le tout donne un bonus."}
+        </Text>
+        {etapes.map((e, i) => (
+          <View
+            key={e.id ?? `n${i}`}
+            style={[styles.etape, { backgroundColor: t.bgCard }]}
+          >
+            <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
+              {!pourRoutine && e.faite ? "✓" : i + 1}
+            </Text>
+            <Text style={[styles.etapeNom, { color: t.textPrimary }]}>{e.nom}</Text>
+            {pourRoutine && (
+              <TouchableOpacity
+                onPress={() =>
+                  setEtapes(
+                    etapes.map((x, k) =>
+                      k === i ? { ...x, essentielle: x.essentielle === 0 ? 1 : 0 } : x,
+                    ),
+                  )
+                }
+                hitSlop={8}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: e.essentielle !== 0 }}
+                accessibilityLabel={`${e.nom} : étape essentielle`}
+              >
+                <Text style={[styles.etapeType, { color: t.accentText }]}>
+                  {e.essentielle === 0 ? "Bonus" : "Essentielle"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => setEtapes(etapes.filter((_, k) => k !== i))}
+              hitSlop={10}
+            >
+              <Text style={[styles.etapeRetirer, { color: t.textMuted }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+        {pourRoutine && sansEssentielle && (
+          <Text style={[styles.aide, { color: t.danger, marginTop: 0, marginBottom: spacing.sm }]}>
+            Il faut au moins une étape essentielle.
+          </Text>
+        )}
+        <View style={styles.etapeAjout}>
+          <TextInput
+            style={[styleInput, { flex: 1 }]}
+            placeholder={
+              etapes.length === 0
+                ? pourRoutine
+                  ? "Ex : sortir le tapis"
+                  : "Ex : trouver le formulaire"
+                : "Étape suivante"
+            }
+            placeholderTextColor={t.textMuted}
+            value={nouvelleEtape}
+            onChangeText={setNouvelleEtape}
+            onSubmitEditing={ajouterEtape}
+            blurOnSubmit={false}
+            returnKeyType="next"
+          />
+          <TouchableOpacity
+            style={[styles.etapeBouton, { backgroundColor: t.accent }]}
+            onPress={ajouterEtape}
+          >
+            <Text style={[styles.etapeBoutonTexte, { color: t.textOnAccent }]}>+</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  };
 
   const styleInput = [
     styles.input,
@@ -469,7 +609,9 @@ export default function Ajouter() {
         >
           {mode === "tache"
             ? "Une tâche disparaît une fois faite."
-            : "Une routine revient les jours choisis."}
+            : periodique
+              ? "Proposée tant que l'objectif de la période n'est pas atteint."
+              : "Une routine revient les jours choisis."}
         </Text>
 
         <TextInput
@@ -487,7 +629,7 @@ export default function Ajouter() {
         />
 
         {/* Tâche : le titre et la liste à l'écran, le reste dans « Plus d'options » */}
-        {mode === "tache" && listes.length > 0 && (
+        {typeEffectif === "tache" && listes.length > 0 && (
           <>
             <Text style={[styles.label, { color: t.textSecondary }]}>
               Liste
@@ -506,6 +648,43 @@ export default function Ajouter() {
         )}
 
         {mode === "routine" && (
+          <>
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              À quel rythme ?
+            </Text>
+            <View style={styles.ligneChoix}>
+              <Choix
+                actif={frequence === "jours"}
+                libelle="Certains jours"
+                onPress={() => setFrequence("jours")}
+              />
+              <Choix
+                actif={frequence === "semaine"}
+                libelle="x fois par semaine"
+                onPress={() => setFrequence("semaine")}
+              />
+              <Choix
+                actif={frequence === "mois"}
+                libelle="x fois par mois"
+                onPress={() => setFrequence("mois")}
+              />
+            </View>
+            {periodique && (
+              <View style={[styles.ligneChoix, { alignItems: "center", marginTop: spacing.md }]}>
+                <PlusMoins
+                  valeur={String(cible)}
+                  libelle={`Nombre de fois par ${frequence}`}
+                  onPas={(sens) => setCible((c) => Math.max(1, Math.min(31, c + sens)))}
+                />
+                <Text style={[styles.aide, { color: t.textSecondary, marginTop: 0 }]}>
+                  fois par {frequence}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {typeEffectif === "routine" && (
           <>
             <Text style={[styles.label, { color: t.textSecondary }]}>
               À quel moment de la journée ?
@@ -578,14 +757,14 @@ export default function Ajouter() {
               Plus d&apos;options
             </Text>
             <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
-              {mode === "routine"
-                ? "Difficulté, versions selon l'énergie, domaine, durée, première action"
+              {typeEffectif === "routine"
+                ? "Étapes, difficulté, versions selon l'énergie, domaine, durée, première action"
                 : "Importance, échéance, étapes, domaine, durée, première action"}
             </Text>
           </TouchableOpacity>
         ) : (
           <>
-            {mode === "tache" ? (
+            {typeEffectif === "tache" ? (
               <>
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Importance
@@ -601,6 +780,8 @@ export default function Ajouter() {
                   ))}
                 </View>
 
+                {!periodique && (
+                <>
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Pour quand ?
                 </Text>
@@ -635,88 +816,15 @@ export default function Ajouter() {
                     )}
                 </View>
 
-                <Text style={[styles.label, { color: t.textSecondary }]}>
-                  Étapes (facultatif)
-                </Text>
-                <Text
-                  style={[
-                    styles.aide,
-                    {
-                      color: t.textMuted,
-                      marginTop: 0,
-                      marginBottom: spacing.sm,
-                    },
-                  ]}
-                >
-                  Pour une grosse tâche : des petits morceaux à cocher un par
-                  un. Chaque étape rapporte des points, et finir le tout donne
-                  un bonus.
-                </Text>
-                {etapes.map((e, i) => (
-                  <View
-                    key={e.id ?? `n${i}`}
-                    style={[styles.etape, { backgroundColor: t.bgCard }]}
-                  >
-                    <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
-                      {e.faite ? "✓" : i + 1}
-                    </Text>
-                    <Text style={[styles.etapeNom, { color: t.textPrimary }]}>
-                      {e.nom}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setEtapes(etapes.filter((_, k) => k !== i))
-                      }
-                      hitSlop={10}
-                    >
-                      <Text
-                        style={[styles.etapeRetirer, { color: t.textMuted }]}
-                      >
-                        ✕
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                <View style={styles.etapeAjout}>
-                  <TextInput
-                    style={[styleInput, { flex: 1 }]}
-                    placeholder={
-                      etapes.length === 0
-                        ? "Ex : trouver le formulaire"
-                        : "Étape suivante"
-                    }
-                    placeholderTextColor={t.textMuted}
-                    value={nouvelleEtape}
-                    onChangeText={setNouvelleEtape}
-                    onSubmitEditing={() => {
-                      if (!nouvelleEtape.trim()) return;
-                      setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
-                      setNouvelleEtape("");
-                    }}
-                    blurOnSubmit={false}
-                    returnKeyType="next"
-                  />
-                  <TouchableOpacity
-                    style={[styles.etapeBouton, { backgroundColor: t.accent }]}
-                    onPress={() => {
-                      if (!nouvelleEtape.trim()) return;
-                      setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
-                      setNouvelleEtape("");
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.etapeBoutonTexte,
-                        { color: t.textOnAccent },
-                      ]}
-                    >
-                      +
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                </>
+                )}
+
+                {editeurEtapes()}
               </>
             ) : (
               <>
+                {editeurEtapes()}
+
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Difficulté
                 </Text>
@@ -735,6 +843,10 @@ export default function Ajouter() {
                   sans pression.
                 </Text>
 
+                {/* Une routine à étapes n'a pas de version courte ni longue
+                    (les valeurs déjà saisies sont gardées, juste masquées). */}
+                {etapes.length === 0 && (
+                <>
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Version courte (facultatif)
                 </Text>
@@ -765,6 +877,8 @@ export default function Ajouter() {
                 <Text style={[styles.aide, { color: t.textMuted }]}>
                   Affichée les jours où tu es en forme. Mêmes points.
                 </Text>
+                </>
+                )}
 
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Moment repère (facultatif)
@@ -1014,6 +1128,7 @@ const styles = StyleSheet.create({
   etapeNom: { flex: 1, fontSize: typography.bodySmall },
   etapeRetirer: { fontSize: 16 },
   etapeAjout: { flexDirection: "row", gap: spacing.sm },
+  etapeType: { fontSize: typography.small, fontWeight: "600" },
   etapeBouton: {
     width: 46,
     borderRadius: radius.md,

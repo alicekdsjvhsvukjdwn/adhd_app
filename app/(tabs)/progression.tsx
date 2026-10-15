@@ -13,6 +13,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { BilanJournee } from "../../components/BilanJournee";
 import { LiensSommeilSport } from "../../components/LiensSommeilSport";
+import { ObjectifsListes } from "../../components/ObjectifsListes";
 import { annulerCompletion, getAujourdhui } from "../../lib/db/completions";
 import {
   avanceePeriode,
@@ -860,6 +861,8 @@ export default function Progression() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <ObjectifsListes />
 
       <LiensSommeilSport />
 

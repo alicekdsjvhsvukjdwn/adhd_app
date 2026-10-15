@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -25,6 +25,12 @@ import {
 import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
 import { soldePoints } from "../../lib/db/recompenses";
+import {
+  basculerEtapeRoutine,
+  getEtapesRoutines,
+  type EtapeRoutine,
+} from "../../lib/db/etapes";
+import { palierEtapes } from "../../lib/regles-taches";
 import { useRoutines } from "../../hooks/useRoutines";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 import {
@@ -96,6 +102,18 @@ export default function Routines() {
     sansDomaine: RoutineResumee[];
   } | null>(null);
   const [voirNonPrevues, setVoirNonPrevues] = useState(false);
+  const [etapesRoutines, setEtapesRoutines] = useState<Record<number, EtapeRoutine[]>>({});
+
+  // Étapes du jour des routines affichées (essentielles et bonus).
+  useEffect(() => {
+    let actif = true;
+    getEtapesRoutines(routines.map((r) => r.id)).then((e) => {
+      if (actif) setEtapesRoutines(e);
+    });
+    return () => {
+      actif = false;
+    };
+  }, [routines]);
 
   const chargerAnnexes = useCallback(async () => {
     setEnergie(await energieDuJour());
@@ -113,11 +131,35 @@ export default function Routines() {
   const version = versionPourEnergie(energie.niveau);
 
   const onChoisirEnergie = async (n: Niveau) => {
-    await choisirEnergie(n);
+    // L'écran suit le choix tout de suite : version des routines, groupe
+    // « Si l'énergie revient », étapes affichées et suggestion se calculent
+    // à partir de cet état. L'enregistrement vient après ; s'il échoue,
+    // on revient au choix d'avant et on le dit.
+    const avant = energie;
     setEnergie({ niveau: n, source: "choix" });
+    try {
+      await choisirEnergie(n);
+    } catch (e) {
+      setEnergie(avant);
+      Alert.alert("Ton choix n'a pas été enregistré", String(e));
+      return;
+    }
+    // Seuls les points dépendent de l'écriture (routines à étapes recalculées).
+    setSolde(await soldePoints());
+    await recharger();
+  };
+
+  const onEtapeRoutine = async (e: EtapeRoutine) => {
+    Haptics.selectionAsync().catch(() => {});
+    // Une routine à étapes n'a qu'une version : la normale.
+    await basculerEtapeRoutine(e.id, "normale");
+    await recharger();
+    await chargerAnnexes();
   };
 
   const onToggle = async (r: RoutineAvecStatut) => {
+    // Routine à étapes : ce sont les étapes qui se cochent.
+    if (etapesRoutines[r.id]?.length) return;
     Haptics.selectionAsync().catch(() => {});
     if (r.faitAujourdhui) {
       await annulerCompletion(r.id);
@@ -196,12 +238,23 @@ export default function Routines() {
 
   const ligneRoutine = (r: RoutineAvecStatut) => {
               const versions = versionsDe(r);
+              const etapesR = etapesRoutines[r.id] ?? [];
+              // Jour difficile : les essentielles seules (et les bonus déjà cochés).
+              const etapesVisibles = energieBasse
+                ? etapesR.filter((e) => e.essentielle === 1 || e.cochee)
+                : etapesR;
               // Cochée : on montre ce qui a été fait. Sinon : la version du jour.
+              // Une routine à étapes n'utilise pas les versions courte et longue.
               const v: Version =
-                r.faitAujourdhui && r.versionDuJour
-                  ? (r.versionDuJour as Version)
-                  : version;
+                etapesR.length > 0
+                  ? "normale"
+                  : r.faitAujourdhui && r.versionDuJour
+                    ? (r.versionDuJour as Version)
+                    : version;
               const affichee = versions[v];
+              const palier = palierEtapes(
+                etapesR.map((e) => ({ essentielle: e.essentielle === 1, cochee: e.cochee })),
+              );
               return (
                 <Swipeable
                   key={r.id}
@@ -213,6 +266,7 @@ export default function Routines() {
                       { backgroundColor: r.faitAujourdhui ? t.bgCardActive : t.bgCard },
                     ]}
                     onPress={() => onToggle(r)}
+                    disabled={etapesR.length > 0}
                   >
                     <View
                       style={[
@@ -244,7 +298,39 @@ export default function Routines() {
                         {v !== "normale" && versions.distincte[v]
                           ? ` · version ${v}${affichee.duree ? ` · ${affichee.duree} min` : ""}`
                           : ""}
+                        {etapesR.length > 0
+                          ? palier === 2
+                            ? " · tout est fait"
+                            : palier === 1
+                              ? " · essentielles faites"
+                              : ` · ${etapesR.filter((e) => e.cochee).length}/${etapesR.length} étapes`
+                          : ""}
                       </Text>
+                      {etapesVisibles.map((e) => (
+                        <TouchableOpacity
+                          key={e.id}
+                          style={styles.etapeRoutine}
+                          onPress={() => onEtapeRoutine(e)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: e.cochee }}
+                          hitSlop={4}
+                        >
+                          <Text
+                            style={[
+                              styles.etapeRoutineTexte,
+                              {
+                                color: e.cochee ? t.textMuted : t.textPrimary,
+                                textDecorationLine: e.cochee ? "line-through" : "none",
+                              },
+                            ]}
+                          >
+                            {e.cochee ? "✓" : "○"} {e.nom}
+                            {e.essentielle ? "" : (
+                              <Text style={{ color: t.textMuted, fontStyle: "italic" }}> · bonus</Text>
+                            )}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   </TouchableOpacity>
                 </Swipeable>
@@ -526,6 +612,8 @@ const styles = StyleSheet.create({
   pastilleCat: { width: 10, height: 10, borderRadius: 5 },
   texteRoutine: { fontSize: typography.body },
   versionTag: { fontSize: typography.tiny, marginTop: 3 },
+  etapeRoutine: { paddingVertical: 6 },
+  etapeRoutineTexte: { fontSize: typography.bodySmall },
 
   actions: { flexDirection: "row" },
   action: {

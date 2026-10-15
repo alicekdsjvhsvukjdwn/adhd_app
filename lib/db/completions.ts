@@ -156,30 +156,41 @@ const POINTS: Record<StatutCompletion, number> = {
   partiel: 5,
 };
 
+/** Points donnés pour une complétion : la colonne points, sinon le barème (anciennes lignes). */
+const pointsDe = (c: { statut: StatutCompletion; points: number | null }) =>
+  c.points ?? POINTS[c.statut];
+
 export async function completer(
   itemId: number,
   statut: StatutCompletion = "complet",
   dureeReelleMin?: number,
   /** Version faite : 'courte' | 'normale' | 'longue'. Même nombre de points. */
   version?: string,
+  /** Points de cette complétion, si ce n'est pas le barème du statut (routines à étapes). */
+  points?: number,
 ) {
   const db = await getDatabase();
   const date = getAujourdhui();
   const now = new Date();
   const heure = now.getHours();
 
-  const existante = await db.getFirstAsync<{ statut: StatutCompletion }>(
-    "SELECT statut FROM completions WHERE item_id = ? AND date = ?",
+  const existante = await db.getFirstAsync<{
+    statut: StatutCompletion;
+    points: number | null;
+  }>(
+    "SELECT statut, points FROM completions WHERE item_id = ? AND date = ?",
     itemId,
     date,
   );
+  const vaut = points ?? POINTS[statut];
 
   await db.runAsync(
-    `INSERT INTO completions (item_id, date, statut, heure, duree_reelle_min, horodatage, version)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO completions (item_id, date, statut, heure, duree_reelle_min, horodatage, version, points)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(item_id, date) DO UPDATE SET
        statut = excluded.statut,
        heure = excluded.heure,
+       points = excluded.points,
        version = COALESCE(excluded.version, completions.version),
        duree_reelle_min = COALESCE(excluded.duree_reelle_min, completions.duree_reelle_min)`,
     itemId,
@@ -189,20 +200,22 @@ export async function completer(
     dureeReelleMin ?? null,
     now.toISOString(),
     version ?? null,
+    vaut,
   );
 
   // Une tâche ponctuelle faite est terminée : elle ne revient pas le lendemain.
   // Les routines, elles, restent actives (récurrentes).
+  // Une tâche « x fois par semaine / par mois » (recurrence renseignée) reste active.
   if (statut === "complet") {
     await db.runAsync(
-      "UPDATE items SET statut = 'termine', maj_le = ? WHERE id = ? AND type = 'tache'",
+      "UPDATE items SET statut = 'termine', maj_le = ? WHERE id = ? AND type = 'tache' AND recurrence IS NULL",
       now.toISOString(),
       itemId,
     );
   }
 
   const { addPoints } = await import("./stats");
-  const delta = POINTS[statut] - (existante ? POINTS[existante.statut] : 0);
+  const delta = vaut - (existante ? pointsDe(existante) : 0);
   if (delta !== 0) await addPoints(delta);
 
   const { logEvent } = await import("./events");
@@ -227,8 +240,11 @@ export async function annulerCompletion(
 ) {
   const db = await getDatabase();
 
-  const existante = await db.getFirstAsync<{ statut: StatutCompletion }>(
-    "SELECT statut FROM completions WHERE item_id = ? AND date = ?",
+  const existante = await db.getFirstAsync<{
+    statut: StatutCompletion;
+    points: number | null;
+  }>(
+    "SELECT statut, points FROM completions WHERE item_id = ? AND date = ?",
     itemId,
     date,
   );
@@ -248,7 +264,7 @@ export async function annulerCompletion(
   );
 
   const { addPoints } = await import("./stats");
-  await addPoints(-POINTS[existante.statut]);
+  await addPoints(-pointsDe(existante));
 
   const { logEvent } = await import("./events");
   await logEvent("item_decoche", itemId, { heure: new Date().getHours() });

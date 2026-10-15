@@ -538,6 +538,103 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 14,
+    nom: "routines à étapes et points par complétion",
+    run: async (db) => {
+      await db.execAsync(`
+        -- Routines : une étape est essentielle (1) ou bonus (0).
+        -- Les étapes des tâches existantes restent essentielles.
+        ALTER TABLE etapes ADD COLUMN essentielle INTEGER NOT NULL DEFAULT 1;
+
+        -- Étapes d'une routine cochées un jour donné (elles repartent
+        -- à zéro chaque jour ; etapes.faite ne sert qu'aux tâches).
+        CREATE TABLE etapes_cochees (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          etape_id INTEGER NOT NULL DEFAULT 0,
+          item_id INTEGER NOT NULL DEFAULT 0,
+          date TEXT NOT NULL DEFAULT '',
+          horodatage TEXT NOT NULL DEFAULT '',
+          UNIQUE(etape_id, date)
+        );
+        CREATE INDEX idx_etapes_cochees_item ON etapes_cochees(item_id, date);
+
+        -- Points réellement donnés pour cette complétion. NULL (anciennes
+        -- lignes) = barème par statut (complet 10, partiel 5).
+        ALTER TABLE completions ADD COLUMN points INTEGER;
+      `);
+    },
+  },
+
+  {
+    version: 15,
+    nom: "objectifs de liste par semaine ou par mois",
+    run: async (db) => {
+      await db.execAsync(`
+        -- Nombre de tâches à faire dans la liste par période ; NULL = pas d'objectif.
+        ALTER TABLE listes ADD COLUMN objectif INTEGER;
+        -- 'semaine' | 'mois'
+        ALTER TABLE listes ADD COLUMN objectif_periode TEXT;
+      `);
+    },
+  },
+
+  {
+    version: 16,
+    nom: "carnet : notes des tâches faites",
+    run: async (db) => {
+      // Une note par complétion, retrouvée par (item_id, date) : décocher
+      // puis recocher le même jour garde la note.
+      await db.execAsync(`
+        CREATE TABLE notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item_id INTEGER NOT NULL DEFAULT 0,
+          date TEXT NOT NULL DEFAULT '',
+          completion_id INTEGER,
+          fait TEXT,
+          retenu TEXT,
+          idees TEXT,
+          cree_le TEXT NOT NULL DEFAULT '',
+          maj_le TEXT NOT NULL DEFAULT '',
+          UNIQUE(item_id, date)
+        );
+      `);
+    },
+  },
+
+  {
+    version: 17,
+    nom: "couleur des listes",
+    run: async (db) => {
+      // Clé de la palette (lib/theme-listes.ts), pas une couleur : lisible en clair et en sombre.
+      await db.execAsync(`
+        ALTER TABLE listes ADD COLUMN couleur TEXT;
+        UPDATE listes SET couleur = 'orange' WHERE nom = 'Quotidien';
+        UPDATE listes SET couleur = 'bleu' WHERE nom = 'Travail';
+        UPDATE listes SET couleur = 'ardoise' WHERE nom = 'Administratif';
+        UPDATE listes SET couleur = 'violet' WHERE nom = 'Compétences';
+        UPDATE listes SET couleur = 'rose' WHERE nom = 'Perso';
+      `);
+      // Listes renommées ou ajoutées : une couleur encore libre chacune.
+      // Recopie volontaire de l'ordre de la palette : une migration ne doit
+      // pas changer si la palette change plus tard.
+      const palette = ["bleu", "orange", "vert", "violet", "rose", "sarcelle", "ocre", "ardoise"];
+      const sans = await db.getAllAsync<{ id: number }>(
+        "SELECT id FROM listes WHERE couleur IS NULL ORDER BY ordre, id",
+      );
+      const prises = (
+        await db.getAllAsync<{ couleur: string }>(
+          "SELECT couleur FROM listes WHERE couleur IS NOT NULL",
+        )
+      ).map((r) => r.couleur);
+      for (const l of sans) {
+        const c = palette.find((x) => !prises.includes(x)) ?? palette[prises.length % palette.length];
+        prises.push(c);
+        await db.runAsync("UPDATE listes SET couleur = ? WHERE id = ?", c, l.id);
+      }
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
