@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
+import { CarteSauvegarde } from "../../components/CarteSauvegarde";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Entree = {
@@ -31,11 +32,6 @@ const ENTREES: Entree[] = [
     titre: "Rappels quotidiens",
     description: "Quand l'appli te fait signe.",
     route: "/rappels",
-  },
-  {
-    titre: "Comment je vais",
-    description: "Le point énergie, concentration, humeur.",
-    route: "/etat",
   },
 ];
 
@@ -62,6 +58,8 @@ export default function Profil() {
             </Text>
           </TouchableOpacity>
         ))}
+
+        <CarteSauvegarde />
 
         <BoutonReinitialiser />
 

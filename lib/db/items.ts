@@ -1,3 +1,7 @@
+import {
+  requeteModification,
+  type ChampModifiable,
+} from "../modification-item";
 import { getDatabase } from "./client";
 
 export type TypeItem = "routine" | "tache" | "evenement";
@@ -125,7 +129,8 @@ export async function addItem(item: NouvelItem): Promise<number> {
     ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.nom,
     item.type ?? "routine",
-    item.recurrence ?? (item.type === "routine" || !item.type ? "quotidien" : null),
+    item.recurrence ??
+      (item.type === "routine" || !item.type ? "quotidien" : null),
     item.template_id ?? null,
     item.variante_rang ?? null,
     item.categorie ?? null,
@@ -161,27 +166,7 @@ export async function addItem(item: NouvelItem): Promise<number> {
   return result.lastInsertRowId;
 }
 
-/** Champs qu'on peut corriger depuis l'écran de modification. */
-const CHAMPS_MODIFIABLES = [
-  "nom",
-  "type",
-  "statut",
-  "recurrence",
-  "categorie",
-  "moment",
-  "duree_min",
-  "premiere_action",
-  "importance",
-  "echeance",
-  "version_courte",
-  "version_longue",
-  "effort",
-  "liste_id",
-] as const;
-
-export type ModificationItem = Partial<
-  Pick<Item, (typeof CHAMPS_MODIFIABLES)[number]>
->;
+export type ModificationItem = Partial<Pick<Item, ChampModifiable>>;
 
 /**
  * Corrige un item existant. Seuls les champs passés sont modifiés,
@@ -189,22 +174,14 @@ export type ModificationItem = Partial<
  * observations) reste attaché à l'item.
  */
 export async function modifierItem(id: number, champs: ModificationItem) {
-  const cles = CHAMPS_MODIFIABLES.filter((c) => c in champs);
-  if (cles.length === 0) return;
+  const requete = requeteModification(id, champs, maintenant());
+  if (!requete) return;
 
   const db = await getDatabase();
-  const affectations = cles.map((c) => `${c} = ?`).join(", ");
-  const valeurs = cles.map((c) => champs[c] ?? null);
-
-  await db.runAsync(
-    `UPDATE items SET ${affectations}, maj_le = ? WHERE id = ?`,
-    ...valeurs,
-    maintenant(),
-    id,
-  );
+  await db.runAsync(requete.sql, ...requete.params);
 
   const { logEvent } = await import("./events");
-  await logEvent("item_modifie", id, { champs: cles });
+  await logEvent("item_modifie", id, { champs: requete.cles });
 }
 
 export async function updateItemAncre(
@@ -261,6 +238,21 @@ export async function archiverItem(id: number) {
   await logEvent("item_archive", id);
 }
 
+/**
+ * Texte de confirmation avant deleteItem, le même partout : dit ce qui est
+ * effacé (historique, passé dans Progression, série) et ce qui reste (points).
+ */
+export function confirmationSuppression(
+  type: "routine" | "tache",
+  nom: string,
+): { titre: string; message: string } {
+  return {
+    titre:
+      type === "routine" ? "Supprimer cette routine ?" : "Supprimer cette tâche ?",
+    message: `« ${nom.trim()} » et son historique seront effacés. Elle disparaîtra aussi des jours passés dans Progression, et ta série peut changer. Tes points restent.`,
+  };
+}
+
 /** Suppression dure. Préférer pauserItem ou archiverItem : rien ne se perd. */
 export async function deleteItem(id: number) {
   const db = await getDatabase();
@@ -285,7 +277,9 @@ export async function descendreVariante(id: number): Promise<boolean> {
   const famille = getFamille(item.template_id);
   if (!famille) return false;
 
-  const cible = famille.variantes.find((v) => v.rang === item.variante_rang! - 1);
+  const cible = famille.variantes.find(
+    (v) => v.rang === item.variante_rang! - 1,
+  );
   if (!cible) return false;
 
   const db = await getDatabase();
@@ -320,7 +314,9 @@ export async function monterVariante(id: number): Promise<boolean> {
   const famille = getFamille(item.template_id);
   if (!famille) return false;
 
-  const cible = famille.variantes.find((v) => v.rang === item.variante_rang! + 1);
+  const cible = famille.variantes.find(
+    (v) => v.rang === item.variante_rang! + 1,
+  );
   if (!cible) return false;
 
   const db = await getDatabase();

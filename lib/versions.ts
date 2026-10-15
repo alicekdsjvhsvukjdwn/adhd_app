@@ -1,13 +1,14 @@
 import { getFamille } from "./catalogue";
 
 /**
- * Versions d'une routine. La courte s'affiche les jours difficiles, la normale
- * sinon ; elles rapportent les mêmes points : faire la version courte un jour
- * difficile, c'est réussir sa journée. La longue n'est plus affichée, mais
- * reste en base et se calcule encore (complétions passées en version longue).
+ * Trois versions de chaque routine, choisies selon le jour sur l'onglet
+ * Routines : courte un jour difficile, normale, longue quand on est en forme.
+ * Les trois rapportent les mêmes points : faire la version courte un jour
+ * difficile, c'est réussir sa journée.
  */
 
 export type Version = "courte" | "normale" | "longue";
+export type Niveau = 1 | 2 | 3;
 
 export type UneVersion = { nom: string; duree: number | null };
 export type Versions = Record<Version, UneVersion> & {
@@ -71,4 +72,11 @@ export function versionsDe(r: RoutineVersionnable): Versions {
 /** Un jour difficile, toutes les routines en version courte ; sinon la normale. */
 export function versionDuJour(jourDifficile: boolean): Version {
   return jourDifficile ? "courte" : "normale";
+}
+
+/** Jour difficile : courte ; en forme : longue ; sinon (ou rien choisi) : normale. */
+export function versionPourEnergie(niveau: Niveau | null): Version {
+  if (niveau === 1) return "courte";
+  if (niveau === 3) return "longue";
+  return "normale";
 }

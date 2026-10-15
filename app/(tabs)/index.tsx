@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
@@ -9,12 +10,18 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { BandeauEtat } from "../../components/BandeauEtat";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import type { Categorie } from "../../lib/catalogue";
-import { annulerCompletion, completer } from "../../lib/db";
-import { routinesParCategorie } from "../../lib/db/categories";
+import {
+  annulerCompletion,
+  completer,
+  confirmationSuppression,
+} from "../../lib/db";
+import {
+  routinesParCategorie,
+  type RoutineResumee,
+} from "../../lib/db/categories";
 import type { RoutineAvecStatut } from "../../lib/db/completions";
 import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
 import { soldePoints } from "../../lib/db/recompenses";
@@ -81,13 +88,14 @@ export default function Routines() {
 
   const [energie, setEnergie] = useState<{
     niveau: Niveau | null;
-    source: "choix" | "checkin" | null;
+    source: "choix" | null;
   }>({ niveau: null, source: null });
   const [solde, setSolde] = useState<number | null>(null);
   const [resume, setResume] = useState<{
-    parCategorie: Record<Categorie, string[]>;
-    sansDomaine: string[];
+    parCategorie: Record<Categorie, RoutineResumee[]>;
+    sansDomaine: RoutineResumee[];
   } | null>(null);
+  const [voirNonPrevues, setVoirNonPrevues] = useState(false);
 
   const chargerAnnexes = useCallback(async () => {
     setEnergie(await energieDuJour());
@@ -110,6 +118,7 @@ export default function Routines() {
   };
 
   const onToggle = async (r: RoutineAvecStatut) => {
+    Haptics.selectionAsync().catch(() => {});
     if (r.faitAujourdhui) {
       await annulerCompletion(r.id);
     } else {
@@ -119,23 +128,41 @@ export default function Routines() {
     await chargerAnnexes();
   };
 
-  const onSupprimer = (r: RoutineAvecStatut) => {
-    Alert.alert(
-      "Supprimer cette routine ?",
-      `« ${r.nom} » et son historique seront effacés.`,
-      [
-        { text: "Garder", style: "cancel" },
-        {
-          text: "Supprimer",
-          style: "destructive",
-          onPress: async () => {
-            await supprimer(r.id);
-            await chargerAnnexes();
-          },
+  const onSupprimer = (r: { id: number; nom: string }) => {
+    const { titre, message } = confirmationSuppression("routine", r.nom);
+    Alert.alert(titre, message, [
+      { text: "Garder", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await supprimer(r.id);
+          await chargerAnnexes();
         },
-      ],
-    );
+      },
+    ]);
   };
+
+  const actionsRoutine = (r: { id: number; nom: string }) => (
+    <View style={styles.actions}>
+      <TouchableOpacity
+        style={[styles.action, { backgroundColor: t.accentText }]}
+        onPress={() => router.push(`/nouvelle-tache?id=${r.id}`)}
+      >
+        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>
+          Modifier
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.action, { backgroundColor: t.danger }]}
+        onPress={() => onSupprimer(r)}
+      >
+        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>
+          Supprimer
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // Énergie basse : les routines exigeantes non faites passent dans un groupe à part.
   const energieBasse = energie.niveau === 1;
@@ -158,6 +185,14 @@ export default function Routines() {
   const toutesParDomaine = (d: string) =>
     routines.filter((r) => (r.categorie ?? "sans") === d);
   const nbFaites = routines.filter((r) => r.faitAujourdhui).length;
+  // Routines actives mais pas prévues aujourd'hui (certains jours, hebdo) :
+  // l'accueil reste le seul endroit pour les modifier ou les supprimer.
+  const idsDuJour = new Set(routines.map((r) => r.id));
+  const nonPrevues = resume
+    ? [...Object.values(resume.parCategorie).flat(), ...resume.sansDomaine].filter(
+        (r) => !idsDuJour.has(r.id),
+      )
+    : [];
 
   const ligneRoutine = (r: RoutineAvecStatut) => {
               const versions = versionsDe(r);
@@ -170,26 +205,7 @@ export default function Routines() {
               return (
                 <Swipeable
                   key={r.id}
-                  renderRightActions={() => (
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        style={[styles.action, { backgroundColor: t.accentText }]}
-                        onPress={() => router.push(`/nouvelle-tache?id=${r.id}`)}
-                      >
-                        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>
-                          Modifier
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.action, { backgroundColor: t.danger }]}
-                        onPress={() => onSupprimer(r)}
-                      >
-                        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>
-                          Supprimer
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                  renderRightActions={() => actionsRoutine(r)}
                 >
                   <TouchableOpacity
                     style={[
@@ -236,11 +252,9 @@ export default function Routines() {
   };
 
   const sousTitreEnergie =
-    energie.source === "checkin"
-      ? `D'après ton dernier check-in. ${EXPLICATION_VERSION[version]}`
-      : energie.source === "choix"
-        ? EXPLICATION_VERSION[version]
-        : "Choisis-la pour adapter tes routines : version courte, normale ou longue.";
+    energie.source === "choix"
+      ? EXPLICATION_VERSION[version]
+      : "Choisis-la pour adapter tes routines : version courte, normale ou longue.";
 
   return (
     <ScrollView
@@ -265,14 +279,15 @@ export default function Routines() {
         </View>
       )}
 
-      <BandeauEtat />
-
-      <CarteSuggestion
-        onDecision={async () => {
-          await recharger();
-          await chargerAnnexes();
-        }}
-      />
+      {/* Pas de suggestion un jour difficile */}
+      {!energieBasse && (
+        <CarteSuggestion
+          onDecision={async () => {
+            await recharger();
+            await chargerAnnexes();
+          }}
+        />
+      )}
 
       {/* Énergie du jour : choisit la version des routines */}
       <View style={[styles.energie, { backgroundColor: t.bgCard }]}>
@@ -379,6 +394,37 @@ export default function Routines() {
             Routines exigeantes : pas de pression aujourd'hui.
           </Text>
           <View style={{ opacity: 0.7 }}>{miseDeCote.map(ligneRoutine)}</View>
+        </View>
+      )}
+
+      {nonPrevues.length > 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            onPress={() => setVoirNonPrevues(!voirNonPrevues)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: voirNonPrevues }}
+            hitSlop={8}
+          >
+            <Text style={[styles.sectionTitre, { color: t.textMuted }]}>
+              {voirNonPrevues ? "−" : "+"} Pas prévues aujourd'hui ·{" "}
+              {nonPrevues.length}
+            </Text>
+          </TouchableOpacity>
+          {voirNonPrevues &&
+            nonPrevues.map((r) => (
+              <Swipeable key={r.id} renderRightActions={() => actionsRoutine(r)}>
+                <TouchableOpacity
+                  style={[styles.routine, { backgroundColor: t.bgCard }]}
+                  onPress={() => router.push(`/nouvelle-tache?id=${r.id}`)}
+                  accessibilityHint="Ouvre la modification"
+                >
+                  <Text style={[styles.texteRoutine, { color: t.textSecondary, flex: 1 }]}>
+                    {r.nom}
+                  </Text>
+                  <Text style={{ color: t.textMuted }}>›</Text>
+                </TouchableOpacity>
+              </Swipeable>
+            ))}
         </View>
       )}
 

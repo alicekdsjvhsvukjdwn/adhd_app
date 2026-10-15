@@ -15,7 +15,13 @@ import {
 import { Swipeable } from "react-native-gesture-handler";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { deviner } from "../../lib/catalogue";
-import { addItem, annulerCompletion, completer, deleteItem } from "../../lib/db";
+import {
+  addItem,
+  annulerCompletion,
+  completer,
+  confirmationSuppression,
+  deleteItem,
+} from "../../lib/db";
 import {
   BONUS_FIN,
   POINTS_ETAPE,
@@ -24,7 +30,7 @@ import {
   getEtapesPour,
   type Etape,
 } from "../../lib/db/etapes";
-import { energieDuJour } from "../../lib/db/energie";
+import { estJourDifficile } from "../../lib/db/jour-difficile";
 import {
   ajouterListe,
   compterTaches,
@@ -35,6 +41,7 @@ import {
   type Liste,
 } from "../../lib/db/listes";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
+import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Annulable =
@@ -48,7 +55,9 @@ export default function Taches() {
   const [classement, setClassement] = useState<Proposition[]>([]);
   const [etapes, setEtapes] = useState<Record<number, Etape[]>>({});
   const [voirPlusTard, setVoirPlusTard] = useState(false);
-  const [energie, setEnergie] = useState<1 | 2 | 3 | null>(null);
+  const [jourDifficile, setJourDifficile] = useState(false);
+  // « Une autre » : rang dans l'ordre du jour difficile. Rien n'est enregistré.
+  const [rangUneAutre, setRangUneAutre] = useState(0);
   const [listes, setListes] = useState<Liste[]>([]);
   /** null = toutes les listes */
   const [filtre, setFiltre] = useState<number | null>(null);
@@ -74,7 +83,8 @@ export default function Taches() {
     const toutes = await genererPropositions();
     setClassement(toutes);
     setEtapes(await getEtapesPour(toutes.map((p) => p.itemId)));
-    setEnergie((await energieDuJour()).niveau);
+    setJourDifficile(await estJourDifficile());
+    setRangUneAutre(0);
     const l = await getListes();
     setListes(l);
     setNoms(Object.fromEntries(l.map((x) => [x.id, x.nom])));
@@ -143,7 +153,8 @@ export default function Taches() {
   };
 
   const onSupprimer = (p: Proposition) => {
-    Alert.alert("Supprimer cette tâche ?", p.nom, [
+    const { titre, message } = confirmationSuppression("tache", p.nom);
+    Alert.alert(titre, message, [
       { text: "Garder", style: "cancel" },
       {
         text: "Supprimer",
@@ -176,7 +187,73 @@ export default function Taches() {
   const listeActive = listes.find((l) => l.id === filtre) ?? null;
   const nomListe = (id: number | null) => listes.find((l) => l.id === id);
 
-  const carte = (p: Proposition) => {
+  /** Bouton discret : sur la première carte, ou la carte unique d'un jour difficile. */
+  const boutonJeCommence = (p: Proposition) => {
+    const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
+    return (
+      <TouchableOpacity
+        style={[styles.jeCommence, { borderColor: t.border }]}
+        onPress={() =>
+          router.push(
+            prochaine
+              ? `/je-commence?id=${p.itemId}&etape=${prochaine.id}`
+              : `/je-commence?id=${p.itemId}`,
+          )
+        }
+        hitSlop={6}
+      >
+        <Text style={[styles.jeCommenceTexte, { color: t.accentText }]}>
+          ▶ Je commence
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const carteJourDifficile = (p: Proposition) => {
+    const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
+    return (
+      <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+        {prochaine ? (
+          <>
+            {/* Tâche découpée : seulement sa prochaine étape */}
+            <Text style={[styles.premiere, { color: t.textMuted, marginTop: 0 }]}>
+              {p.nom}
+            </Text>
+            <TouchableOpacity
+              onPress={() => onEtape(p, prochaine)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: false }}
+            >
+              <Text style={[styles.nom, { color: t.textPrimary }]}>
+                ○ {prochaine.nom}
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            onPress={() => onTerminer(p)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: false }}
+          >
+            <Text style={[styles.nom, { color: t.textPrimary }]}>○ {p.nom}</Text>
+            {p.premiere_action ? (
+              <Text style={[styles.premiere, { color: t.textSecondary }]}>
+                Commencer par : {p.premiere_action}
+              </Text>
+            ) : null}
+            {p.duree_min ? (
+              <Text style={[styles.premiere, { color: t.textMuted }]}>
+                {p.duree_min} min
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+        )}
+        {boutonJeCommence(p)}
+      </View>
+    );
+  };
+
+  const carte = (p: Proposition, rang: number) => {
           const liste = etapes[p.itemId] ?? [];
           const faites = liste.filter((e) => e.faite === 1).length;
           const suivante = liste.find((e) => e.faite === 0);
@@ -275,13 +352,22 @@ export default function Taches() {
                     </Text>
                   </>
                 )}
+                {rang === 0 && boutonJeCommence(p)}
               </View>
             </Swipeable>
           );
           };
 
-  const maintenant = classement.filter((p) => p.propose);
-  const plusTard = classement.filter((p) => !p.propose);
+  // Jour difficile (vue « Toutes ») : une seule tâche (voir ordreJourDifficile), le reste attend.
+  const modeUnique = jourDifficile && filtre === null;
+  const ordre = modeUnique
+    ? ordreJourDifficile(classement, (id) =>
+        (etapes[id] ?? []).some((e) => e.faite === 0),
+      )
+    : [];
+  const unique = ordre.length > 0 ? ordre[rangUneAutre % ordre.length] : null;
+  const maintenant = modeUnique ? [] : classement.filter((p) => p.propose);
+  const plusTard = modeUnique ? [] : classement.filter((p) => !p.propose);
   const dansListe = filtre === null ? [] : classement.filter((p) => p.liste_id === filtre);
 
   return (
@@ -340,23 +426,6 @@ export default function Taches() {
             <Text style={[styles.filtreTexte, { color: t.textMuted }]}>✎ Listes</Text>
           </TouchableOpacity>
         </ScrollView>
-
-        {/* L'énergie choisie sur Routines oriente aussi le tri des tâches */}
-        <TouchableOpacity
-          style={[styles.energie, { backgroundColor: t.bgCard }]}
-          onPress={() => router.push("/")}
-        >
-          <Text style={[styles.energieTexte, { color: t.textSecondary }]}>
-            {energie === 1
-              ? "🪫 Énergie basse : les tâches exigeantes sont écartées en priorité."
-              : energie === 3
-                ? "⚡ Énergie haute : les tâches exigeantes ne sont plus écartées."
-                : energie === 2
-                  ? "🔋 Énergie normale."
-                  : "Indique ton énergie sur l'onglet Routines pour adapter les tâches."}
-          </Text>
-          <Text style={[styles.energieLien, { color: t.accentText }]}>Changer</Text>
-        </TouchableOpacity>
 
         {/* Noter en une ligne : l'appli devine le domaine et trie */}
         <View style={styles.ajout}>
@@ -427,8 +496,27 @@ export default function Taches() {
           </>
         ) : (
           <>
-        <Text style={[styles.section, { color: t.textPrimary }]}>À faire maintenant</Text>
-        {maintenant.length === 0 && (
+        <Text style={[styles.section, { color: t.textPrimary }]}>
+          {modeUnique ? "Une seule chose" : "À faire maintenant"}
+        </Text>
+        {modeUnique && unique && (
+          <>
+            <Text style={[styles.vide, { color: t.textMuted, marginTop: 0 }]}>
+              Jour difficile : le reste attend.
+            </Text>
+            {carteJourDifficile(unique)}
+            {ordre.length > 1 && (
+              <TouchableOpacity
+                onPress={() => setRangUneAutre(rangUneAutre + 1)}
+                hitSlop={8}
+                style={styles.uneAutre}
+              >
+                <Text style={[styles.lien, { color: t.accentText }]}>Une autre</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+        {(modeUnique ? !unique : maintenant.length === 0) && (
           <Text style={[styles.vide, { color: t.textMuted }]}>
             Aucune tâche en cours.
           </Text>
@@ -606,16 +694,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
   titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: spacing.lg },
 
-  energie: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.md,
+  uneAutre: { alignSelf: "flex-start", paddingVertical: spacing.sm },
+  jeCommence: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
   },
-  energieTexte: { flex: 1, fontSize: typography.small, lineHeight: 18 },
-  energieLien: { fontSize: typography.small, fontWeight: "600" },
+  jeCommenceTexte: { fontSize: typography.small, fontWeight: "600" },
   ajout: { flexDirection: "row", gap: spacing.sm },
   filtres: { gap: spacing.sm, paddingRight: spacing.xl },
   filtre: {

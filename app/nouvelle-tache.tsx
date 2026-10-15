@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,10 +13,17 @@ import {
 } from "react-native";
 import type { Categorie } from "../lib/catalogue";
 import { dateLocale, decalerJours, jourDeCreation } from "../lib/dates";
-import { addItem, getItem, modifierItem } from "../lib/db";
+import {
+  addItem,
+  confirmationSuppression,
+  deleteItem,
+  getAncres,
+  getItem,
+  modifierItem,
+  type Ancre,
+} from "../lib/db";
 import { enregistrerEtapes, getEtapes } from "../lib/db/etapes";
 import { getListes, type Liste } from "../lib/db/listes";
-import { versionsDe } from "../lib/versions";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -23,6 +31,7 @@ import {
   ORDRE_CATEGORIES,
   useCouleurCategorie,
 } from "../lib/theme-categories";
+import { versionsDe } from "../lib/versions";
 
 /**
  * Écran d'ajout unique : une tâche (une fois) ou une routine (régulièrement).
@@ -68,8 +77,18 @@ const AUTRES_MOMENTS: Record<string, string> = {
 const CATEGORIES_VALIDES = ORDRE_CATEGORIES as string[];
 
 const MOIS_COURTS = [
-  "janv.", "févr.", "mars", "avr.", "mai", "juin",
-  "juil.", "août", "sept.", "oct.", "nov.", "déc.",
+  "janv.",
+  "févr.",
+  "mars",
+  "avr.",
+  "mai",
+  "juin",
+  "juil.",
+  "août",
+  "sept.",
+  "oct.",
+  "nov.",
+  "déc.",
 ];
 
 function dateCourte(iso: string): string {
@@ -127,6 +146,44 @@ function resumeJours(jours: number[]): string {
   return `${jours.length} jours par semaine`;
 }
 
+/** Une puce à toucher. Hors de l'écran : React ne la recrée pas à chaque rendu. */
+function Choix({
+  actif,
+  libelle,
+  onPress,
+  couleurActive,
+}: {
+  actif: boolean;
+  libelle: string;
+  onPress: () => void;
+  couleurActive?: string;
+}) {
+  const t = useTheme();
+  return (
+    <TouchableOpacity
+      style={[
+        styles.choix,
+        {
+          backgroundColor: actif ? (couleurActive ?? t.accent) : t.bgCard,
+          borderColor: actif ? (couleurActive ?? t.accent) : t.border,
+        },
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: actif }}
+    >
+      <Text
+        style={[
+          styles.choixTexte,
+          { color: actif ? t.textOnAccent : t.textSecondary },
+        ]}
+      >
+        {libelle}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function Ajouter() {
   const router = useRouter();
   const t = useTheme();
@@ -156,31 +213,32 @@ export default function Ajouter() {
   const [moment, setMoment] = useState<string | null>("matin");
   const [jours, setJours] = useState<number[]>(TOUS_LES_JOURS);
 
-  // Routine : versions selon l'énergie
-  const [versionCourte, setVersionCourte] = useState("");
-  const [versionLongue, setVersionLongue] = useState("");
-  const [suggestionsVersions, setSuggestionsVersions] = useState<{
-    courte: string | null;
-    longue: string | null;
-  }>({ courte: null, longue: null });
-
-  // Tâche : étapes
-  const [etapes, setEtapes] = useState<{ id?: number; nom: string; faite?: number }[]>([]);
-  const [nouvelleEtape, setNouvelleEtape] = useState("");
-
-  const [effort, setEffort] = useState<1 | 2 | 3>(2);
+  // Tâche : liste (Quotidien, Travail…) ; sans précision, la première.
   const [listes, setListes] = useState<Liste[]>([]);
   const [listeId, setListeId] = useState<number | null>(
     params.liste ? Number(params.liste) : null,
   );
 
-  // Listes de tâches ; sans précision, la première (Quotidien).
-  useEffect(() => {
-    getListes().then((l) => {
-      setListes(l);
-      setListeId((actuelle) => actuelle ?? l[0]?.id ?? null);
-    });
-  }, []);
+  // Routine : version courte (jour difficile) et longue (en forme).
+  const [versionCourte, setVersionCourte] = useState("");
+  const [versionLongue, setVersionLongue] = useState("");
+  const [suggestionCourte, setSuggestionCourte] = useState<string | null>(null);
+  const [suggestionLongue, setSuggestionLongue] = useState<string | null>(null);
+
+  // Routine : moment repère (« Après le café »)
+  const [ancres, setAncres] = useState<Ancre[]>([]);
+  const [ancreId, setAncreId] = useState<number | null>(null);
+  const [ancrePosition, setAncrePosition] = useState<"avant" | "apres">(
+    "apres",
+  );
+
+  // Tâche : étapes
+  const [etapes, setEtapes] = useState<
+    { id?: number; nom: string; faite?: number }[]
+  >([]);
+  const [nouvelleEtape, setNouvelleEtape] = useState("");
+
+  const [effort, setEffort] = useState<1 | 2 | 3>(2);
   // Formulaire court par défaut ; tout est déplié quand on modifie.
   const [plusOptions, setPlusOptions] = useState(idModifie !== null);
 
@@ -208,29 +266,48 @@ export default function Ajouter() {
         setEcheance(item.echeance);
         setMoment(item.moment === "indifferent" ? null : item.moment);
         setJours(joursDe(item.recurrence, item.cree_le));
-        if (item.liste_id !== null) setListeId(item.liste_id);
-        setEffort(
-          item.effort === 1 || item.effort === 3 ? item.effort : 2,
-        );
+        setEffort(item.effort === 1 || item.effort === 3 ? item.effort : 2);
         setVersionCourte(item.version_courte ?? "");
         setVersionLongue(item.version_longue ?? "");
-        // Ce que proposerait le catalogue, affiché en exemple dans les champs vides
+        if (item.liste_id !== null) setListeId(item.liste_id);
+        setAncreId(item.ancre_id);
+        setAncrePosition(item.ancre_position === "avant" ? "avant" : "apres");
+        // Ce que proposerait le catalogue, affiché en exemple dans le champ vide
         const duCatalogue = versionsDe({
           ...item,
           version_courte: null,
           version_longue: null,
         });
-        setSuggestionsVersions({
-          courte: duCatalogue.distincte.courte ? duCatalogue.courte.nom : null,
-          longue: duCatalogue.distincte.longue ? duCatalogue.longue.nom : null,
-        });
+        setSuggestionCourte(
+          duCatalogue.distincte.courte ? duCatalogue.courte.nom : null,
+        );
+        setSuggestionLongue(
+          duCatalogue.distincte.longue ? duCatalogue.longue.nom : null,
+        );
         setEtapes(
-          (await getEtapes(item.id)).map((e) => ({ id: e.id, nom: e.nom, faite: e.faite })),
+          (await getEtapes(item.id)).map((e) => ({
+            id: e.id,
+            nom: e.nom,
+            faite: e.faite,
+          })),
         );
       }
       setChargement(false);
     })();
   }, [idModifie]);
+
+  useEffect(() => {
+    getAncres().then(setAncres);
+    getListes().then((l) => {
+      setListes(l);
+      setListeId((actuelle) => actuelle ?? l[0]?.id ?? null);
+    });
+  }, []);
+
+  // Moments repères actifs, plus celui déjà choisi s'il a été désactivé depuis.
+  const ancresProposees = ancres.filter(
+    (a) => a.active === 1 || a.id === ancreId,
+  );
 
   const valide =
     nom.trim().length > 0 && (mode === "tache" || jours.length > 0);
@@ -246,7 +323,8 @@ export default function Ajouter() {
     try {
       const commun = {
         nom: nom.trim(),
-        effort,
+        // La difficulté ne sert qu'aux routines (« Si l'énergie revient »).
+        effort: mode === "routine" ? effort : null,
         categorie,
         duree_min: duree,
         premiere_action: premiereAction.trim() || null,
@@ -265,6 +343,8 @@ export default function Ajouter() {
                 moment,
                 version_courte: versionCourte.trim() || null,
                 version_longue: versionLongue.trim() || null,
+                ancre_id: ancreId,
+                ancre_position: ancreId !== null ? ancrePosition : null,
               }),
         });
         if (mode === "tache") await enregistrerEtapes(idModifie, etapes);
@@ -285,6 +365,8 @@ export default function Ajouter() {
           moment,
           version_courte: versionCourte.trim() || null,
           version_longue: versionLongue.trim() || null,
+          ancre_id: ancreId,
+          ancre_position: ancreId !== null ? ancrePosition : null,
         });
       }
       router.back();
@@ -293,37 +375,24 @@ export default function Ajouter() {
     }
   };
 
-  const Choix = ({
-    actif,
-    libelle,
-    onPress,
-    couleurActive,
-  }: {
-    actif: boolean;
-    libelle: string;
-    onPress: () => void;
-    couleurActive?: string;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.choix,
-        {
-          backgroundColor: actif ? (couleurActive ?? t.accent) : t.bgCard,
-          borderColor: actif ? (couleurActive ?? t.accent) : t.border,
+  const onSupprimer = () => {
+    if (idModifie === null) return;
+    const { titre, message } = confirmationSuppression(
+      typeInitial === "routine" ? "routine" : "tache",
+      nom,
+    );
+    Alert.alert(titre, message, [
+      { text: "Garder", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await deleteItem(idModifie);
+          router.back();
         },
-      ]}
-      onPress={onPress}
-    >
-      <Text
-        style={[
-          styles.choixTexte,
-          { color: actif ? t.textOnAccent : t.textSecondary },
-        ]}
-      >
-        {libelle}
-      </Text>
-    </TouchableOpacity>
-  );
+      },
+    ]);
+  };
 
   if (chargement) {
     return (
@@ -392,7 +461,12 @@ export default function Ajouter() {
             );
           })}
         </View>
-        <Text style={[styles.aide, { color: t.textMuted, marginBottom: spacing.lg }]}>
+        <Text
+          style={[
+            styles.aide,
+            { color: t.textMuted, marginBottom: spacing.lg },
+          ]}
+        >
           {mode === "tache"
             ? "Une tâche disparaît une fois faite."
             : "Une routine revient les jours choisis."}
@@ -412,66 +486,26 @@ export default function Ajouter() {
           returnKeyType="done"
         />
 
-        {mode === "tache" ? (
+        {/* Tâche : le titre et la liste à l'écran, le reste dans « Plus d'options » */}
+        {mode === "tache" && listes.length > 0 && (
           <>
-            {listes.length > 0 && (
-              <>
-                <Text style={[styles.label, { color: t.textSecondary }]}>Liste</Text>
-                <View style={styles.ligneChoix}>
-                  {listes.map((l) => (
-                    <Choix
-                      key={l.id}
-                      actif={listeId === l.id}
-                      libelle={`${l.icone ? `${l.icone} ` : ""}${l.nom}`}
-                      onPress={() => setListeId(l.id)}
-                    />
-                  ))}
-                </View>
-              </>
-            )}
-
             <Text style={[styles.label, { color: t.textSecondary }]}>
-              Importance
+              Liste
             </Text>
             <View style={styles.ligneChoix}>
-              {IMPORTANCES.map((i) => (
+              {listes.map((l) => (
                 <Choix
-                  key={i.valeur}
-                  actif={importance === i.valeur}
-                  libelle={i.libelle}
-                  onPress={() => setImportance(i.valeur)}
+                  key={l.id}
+                  actif={listeId === l.id}
+                  libelle={`${l.icone ? `${l.icone} ` : ""}${l.nom}`}
+                  onPress={() => setListeId(l.id)}
                 />
               ))}
             </View>
-
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Pour quand ?
-            </Text>
-            <View style={styles.ligneChoix}>
-              {ECHEANCES.map((e) => (
-                <Choix
-                  key={e.libelle}
-                  actif={
-                    e.jours === null
-                      ? echeance === null
-                      : echeance === dateDansJours(e.jours)
-                  }
-                  libelle={e.libelle}
-                  onPress={() =>
-                    setEcheance(e.jours === null ? null : dateDansJours(e.jours))
-                  }
-                />
-              ))}
-              {echeance !== null &&
-                !ECHEANCES.some(
-                  (e) => e.jours !== null && dateDansJours(e.jours) === echeance,
-                ) && (
-                  <Choix actif libelle={dateCourte(echeance)} onPress={() => {}} />
-                )}
-            </View>
-
           </>
-        ) : (
+        )}
+
+        {mode === "routine" && (
           <>
             <Text style={[styles.label, { color: t.textSecondary }]}>
               À quel moment de la journée ?
@@ -486,7 +520,11 @@ export default function Ajouter() {
                 />
               ))}
               {moment !== null && AUTRES_MOMENTS[moment] && (
-                <Choix actif libelle={AUTRES_MOMENTS[moment]} onPress={() => {}} />
+                <Choix
+                  actif
+                  libelle={AUTRES_MOMENTS[moment]}
+                  onPress={() => {}}
+                />
               )}
             </View>
 
@@ -528,28 +566,8 @@ export default function Ajouter() {
             >
               {resumeJours(jours)}
             </Text>
-
           </>
         )}
-
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Difficulté
-        </Text>
-        <View style={styles.ligneChoix}>
-          {DIFFICULTES.map((d) => (
-            <Choix
-              key={d.valeur}
-              actif={effort === d.valeur}
-              libelle={d.libelle}
-              onPress={() => setEffort(d.valeur)}
-            />
-          ))}
-        </View>
-        <Text style={[styles.aide, { color: t.textMuted }]}>
-          {mode === "routine"
-            ? "Quand ton énergie est basse, les routines exigeantes passent à part, sans pression."
-            : "L'appli propose les tâches faciles en premier quand ton énergie est basse."}
-        </Text>
 
         {!plusOptions ? (
           <TouchableOpacity
@@ -557,146 +575,297 @@ export default function Ajouter() {
             onPress={() => setPlusOptions(true)}
           >
             <Text style={[styles.plusOptionsTexte, { color: t.textPrimary }]}>
-              Plus d'options
+              Plus d&apos;options
             </Text>
             <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
               {mode === "routine"
-                ? "Versions selon l'énergie, domaine, durée, première action"
-                : "Étapes, domaine, durée, première action"}
+                ? "Difficulté, versions selon l'énergie, domaine, durée, première action"
+                : "Importance, échéance, étapes, domaine, durée, première action"}
             </Text>
           </TouchableOpacity>
         ) : (
           <>
             {mode === "tache" ? (
               <>
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Étapes (facultatif)
-            </Text>
-            <Text style={[styles.aide, { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm }]}>
-              Pour une grosse tâche : des petits morceaux à cocher un par un. Chaque
-              étape rapporte des points, et finir le tout donne un bonus.
-            </Text>
-            {etapes.map((e, i) => (
-              <View key={e.id ?? `n${i}`} style={[styles.etape, { backgroundColor: t.bgCard }]}>
-                <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
-                  {e.faite ? "✓" : i + 1}
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Importance
                 </Text>
-                <Text style={[styles.etapeNom, { color: t.textPrimary }]}>{e.nom}</Text>
-                <TouchableOpacity
-                  onPress={() => setEtapes(etapes.filter((_, k) => k !== i))}
-                  hitSlop={10}
+                <View style={styles.ligneChoix}>
+                  {IMPORTANCES.map((i) => (
+                    <Choix
+                      key={i.valeur}
+                      actif={importance === i.valeur}
+                      libelle={i.libelle}
+                      onPress={() => setImportance(i.valeur)}
+                    />
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Pour quand ?
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {ECHEANCES.map((e) => (
+                    <Choix
+                      key={e.libelle}
+                      actif={
+                        e.jours === null
+                          ? echeance === null
+                          : echeance === dateDansJours(e.jours)
+                      }
+                      libelle={e.libelle}
+                      onPress={() =>
+                        setEcheance(
+                          e.jours === null ? null : dateDansJours(e.jours),
+                        )
+                      }
+                    />
+                  ))}
+                  {echeance !== null &&
+                    !ECHEANCES.some(
+                      (e) =>
+                        e.jours !== null &&
+                        dateDansJours(e.jours) === echeance,
+                    ) && (
+                      <Choix
+                        actif
+                        libelle={dateCourte(echeance)}
+                        onPress={() => {}}
+                      />
+                    )}
+                </View>
+
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Étapes (facultatif)
+                </Text>
+                <Text
+                  style={[
+                    styles.aide,
+                    {
+                      color: t.textMuted,
+                      marginTop: 0,
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
                 >
-                  <Text style={[styles.etapeRetirer, { color: t.textMuted }]}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-            <View style={styles.etapeAjout}>
-              <TextInput
-                style={[styleInput, { flex: 1 }]}
-                placeholder={etapes.length === 0 ? "Ex : trouver le formulaire" : "Étape suivante"}
-                placeholderTextColor={t.textMuted}
-                value={nouvelleEtape}
-                onChangeText={setNouvelleEtape}
-                onSubmitEditing={() => {
-                  if (!nouvelleEtape.trim()) return;
-                  setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
-                  setNouvelleEtape("");
-                }}
-                blurOnSubmit={false}
-                returnKeyType="next"
-              />
-              <TouchableOpacity
-                style={[styles.etapeBouton, { backgroundColor: t.accent }]}
-                onPress={() => {
-                  if (!nouvelleEtape.trim()) return;
-                  setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
-                  setNouvelleEtape("");
-                }}
-              >
-                <Text style={[styles.etapeBoutonTexte, { color: t.textOnAccent }]}>+</Text>
-              </TouchableOpacity>
-            </View>
+                  Pour une grosse tâche : des petits morceaux à cocher un par
+                  un. Chaque étape rapporte des points, et finir le tout donne
+                  un bonus.
+                </Text>
+                {etapes.map((e, i) => (
+                  <View
+                    key={e.id ?? `n${i}`}
+                    style={[styles.etape, { backgroundColor: t.bgCard }]}
+                  >
+                    <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
+                      {e.faite ? "✓" : i + 1}
+                    </Text>
+                    <Text style={[styles.etapeNom, { color: t.textPrimary }]}>
+                      {e.nom}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setEtapes(etapes.filter((_, k) => k !== i))
+                      }
+                      hitSlop={10}
+                    >
+                      <Text
+                        style={[styles.etapeRetirer, { color: t.textMuted }]}
+                      >
+                        ✕
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <View style={styles.etapeAjout}>
+                  <TextInput
+                    style={[styleInput, { flex: 1 }]}
+                    placeholder={
+                      etapes.length === 0
+                        ? "Ex : trouver le formulaire"
+                        : "Étape suivante"
+                    }
+                    placeholderTextColor={t.textMuted}
+                    value={nouvelleEtape}
+                    onChangeText={setNouvelleEtape}
+                    onSubmitEditing={() => {
+                      if (!nouvelleEtape.trim()) return;
+                      setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
+                      setNouvelleEtape("");
+                    }}
+                    blurOnSubmit={false}
+                    returnKeyType="next"
+                  />
+                  <TouchableOpacity
+                    style={[styles.etapeBouton, { backgroundColor: t.accent }]}
+                    onPress={() => {
+                      if (!nouvelleEtape.trim()) return;
+                      setEtapes([...etapes, { nom: nouvelleEtape.trim() }]);
+                      setNouvelleEtape("");
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.etapeBoutonTexte,
+                        { color: t.textOnAccent },
+                      ]}
+                    >
+                      +
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             ) : (
               <>
-            <Text style={[styles.label, { color: t.textSecondary }]}>
-              Selon ton énergie (facultatif)
-            </Text>
-            <Text style={[styles.aide, { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm }]}>
-              La version affichée change avec ton énergie du jour. Les trois
-              rapportent les mêmes points.
-            </Text>
-            <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
-              🪫 Version courte, quand l'énergie est basse
-            </Text>
-            <TextInput
-              style={styleInput}
-              placeholder={suggestionsVersions.courte ?? "Ex : deux minutes seulement"}
-              placeholderTextColor={t.textMuted}
-              value={versionCourte}
-              onChangeText={setVersionCourte}
-              returnKeyType="done"
-            />
-            <Text style={[styles.sousLabel, { color: t.textSecondary }]}>
-              ⚡ Version longue, quand l'énergie est haute
-            </Text>
-            <TextInput
-              style={styleInput}
-              placeholder={suggestionsVersions.longue ?? "Ex : vingt minutes"}
-              placeholderTextColor={t.textMuted}
-              value={versionLongue}
-              onChangeText={setVersionLongue}
-              returnKeyType="done"
-            />
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Difficulté
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {DIFFICULTES.map((d) => (
+                    <Choix
+                      key={d.valeur}
+                      actif={effort === d.valeur}
+                      libelle={d.libelle}
+                      onPress={() => setEffort(d.valeur)}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.aide, { color: t.textMuted }]}>
+                  Les jours difficiles, les routines exigeantes passent à part,
+                  sans pression.
+                </Text>
+
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Version courte (facultatif)
+                </Text>
+                <TextInput
+                  style={styleInput}
+                  placeholder={suggestionCourte ?? "Ex : deux minutes seulement"}
+                  placeholderTextColor={t.textMuted}
+                  value={versionCourte}
+                  onChangeText={setVersionCourte}
+                  returnKeyType="done"
+                />
+                <Text style={[styles.aide, { color: t.textMuted }]}>
+                  Affichée les jours difficiles. Elle rapporte les mêmes
+                  points.
+                </Text>
+
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Version longue (facultatif)
+                </Text>
+                <TextInput
+                  style={styleInput}
+                  placeholder={suggestionLongue ?? "Ex : vingt minutes"}
+                  placeholderTextColor={t.textMuted}
+                  value={versionLongue}
+                  onChangeText={setVersionLongue}
+                  returnKeyType="done"
+                />
+                <Text style={[styles.aide, { color: t.textMuted }]}>
+                  Affichée les jours où tu es en forme. Mêmes points.
+                </Text>
+
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Moment repère (facultatif)
+                </Text>
+                {ancresProposees.length === 0 ? (
+                  <TouchableOpacity
+                    onPress={() => router.push("/ancres")}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.aide, { color: t.accentText }]}>
+                      Aucun moment repère pour l&apos;instant · Mes moments
+                      repères
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    <View style={styles.ligneChoix}>
+                      <Choix
+                        actif={ancreId === null}
+                        libelle="Aucun"
+                        onPress={() => setAncreId(null)}
+                      />
+                      {ancresProposees.map((a) => (
+                        <Choix
+                          key={a.id}
+                          actif={ancreId === a.id}
+                          libelle={a.nom}
+                          onPress={() => setAncreId(a.id)}
+                        />
+                      ))}
+                    </View>
+                    {ancreId !== null && (
+                      <View style={[styles.ligneChoix, { marginTop: spacing.sm }]}>
+                        <Choix
+                          actif={ancrePosition === "avant"}
+                          libelle="Avant"
+                          onPress={() => setAncrePosition("avant")}
+                        />
+                        <Choix
+                          actif={ancrePosition === "apres"}
+                          libelle="Après"
+                          onPress={() => setAncrePosition("apres")}
+                        />
+                      </View>
+                    )}
+                    <Text style={[styles.aide, { color: t.textMuted }]}>
+                      La routine se range au moment de son repère.
+                    </Text>
+                  </>
+                )}
               </>
             )}
 
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Domaine (facultatif)
-        </Text>
-        <View style={styles.ligneChoix}>
-          {ORDRE_CATEGORIES.map((c) => (
-            <Choix
-              key={c}
-              actif={categorie === c}
-              libelle={`${ICONES_CATEGORIE[c]} ${LIBELLES_CATEGORIE[c]}`}
-              couleurActive={couleurCat(c)}
-              onPress={() => setCategorie(categorie === c ? null : c)}
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Domaine (facultatif)
+            </Text>
+            <View style={styles.ligneChoix}>
+              {ORDRE_CATEGORIES.map((c) => (
+                <Choix
+                  key={c}
+                  actif={categorie === c}
+                  libelle={`${ICONES_CATEGORIE[c]} ${LIBELLES_CATEGORIE[c]}`}
+                  couleurActive={couleurCat(c)}
+                  onPress={() => setCategorie(categorie === c ? null : c)}
+                />
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Durée estimée (facultatif)
+            </Text>
+            <View style={styles.ligneChoix}>
+              {DUREES.map((d) => (
+                <Choix
+                  key={d}
+                  actif={duree === d}
+                  libelle={d === 60 ? "1 h ou +" : `${d} min`}
+                  onPress={() => setDuree(duree === d ? null : d)}
+                />
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Première petite action (facultatif)
+            </Text>
+            <TextInput
+              style={styleInput}
+              placeholder={
+                mode === "tache"
+                  ? "Ex : chercher le numéro"
+                  : "Ex : sortir la guitare de sa housse"
+              }
+              placeholderTextColor={t.textMuted}
+              value={premiereAction}
+              onChangeText={setPremiereAction}
+              returnKeyType="done"
             />
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Durée estimée (facultatif)
-        </Text>
-        <View style={styles.ligneChoix}>
-          {DUREES.map((d) => (
-            <Choix
-              key={d}
-              actif={duree === d}
-              libelle={d === 60 ? "1 h ou +" : `${d} min`}
-              onPress={() => setDuree(duree === d ? null : d)}
-            />
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: t.textSecondary }]}>
-          Première petite action (facultatif)
-        </Text>
-        <TextInput
-          style={styleInput}
-          placeholder={
-            mode === "tache" ? "Ex : chercher le numéro" : "Ex : sortir la guitare de sa housse"
-          }
-          placeholderTextColor={t.textMuted}
-          value={premiereAction}
-          onChangeText={setPremiereAction}
-          returnKeyType="done"
-        />
-        <Text style={[styles.aide, { color: t.textMuted }]}>
-          Le plus dur, c'est de commencer. Une action de deux minutes suffit.
-        </Text>
-
+            <Text style={[styles.aide, { color: t.textMuted }]}>
+              Le plus dur, c&apos;est de commencer. Une action de deux minutes
+              suffit.
+            </Text>
           </>
         )}
 
@@ -721,12 +890,34 @@ export default function Ajouter() {
                 : "Ajouter la routine"}
           </Text>
         </TouchableOpacity>
+
+        {idModifie !== null && (
+          <TouchableOpacity
+            style={[styles.boutonSupprimer, { borderColor: t.danger }]}
+            onPress={onSupprimer}
+            disabled={enregistrement}
+          >
+            <Text style={[styles.boutonSupprimerTexte, { color: t.danger }]}>
+              {typeInitial === "routine"
+                ? "Supprimer cette routine"
+                : "Supprimer cette tâche"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  boutonSupprimer: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+    marginTop: spacing.lg,
+  },
+  boutonSupprimerTexte: { fontSize: typography.body, fontWeight: "600" },
   container: {
     paddingTop: 60,
     paddingHorizontal: spacing.xl,
@@ -787,7 +978,11 @@ const styles = StyleSheet.create({
   },
   jourTexte: { fontSize: typography.small, fontWeight: "600" },
   aide: { fontSize: typography.tiny, marginTop: 6, lineHeight: 17 },
-  sousLabel: { fontSize: typography.small, marginTop: spacing.sm, marginBottom: 6 },
+  sousLabel: {
+    fontSize: typography.small,
+    marginTop: spacing.sm,
+    marginBottom: 6,
+  },
   plusOptions: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -796,7 +991,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   plusOptionsTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
-  plusOptionsDetail: { fontSize: typography.tiny, marginTop: 2, textAlign: "center" },
+  plusOptionsDetail: {
+    fontSize: typography.tiny,
+    marginTop: 2,
+    textAlign: "center",
+  },
   etape: {
     flexDirection: "row",
     alignItems: "center",
@@ -806,7 +1005,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     gap: spacing.md,
   },
-  etapeNumero: { width: 18, textAlign: "center", fontSize: typography.small, fontWeight: "600" },
+  etapeNumero: {
+    width: 18,
+    textAlign: "center",
+    fontSize: typography.small,
+    fontWeight: "600",
+  },
   etapeNom: { flex: 1, fontSize: typography.bodySmall },
   etapeRetirer: { fontSize: 16 },
   etapeAjout: { flexDirection: "row", gap: spacing.sm },
