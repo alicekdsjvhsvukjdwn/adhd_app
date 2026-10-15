@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { BilanJournee } from "../../components/BilanJournee";
+import { LiensSommeilSport } from "../../components/LiensSommeilSport";
 import { annulerCompletion, getAujourdhui } from "../../lib/db/completions";
 import {
   avanceePeriode,
@@ -859,6 +860,8 @@ export default function Progression() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <LiensSommeilSport />
 
       {/* Année : une ligne par mois, une case par jour */}
       <Text style={[styles.sectionTitre, { color: t.textPrimary }]}>

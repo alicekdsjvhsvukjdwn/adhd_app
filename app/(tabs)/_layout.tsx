@@ -47,6 +47,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="suivi"
+        options={{
+          title: "Suivi",
+          tabBarIcon: ({ focused }) => <Icone symbole="🌙" actif={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="progression"
         options={{
           title: "Progression",

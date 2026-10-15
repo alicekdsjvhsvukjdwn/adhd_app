@@ -18,4 +18,15 @@ test("migrations déjà appliquées sur le téléphone : jamais renommées", () 
   const nom = (v) => migrations.find((m) => m.version === v)?.nom;
   assert.equal(nom(10), "bilan de la journée : concentration et humeur facultatives");
   assert.equal(nom(11), "listes de tâches");
+  assert.equal(nom(12), "sommeil");
+  assert.equal(nom(13), "sport : callisthénie guidée");
+});
+
+test("migrations 12 et suivantes : toute colonne NOT NULL a un DEFAULT", () => {
+  const debut = source.indexOf("version: 12,");
+  const lignes = source.slice(debut).split("\n");
+  const fautives = lignes.filter(
+    (l) => /NOT NULL/.test(l) && !/DEFAULT/.test(l) && !/PRIMARY KEY/.test(l),
+  );
+  assert.deepEqual(fautives, []);
 });

@@ -4,6 +4,7 @@ import { CATEGORIES, categorieEffective } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui, routineAttendueLe } from "./completions";
 import { trancheDeHeure, type Tranche } from "./etat";
+import { comparer, type Comparaison } from "../suivi-regles";
 
 /**
  * Données de l'écran Progression.
@@ -470,4 +471,78 @@ export async function faitsDuJour(
     categorie: categorieEffective(r.categorie, r.template_id),
     version: r.version,
   }));
+}
+
+export type LiensSommeilSport = {
+  /** Part des routines attendues faites : après une bonne nuit (A) / une mauvaise (B). */
+  routinesSelonNuit: Comparaison;
+  /** Qualité ressentie (1–3) : nuits avec écrans (A) / sans (B). */
+  qualiteSelonEcrans: Comparaison;
+  /** Énergie choisie sur Routines (1–3) : jours avec séance (A) / sans (B). */
+  energieSelonSeance: Comparaison;
+};
+
+/**
+ * Liens entre sommeil, sport et le reste, pour l'analyse seulement :
+ * rien ici ne modifie le tri, les routines ou Jour difficile.
+ */
+export async function liensSommeilSport(): Promise<LiensSommeilSport> {
+  const db = await getDatabase();
+  const aujourdhui = getAujourdhui();
+  const nuits = await db.getAllAsync<{ date: string; qualite: number; ecrans: number }>(
+    "SELECT date, qualite, ecrans FROM sommeil WHERE date <= ? ORDER BY date",
+    aujourdhui,
+  );
+
+  // Taux de routines faites, jour par jour, pour les jours qui suivent une nuit notée.
+  const routines = await routinesSuivies();
+  const ids = new Set(routines.map((r) => r.id));
+  const fait = new Map<string, number>();
+  if (nuits.length > 0) {
+    for (const c of await completionsEntre(nuits[0].date, aujourdhui)) {
+      if (c.type === "routine" && ids.has(c.item_id)) {
+        fait.set(c.date, (fait.get(c.date) ?? 0) + poids(c.statut));
+      }
+    }
+  }
+  const taux = (jour: string): number | null => {
+    const attendu = routines.filter((r) => attenduCeJour(r, jour)).length;
+    return attendu > 0 ? Math.min(1, (fait.get(jour) ?? 0) / attendu) : null;
+  };
+  const tauxDe = (q: number) =>
+    nuits
+      .filter((n) => n.qualite === q)
+      .map((n) => taux(n.date))
+      .filter((x): x is number => x !== null);
+
+  // Énergie choisie à la main sur Routines (meta energie_routines:AAAA-MM-JJ).
+  // meta est créée à la demande : elle peut manquer sur une base neuve.
+  await db.execAsync(
+    "CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);",
+  );
+  const energies = await db.getAllAsync<{ cle: string; valeur: string }>(
+    "SELECT cle, valeur FROM meta WHERE cle LIKE 'energie_routines:%'",
+  );
+  const joursSeance = new Set(
+    (
+      await db.getAllAsync<{ date: string }>(
+        "SELECT DISTINCT date FROM seances WHERE points_donnes > 0",
+      )
+    ).map((r) => r.date),
+  );
+  const avec: number[] = [];
+  const sans: number[] = [];
+  for (const e of energies) {
+    const jour = e.cle.slice("energie_routines:".length);
+    (joursSeance.has(jour) ? avec : sans).push(Number(e.valeur));
+  }
+
+  return {
+    routinesSelonNuit: comparer(tauxDe(3), tauxDe(1)),
+    qualiteSelonEcrans: comparer(
+      nuits.filter((n) => n.ecrans === 1).map((n) => n.qualite),
+      nuits.filter((n) => n.ecrans === 0).map((n) => n.qualite),
+    ),
+    energieSelonSeance: comparer(avec, sans),
+  };
 }

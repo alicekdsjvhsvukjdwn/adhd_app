@@ -456,6 +456,88 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 12,
+    nom: "sommeil",
+    run: async (db) => {
+      // Une nuit par jour du lever. La durée est stockée (calculée à la
+      // saisie) pour que l'analyse n'ait rien à recalculer.
+      await db.execAsync(`
+        CREATE TABLE sommeil (
+          date TEXT PRIMARY KEY,
+          -- heures locales HH:MM
+          coucher TEXT NOT NULL DEFAULT '',
+          lever TEXT NOT NULL DEFAULT '',
+          duree_min INTEGER NOT NULL DEFAULT 0,
+          -- 1 = mauvaise, 2 = moyenne, 3 = bonne
+          qualite INTEGER NOT NULL DEFAULT 2,
+          ecrans INTEGER NOT NULL DEFAULT 0,
+          saisi_le TEXT NOT NULL DEFAULT '',
+          maj_le TEXT NOT NULL DEFAULT ''
+        );
+      `);
+    },
+  },
+
+  {
+    version: 13,
+    nom: "sport : callisthénie guidée",
+    run: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE sport_reglages (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          barre_traction INTEGER NOT NULL DEFAULT 0,
+          configure_le TEXT NOT NULL DEFAULT ''
+        );
+
+        -- 'pousser' | 'tirer' | 'jambes' | 'gainage'
+        CREATE TABLE sport_paliers (
+          famille TEXT PRIMARY KEY,
+          palier INTEGER NOT NULL DEFAULT 1,
+          maj_le TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE seances (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL DEFAULT '',
+          debut TEXT NOT NULL DEFAULT '',
+          -- NULL tant que la séance n'est pas terminée
+          fin TEXT,
+          points_donnes INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX idx_seances_date ON seances(date);
+
+        -- Exercice et objectif recopiés : l'historique reste lisible
+        -- même si les échelles changent.
+        CREATE TABLE series (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          seance_id INTEGER NOT NULL DEFAULT 0,
+          famille TEXT NOT NULL DEFAULT '',
+          palier INTEGER NOT NULL DEFAULT 0,
+          exercice TEXT NOT NULL DEFAULT '',
+          numero INTEGER NOT NULL DEFAULT 0,
+          -- 'reps' | 's'
+          unite TEXT NOT NULL DEFAULT 'reps',
+          objectif_bas INTEGER NOT NULL DEFAULT 0,
+          objectif_haut INTEGER NOT NULL DEFAULT 0,
+          realise INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX idx_series_famille ON series(famille, palier);
+
+        -- 'depart' | 'propose_accepte' | 'propose_refuse' | 'manuel'
+        CREATE TABLE paliers_historique (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL DEFAULT '',
+          horodatage TEXT NOT NULL DEFAULT '',
+          famille TEXT NOT NULL DEFAULT '',
+          de INTEGER,
+          vers INTEGER NOT NULL DEFAULT 0,
+          origine TEXT NOT NULL DEFAULT ''
+        );
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

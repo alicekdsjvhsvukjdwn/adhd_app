@@ -1,3 +1,4 @@
+import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { initStats } from "./stats";
@@ -29,6 +30,8 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
   { action: "Une tâche terminée", points: "+10" },
   { action: "Une étape d'une grosse tâche", points: "+5" },
   { action: "Toutes les étapes finies", points: "+10 de bonus" },
+  { action: "Une nuit notée (une fois par nuit)", points: `+${POINTS_NUIT}` },
+  { action: "Une séance de sport, même partielle", points: `+${POINTS_SEANCE}` },
 ];
 
 /** Idées de départ, prix calibrés sur ~60 points gagnés par jour. */

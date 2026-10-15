@@ -60,3 +60,22 @@ test("restauration : seules les colonnes encore présentes sont reprises", () =>
 test("le fichier porte la date du jour", () => {
   assert.equal(nomFichier("2026-10-01"), "tdah-routines-sauvegarde-2026-10-01.json");
 });
+
+test("Suivi : une sauvegarde d'avant le sommeil et le sport se restaure, une récente les contient", () => {
+  // Avant les migrations 12-13 : pas de tables sommeil ni sport.
+  const ancienne = JSON.stringify(construireSauvegarde(11, tables));
+  assert.equal(validerSauvegarde(ancienne, 13).ok, true);
+
+  const recente = JSON.stringify(
+    construireSauvegarde(13, {
+      ...tables,
+      sommeil: [{ date: "2026-10-15", coucher: "23:30", lever: "07:00", duree_min: 450, qualite: 3, ecrans: 0 }],
+      series: [{ id: 1, seance_id: 1, famille: "pousser", palier: 2, exercice: "Pompes inclinées (table)", numero: 1, realise: 10 }],
+    }),
+  );
+  const v = validerSauvegarde(recente, 13);
+  assert.equal(v.ok, true);
+  assert.equal(v.sauvegarde.tables.sommeil[0].duree_min, 450);
+  // Restaurée dans une appli plus ancienne (schéma 11) : refusée, rien n'est perdu.
+  assert.equal(validerSauvegarde(recente, 11).ok, false);
+});

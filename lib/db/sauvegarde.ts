@@ -1,7 +1,10 @@
 import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import JSZip from "jszip";
+import { lisezmoi, versCsv } from "../csv";
 import {
+  APP,
   colonnesCommunes,
   construireSauvegarde,
   nomFichier,
@@ -72,6 +75,40 @@ export async function exporterSauvegarde(): Promise<void> {
     mimeType: "application/json",
     UTI: "public.json",
     dialogTitle: "Enregistrer la sauvegarde",
+  });
+}
+
+/**
+ * Export pour l'analyse : un CSV par table (toutes) et un LISEZMOI.txt
+ * qui décrit chaque colonne, dans un zip partagé.
+ */
+export async function exporterCsv(): Promise<void> {
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error("Le partage de fichiers n'est pas disponible sur cet appareil.");
+  }
+  const { tables } = await lireSauvegarde();
+  const db = await getDatabase();
+  const zip = new JSZip();
+  const resume: { nom: string; colonnes: string[]; lignes: number }[] = [];
+
+  for (const [nom, lignes] of Object.entries(tables)) {
+    // Colonnes lues dans le schéma : une table vide a quand même ses en-têtes.
+    const colonnes = (
+      await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${nom}")`)
+    ).map((c) => c.name);
+    zip.file(`${nom}.csv`, versCsv(colonnes, lignes));
+    resume.push({ nom, colonnes, lignes: lignes.length });
+  }
+  zip.file("LISEZMOI.txt", lisezmoi(resume, new Date().toISOString()));
+
+  const fichier = new File(Paths.cache, `${APP}-donnees-${getAujourdhui()}.zip`);
+  if (fichier.exists) fichier.delete();
+  fichier.create();
+  fichier.write(await zip.generateAsync({ type: "uint8array" }));
+  await Sharing.shareAsync(fichier.uri, {
+    mimeType: "application/zip",
+    UTI: "public.zip-archive",
+    dialogTitle: "Exporter mes données (CSV)",
   });
 }
 

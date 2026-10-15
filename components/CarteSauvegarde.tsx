@@ -3,6 +3,7 @@ import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { getConfigRappel } from "../lib/db";
 import {
   choisirSauvegarde,
+  exporterCsv,
   exporterSauvegarde,
   restaurerSauvegarde,
 } from "../lib/db/sauvegarde";
@@ -22,6 +23,17 @@ export function CarteSauvegarde() {
     setEnCours(true);
     try {
       await exporterSauvegarde();
+    } catch (e) {
+      Alert.alert("L'export a échoué", String(e));
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  const exporterTableur = async () => {
+    setEnCours(true);
+    try {
+      await exporterCsv();
     } catch (e) {
       Alert.alert("L'export a échoué", String(e));
     } finally {
@@ -105,6 +117,19 @@ export function CarteSauvegarde() {
           </Text>
         </TouchableOpacity>
       </View>
+      <TouchableOpacity
+        style={styles.lienCsv}
+        onPress={exporterTableur}
+        disabled={enCours}
+        hitSlop={8}
+      >
+        <Text style={[styles.lienCsvTexte, { color: t.accentText }]}>
+          Exporter mes données (CSV)
+        </Text>
+        <Text style={[styles.texte, { color: t.textMuted }]}>
+          Un tableau par sorte de données, pour les analyser (tableur, pandas).
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -125,4 +150,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   boutonTexte: { fontSize: typography.body, fontWeight: "600" },
+  lienCsv: { marginTop: spacing.md, paddingVertical: spacing.sm },
+  lienCsvTexte: { fontSize: typography.body, fontWeight: "600" },
 });
