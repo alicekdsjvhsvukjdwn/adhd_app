@@ -1,6 +1,13 @@
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte } from "../components/Texte";
 import { PlusMoins } from "../components/PlusMoins";
 import {
   commencerSeance,
@@ -83,32 +90,32 @@ export default function Seance() {
       contentContainerStyle={styles.contenu}
     >
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+        <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Séance</Text>
-      <Text style={[styles.aide, { color: t.textMuted }]}>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>Séance</Texte>
+      <Texte style={[styles.aide, { color: t.textMuted }]}>
         Note ce que tu as vraiment fait. Même une partie compte : +{POINTS_SEANCE} pts.
-      </Text>
+      </Texte>
 
       {exercices.map((ex) => {
         const u = ex.unite === "s" ? "s" : "rép.";
         return (
           <View key={ex.famille} style={[styles.carte, { backgroundColor: t.bgCard }]}>
-            <Text style={[styles.famille, { color: t.accentText }]}>
+            <Texte style={[styles.famille, { color: t.accentText }]}>
               {LIBELLES_FAMILLE[ex.famille]} · palier {ex.numero}/{ex.max}
-            </Text>
-            <Text style={[styles.exercice, { color: t.textPrimary }]}>{ex.palier.nom}</Text>
-            <Text style={[styles.objectif, { color: t.textSecondary }]}>
+            </Texte>
+            <Texte style={[styles.exercice, { color: t.textPrimary }]}>{ex.palier.nom}</Texte>
+            <Texte style={[styles.objectif, { color: t.textSecondary }]}>
               Objectif : {SERIES_PAR_EXERCICE} × {ex.palier.bas}–{ex.palier.haut} {u}
-            </Text>
+            </Texte>
             {Array.from({ length: SERIES_PAR_EXERCICE }, (_, i) => i + 1).map((n) => {
               const v = realise[cle(ex, n)] ?? 0;
               return (
                 <View key={n} style={styles.serie}>
-                  <Text style={[styles.serieTexte, { color: t.textSecondary }]}>
+                  <Texte style={[styles.serieTexte, { color: t.textSecondary }]}>
                     Série {n}
                     {v >= ex.palier.haut ? " ✓" : ""}
-                  </Text>
+                  </Texte>
                   <PlusMoins
                     valeur={`${v} ${u}`}
                     libelle={`${ex.palier.nom}, série ${n}`}
@@ -131,9 +138,9 @@ export default function Seance() {
         style={[styles.bouton, { backgroundColor: aCommence ? t.accent : t.border }]}
         onPress={terminer}
       >
-        <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>
+        <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>
           {aCommence ? "Terminer la séance" : "Fermer"}
-        </Text>
+        </Texte>
       </TouchableOpacity>
     </ScrollView>
   );

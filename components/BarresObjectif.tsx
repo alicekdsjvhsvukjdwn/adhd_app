@@ -1,4 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import {
+  StyleSheet,
+  View,
+} from "react-native";
+import { Texte } from "./Texte";
 import type { SuiviObjectif } from "../lib/db/listes";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
@@ -34,16 +38,16 @@ export function BarresObjectif({
 
   return (
     <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>
         {titre ? `${titre} · ` : ""}
         {suivi.cible} par {unite}
-      </Text>
-      <Text style={[styles.sous, { color: t.textSecondary }]}>
+      </Texte>
+      <Texte style={[styles.sous, { color: t.textSecondary }]}>
         {enCours.fait}/{suivi.cible} {suivi.periode === "semaine" ? "cette semaine" : "ce mois-ci"}
         {suivi.serie > 0
           ? ` · atteint ${suivi.serie} ${suivi.periode === "semaine" ? "semaine" : "mois"}${suivi.serie > 1 && suivi.periode === "semaine" ? "s" : ""} d'affilée`
           : ""}
-      </Text>
+      </Texte>
 
       <View
         style={styles.graphique}
@@ -71,9 +75,9 @@ export function BarresObjectif({
                   }}
                 />
               </View>
-              <Text style={[styles.etiquette, { color: t.textMuted }]}>
+              <Texte style={[styles.etiquette, { color: t.textMuted }]}>
                 {etiquette(p.debut, suivi.periode)}
-              </Text>
+              </Texte>
             </View>
           );
         })}

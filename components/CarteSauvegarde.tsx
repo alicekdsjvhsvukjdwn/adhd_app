@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte } from "./Texte";
 import { getConfigRappel } from "../lib/db";
 import {
   choisirSauvegarde,
@@ -92,29 +98,29 @@ export function CarteSauvegarde() {
 
   return (
     <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Mes données</Text>
-      <Text style={[styles.texte, { color: t.textSecondary }]}>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>Mes données</Texte>
+      <Texte style={[styles.texte, { color: t.textSecondary }]}>
         Une copie de tout ce que tu as noté, à garder où tu veux (Fichiers,
         Drive, mail). Elle contient aussi ton carnet et ton sommeil : garde-la pour toi.
-      </Text>
+      </Texte>
       <View style={styles.boutons}>
         <TouchableOpacity
           style={[styles.bouton, { backgroundColor: t.accent }]}
           onPress={exporter}
           disabled={enCours}
         >
-          <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>
+          <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>
             Exporter
-          </Text>
+          </Texte>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.bouton, { borderColor: t.border, borderWidth: 1 }]}
           onPress={restaurer}
           disabled={enCours}
         >
-          <Text style={[styles.boutonTexte, { color: t.textPrimary }]}>
+          <Texte style={[styles.boutonTexte, { color: t.textPrimary }]}>
             Restaurer
-          </Text>
+          </Texte>
         </TouchableOpacity>
       </View>
       <TouchableOpacity
@@ -123,12 +129,12 @@ export function CarteSauvegarde() {
         disabled={enCours}
         hitSlop={8}
       >
-        <Text style={[styles.lienCsvTexte, { color: t.accentText }]}>
+        <Texte style={[styles.lienCsvTexte, { color: t.accentText }]}>
           Exporter mes données (CSV)
-        </Text>
-        <Text style={[styles.texte, { color: t.textMuted }]}>
+        </Texte>
+        <Texte style={[styles.texte, { color: t.textMuted }]}>
           Un tableau par sorte de données, pour les analyser (tableur, pandas).
-        </Text>
+        </Texte>
       </TouchableOpacity>
     </View>
   );

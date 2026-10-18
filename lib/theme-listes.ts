@@ -1,29 +1,50 @@
-import { useColorScheme } from "react-native";
-
 /**
- * Couleurs des listes de tâches : palette fixe, une teinte par liste.
- * En base, on garde la clé (« bleu »), pas la couleur : la même liste
- * reste lisible en clair et en sombre. Contrastes vérifiés ≥ 4,5:1 :
- * texte blanc sur la teinte claire, texte sombre sur la teinte sombre,
- * et teinte contre le fond de l'appli.
+ * Couleurs des listes de tâches : 8 nuances de bleu, vert, bleu-vert, cyan
+ * et indigo, aux luminosités bien espacées (×1,18 au moins de l'une à la
+ * suivante) pour se distinguer sur le fond noir. En base, on garde la clé.
+ * Le texte posé dessus est le fond de l'appli (≥ 4,5:1 sur chacune).
+ * Sans accès au téléphone : testable seul (tests/theme.test.mjs).
  */
 
 export const COULEURS_LISTES = {
-  bleu: { clair: "#3f5f8f", sombre: "#9db6dd" },
-  orange: { clair: "#a3502a", sombre: "#f0b48c" },
-  vert: { clair: "#4a7236", sombre: "#a9cf8f" },
-  violet: { clair: "#6e4f9a", sombre: "#c4b0e6" },
-  rose: { clair: "#a3416a", sombre: "#eba9c4" },
-  sarcelle: { clair: "#2c6e6a", sombre: "#8fd1cb" },
-  ocre: { clair: "#80621a", sombre: "#e3c77a" },
-  ardoise: { clair: "#555b66", sombre: "#b8bec8" },
+  indigo: "#6568F1",
+  foret: "#159946",
+  bleu: "#5392F7",
+  sarcelle: "#14B6A4",
+  lavande: "#A5ADFA",
+  cyan: "#65D2E4",
+  vert: "#88E9AC",
+  glacier: "#B3F3FC",
 } as const;
 
 export type CleCouleur = keyof typeof COULEURS_LISTES;
-export const CLES_COULEURS = Object.keys(COULEURS_LISTES) as CleCouleur[];
+
+/** Ordre de distribution aux nouvelles listes : voisines de teinte et de luminosité éloignées. */
+export const CLES_COULEURS: CleCouleur[] = [
+  "bleu",
+  "vert",
+  "indigo",
+  "cyan",
+  "foret",
+  "lavande",
+  "sarcelle",
+  "glacier",
+];
+
+/** Anciennes clés (avant la version 21) → nouvelles. Une à une : deux listes restent distinctes. */
+export const ANCIENNES_CLES: Record<string, CleCouleur> = {
+  bleu: "bleu",
+  orange: "cyan",
+  vert: "vert",
+  violet: "indigo",
+  rose: "lavande",
+  sarcelle: "sarcelle",
+  ocre: "foret",
+  ardoise: "glacier",
+};
 
 /** Texte posé sur une pastille remplie de la couleur. */
-const TEXTE_SUR = { clair: "#ffffff", sombre: "#1f1a14" };
+const TEXTE_SUR = "#05080A";
 
 /** Première couleur pas encore prise, sinon on recommence la palette. */
 export function couleurLibre(prises: (string | null)[]): CleCouleur {
@@ -33,14 +54,11 @@ export function couleurLibre(prises: (string | null)[]): CleCouleur {
   );
 }
 
-/** Hook : couleur d'une liste (et texte à poser dessus) selon le thème. */
-export function useCouleurListe(): (cle: string | null) => { fond: string; texte: string } {
-  const sombre = useColorScheme() === "dark";
-  return (cle) => {
-    const c = COULEURS_LISTES[(cle ?? "ardoise") as CleCouleur] ?? COULEURS_LISTES.ardoise;
-    return {
-      fond: sombre ? c.sombre : c.clair,
-      texte: sombre ? TEXTE_SUR.sombre : TEXTE_SUR.clair,
-    };
-  };
+/** Couleur d'une liste (et texte à poser dessus). */
+export function couleurListe(cle: string | null): { fond: string; texte: string } {
+  const c = COULEURS_LISTES[(cle ?? "") as CleCouleur] ?? COULEURS_LISTES.glacier;
+  return { fond: c, texte: TEXTE_SUR };
 }
+
+/** Gardé sous forme de hook pour les écrans : la couleur ne dépend plus du thème. */
+export const useCouleurListe = () => couleurListe;

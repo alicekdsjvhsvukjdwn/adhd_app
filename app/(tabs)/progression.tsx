@@ -5,14 +5,15 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte } from "../../components/Texte";
 import Svg, { Circle } from "react-native-svg";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { LiensSommeilSport } from "../../components/LiensSommeilSport";
 import { remettreAFaire } from "../../lib/db/etapes";
+import { getStats } from "../../lib/db/stats";
 import {
   avanceePeriode,
   decalerJours,
@@ -128,13 +129,16 @@ export default function Progression() {
   const [parCategorie, setParCategorie] = useState<AvanceeCategorie[]>([]);
   const [taches, setTaches] = useState<TacheFaite[]>([]);
   const [mesure, setMesure] = useState<MesureAdaptation | null>(null);
+  const [serie, setSerie] = useState<{ actuelle: number; record: number } | null>(null);
 
   const charger = useCallback(async () => {
-    const [avancee, tf, m] = await Promise.all([
+    const [avancee, tf, m, stats] = await Promise.all([
       avanceePeriode(periode),
       tachesFaites(periode),
       mesureAdaptation(14),
+      getStats(),
     ]);
+    setSerie({ actuelle: stats.currentStreak, record: stats.bestStreak });
     setGlobal(avancee.global);
     setParCategorie(avancee.parCategorie);
     setTaches(tf);
@@ -172,9 +176,17 @@ export default function Progression() {
       style={[styles.container, { backgroundColor: t.bgApp }]}
       contentContainerStyle={{ paddingBottom: spacing.xxxl }}
     >
-      <Text style={[styles.titre, { color: t.textPrimary }]}>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>
         Ce qui avance
-      </Text>
+      </Texte>
+
+      {/* Série : jours d'affilée avec au moins une coche (venue de l'onglet Routines) */}
+      {serie && (
+        <Texte style={[styles.serie, { color: t.textSecondary }]}>
+          🔥 {serie.actuelle} jour{serie.actuelle > 1 ? "s" : ""} d&apos;affilée
+          {serie.record > serie.actuelle ? ` · record ${serie.record}` : ""}
+        </Texte>
+      )}
 
       {/* Sélecteur de période */}
       <View style={[styles.selecteur, { backgroundColor: t.bgCard }]}>
@@ -189,14 +201,14 @@ export default function Progression() {
               ]}
               onPress={() => setPeriode(p.valeur)}
             >
-              <Text
+              <Texte
                 style={[
                   styles.selecteurTexte,
                   { color: actif ? t.textOnAccent : t.textSecondary },
                 ]}
               >
                 {p.libelle}
-              </Text>
+              </Texte>
             </TouchableOpacity>
           );
         })}
@@ -204,24 +216,24 @@ export default function Progression() {
 
       {/* Taux global */}
       <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-        <Text style={[styles.grandChiffre, { color: t.textPrimary }]}>
+        <Texte style={[styles.grandChiffre, { color: t.textPrimary }]}>
           {global === null ? "—" : `${Math.round(global * 100)} %`}
-        </Text>
-        <Text style={[styles.carteTexte, { color: t.textSecondary }]}>
+        </Texte>
+        <Texte style={[styles.carteTexte, { color: t.textSecondary }]}>
           {global === null
             ? "Pas encore de routine à suivre sur cette période."
             : `de tes routines tenues ${detailPeriode}`}
-        </Text>
+        </Texte>
       </View>
 
       {/* Anneaux par domaine */}
-      <Text style={[styles.sectionTitre, { color: t.textPrimary }]}>
+      <Texte style={[styles.sectionTitre, { color: t.textPrimary }]}>
         Par domaine
-      </Text>
+      </Texte>
       {parCategorie.length === 0 ? (
-        <Text style={[styles.vide, { color: t.textMuted }]}>
+        <Texte style={[styles.vide, { color: t.textMuted }]}>
           Les domaines apparaîtront dès que tes routines ou tâches en auront un.
-        </Text>
+        </Texte>
       ) : (
         <View style={styles.grilleAnneaux}>
           {parCategorie.map((a) => (
@@ -231,23 +243,23 @@ export default function Progression() {
                 couleur={couleurCat(a.categorie)}
                 fond={t.bgCard}
               >
-                <Text style={[styles.anneauValeur, { color: t.textPrimary }]}>
+                <Texte style={[styles.anneauValeur, { color: t.textPrimary }]}>
                   {a.taux === null ? "—" : `${Math.round(a.taux * 100)}%`}
-                </Text>
+                </Texte>
               </Anneau>
-              <Text style={[styles.anneauLibelle, { color: t.textPrimary }]}>
+              <Texte style={[styles.anneauLibelle, { color: t.textPrimary }]}>
                 {ICONES_CATEGORIE[a.categorie]}{" "}
                 {LIBELLES_CATEGORIE[a.categorie]}
-              </Text>
+              </Texte>
               {a.attendu > 0 && (
-                <Text style={[styles.anneauDetail, { color: t.textMuted }]}>
+                <Texte style={[styles.anneauDetail, { color: t.textMuted }]}>
                   {nombre(a.fait)}/{a.attendu} routines
-                </Text>
+                </Texte>
               )}
               {a.taches > 0 && (
-                <Text style={[styles.anneauDetail, { color: t.textMuted }]}>
+                <Texte style={[styles.anneauDetail, { color: t.textMuted }]}>
                   + {a.taches} {a.taches > 1 ? "tâches" : "tâche"}
-                </Text>
+                </Texte>
               )}
             </View>
           ))}
@@ -255,18 +267,18 @@ export default function Progression() {
       )}
 
       {/* Tâches faites */}
-      <Text style={[styles.sectionTitre, { color: t.textPrimary }]}>
+      <Texte style={[styles.sectionTitre, { color: t.textPrimary }]}>
         Tâches faites{taches.length > 0 ? ` · ${taches.length}` : ""}
-      </Text>
+      </Texte>
       {taches.length === 0 ? (
-        <Text style={[styles.vide, { color: t.textMuted }]}>
+        <Texte style={[styles.vide, { color: t.textMuted }]}>
           Aucune tâche terminée {detailPeriode}.
-        </Text>
+        </Texte>
       ) : (
         <>
-          <Text style={[styles.aideListe, { color: t.textMuted }]}>
+          <Texte style={[styles.aideListe, { color: t.textMuted }]}>
             Cochée par erreur ? Touche-la pour la remettre à faire.
-          </Text>
+          </Texte>
           <View
             style={[
               styles.carte,
@@ -292,15 +304,15 @@ export default function Progression() {
                     },
                   ]}
                 />
-                <Text
+                <Texte
                   style={[styles.tacheNom, { color: t.textPrimary }]}
                   numberOfLines={2}
                 >
                   {tf.nom}
-                </Text>
-                <Text style={[styles.tacheDate, { color: t.textMuted }]}>
+                </Texte>
+                <Texte style={[styles.tacheDate, { color: t.textMuted }]}>
                   {dateLisible(tf.date, aujourdhui)}
-                </Text>
+                </Texte>
               </TouchableOpacity>
             ))}
           </View>
@@ -316,22 +328,22 @@ export default function Progression() {
               { backgroundColor: t.bgCard, marginTop: spacing.lg },
             ]}
           >
-            <Text style={[styles.carteTitre, { color: t.textPrimary }]}>
+            <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>
               Ce que l'appli apprend
-            </Text>
+            </Texte>
             {mesure.propositions > 0 && (
               <>
-                <Text style={[styles.mesureChiffre, { color: t.textPrimary }]}>
+                <Texte style={[styles.mesureChiffre, { color: t.textPrimary }]}>
                   {Math.round((mesure.faites / mesure.propositions) * 100)} %
-                </Text>
-                <Text style={[styles.carteTexte, { color: t.textSecondary }]}>
+                </Texte>
+                <Texte style={[styles.carteTexte, { color: t.textSecondary }]}>
                   des tâches proposées faites le jour même ({mesure.faites} sur{" "}
                   {mesure.propositions}, 14 derniers jours)
-                </Text>
+                </Texte>
               </>
             )}
             {mesure.suggestionsDecidees > 0 && (
-              <Text
+              <Texte
                 style={[
                   styles.carteTexte,
                   { color: t.textSecondary, marginTop: spacing.sm },
@@ -340,7 +352,7 @@ export default function Progression() {
                 Suggestions d'ajustement : {mesure.suggestionsAcceptees}{" "}
                 acceptée{mesure.suggestionsAcceptees > 1 ? "s" : ""} sur{" "}
                 {mesure.suggestionsDecidees}
-              </Text>
+              </Texte>
             )}
           </View>
         )}
@@ -361,8 +373,9 @@ const styles = StyleSheet.create({
   titre: {
     fontSize: typography.h1,
     fontWeight: "600",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
+  serie: { fontSize: typography.bodySmall, fontWeight: "600", marginBottom: spacing.lg },
 
   selecteur: {
     flexDirection: "row",

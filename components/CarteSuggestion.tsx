@@ -1,41 +1,29 @@
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
-    deciderSuggestion,
-    suggestionDuJour,
-    type Suggestion,
-} from "../lib/db/suggestions";
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte } from "./Texte";
+import { deciderSuggestion, type Suggestion } from "../lib/db/suggestions";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
- * Une suggestion d'ajustement à la fois, en haut de l'onglet Routines
- * (sauf un jour difficile). La personne décide : l'appli n'applique
- * jamais un changement visible seule.
+ * Une suggestion d'ajustement, ouverte depuis la pastille de l'onglet
+ * Routines (sauf un jour difficile). La personne décide : l'appli
+ * n'applique jamais un changement visible seule.
  */
-export function CarteSuggestion({ onDecision }: { onDecision?: () => void }) {
+export function CarteSuggestion({
+  suggestion,
+  onDecision,
+}: {
+  suggestion: Suggestion;
+  onDecision?: () => void;
+}) {
   const router = useRouter();
   const t = useTheme();
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [enCours, setEnCours] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      let actif = true;
-      suggestionDuJour()
-        .then((s) => {
-          if (actif) setSuggestion(s);
-        })
-        .catch(() => {
-          // Une suggestion ratée ne doit jamais bloquer l'accueil.
-        });
-      return () => {
-        actif = false;
-      };
-    }, []),
-  );
-
-  if (!suggestion) return null;
 
   const decider = async (acceptee: boolean) => {
     if (enCours) return;
@@ -43,7 +31,6 @@ export function CarteSuggestion({ onDecision }: { onDecision?: () => void }) {
     const s = suggestion;
     try {
       await deciderSuggestion(s, acceptee);
-      setSuggestion(null);
       onDecision?.();
       if (acceptee && s.route) router.push(s.route as never);
     } finally {
@@ -58,13 +45,13 @@ export function CarteSuggestion({ onDecision }: { onDecision?: () => void }) {
         { backgroundColor: t.bgCard, borderLeftColor: t.accent },
       ]}
     >
-      <Text style={[styles.label, { color: t.accentText }]}>💬 Suggestion</Text>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>
+      <Texte style={[styles.label, { color: t.accentText }]}>💬 Suggestion</Texte>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>
         {suggestion.titre}
-      </Text>
-      <Text style={[styles.explication, { color: t.textMuted }]}>
+      </Texte>
+      <Texte style={[styles.explication, { color: t.textMuted }]}>
         {suggestion.explication}
-      </Text>
+      </Texte>
 
       <View style={styles.boutons}>
         <TouchableOpacity
@@ -72,18 +59,18 @@ export function CarteSuggestion({ onDecision }: { onDecision?: () => void }) {
           onPress={() => decider(true)}
           disabled={enCours}
         >
-          <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>
+          <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>
             {suggestion.accepter}
-          </Text>
+          </Texte>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.bouton, { borderColor: t.border, borderWidth: 1 }]}
           onPress={() => decider(false)}
           disabled={enCours}
         >
-          <Text style={[styles.boutonTexte, { color: t.textSecondary }]}>
+          <Texte style={[styles.boutonTexte, { color: t.textSecondary }]}>
             Pas maintenant
-          </Text>
+          </Texte>
         </TouchableOpacity>
       </View>
     </View>

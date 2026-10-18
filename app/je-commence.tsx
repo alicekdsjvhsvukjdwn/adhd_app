@@ -4,10 +4,10 @@ import {
   AppState,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte } from "../components/Texte";
 import { ZoneNote } from "../components/ZoneNote";
 import { completer, getAujourdhui, getItem } from "../lib/db";
 import { cocherEtape, getEtapes } from "../lib/db/etapes";
@@ -70,14 +70,14 @@ function Bouton({
       ]}
       onPress={onPress}
     >
-      <Text
+      <Texte
         style={[
           styles.boutonTexte,
           { color: principal ? t.textOnAccent : t.textPrimary },
         ]}
       >
         {libelle}
-      </Text>
+      </Texte>
     </TouchableOpacity>
   );
 }
@@ -241,23 +241,23 @@ export default function JeCommence() {
       contentContainerStyle={styles.container}
     >
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+        <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
 
       {cible && (
         <>
           {cible.etape && (
-            <Text style={[styles.petit, { color: t.textMuted }]}>
+            <Texte style={[styles.petit, { color: t.textMuted }]}>
               {cible.nom}
-            </Text>
+            </Texte>
           )}
-          <Text style={[styles.nom, { color: t.textPrimary }]}>
+          <Texte style={[styles.nom, { color: t.textPrimary }]}>
             {cible.etape ? cible.etape.nom : cible.nom}
-          </Text>
+          </Texte>
           {!cible.etape && cible.premiereAction && (
-            <Text style={[styles.petit, { color: t.textSecondary }]}>
+            <Texte style={[styles.petit, { color: t.textSecondary }]}>
               Commencer par : {cible.premiereAction}
-            </Text>
+            </Texte>
           )}
 
           {noteOuverte ? (
@@ -271,9 +271,9 @@ export default function JeCommence() {
             </View>
           ) : arrete ? (
             <View style={styles.bloc}>
-              <Text style={[styles.message, { color: t.textPrimary }]}>
+              <Texte style={[styles.message, { color: t.textPrimary }]}>
                 C&apos;est noté. La tâche t&apos;attendra.
-              </Text>
+              </Texte>
               <Bouton
                 libelle="Retour aux tâches"
                 onPress={() => router.back()}
@@ -282,9 +282,9 @@ export default function JeCommence() {
             </View>
           ) : !session ? (
             <View style={styles.bloc}>
-              <Text style={[styles.label, { color: t.textSecondary }]}>
+              <Texte style={[styles.label, { color: t.textSecondary }]}>
                 Combien de temps ?
-              </Text>
+              </Texte>
               <View style={styles.puces}>
                 {dureesProposees(cible.dureeMin).map((d) => {
                   const actif = d === duree;
@@ -302,28 +302,28 @@ export default function JeCommence() {
                         },
                       ]}
                     >
-                      <Text
+                      <Texte
                         style={[
                           styles.puceTexte,
                           { color: actif ? t.textOnAccent : t.textSecondary },
                         ]}
                       >
                         {d} min
-                      </Text>
+                      </Texte>
                     </TouchableOpacity>
                   );
                 })}
               </View>
               {cible.dureeMin == null && (
-                <Text style={[styles.petit, { color: t.textMuted }]}>
+                <Texte style={[styles.petit, { color: t.textMuted }]}>
                   5 minutes, juste pour voir. Tu pourras continuer.
-                </Text>
+                </Texte>
               )}
               <Bouton libelle="Commencer" onPress={commencer} principal />
             </View>
           ) : (
             <View style={styles.bloc}>
-              <Text
+              <Texte
                 style={[styles.temps, { color: t.textPrimary }]}
                 accessibilityLabel={
                   fini
@@ -332,7 +332,7 @@ export default function JeCommence() {
                 }
               >
                 {formatRestant(restant)}
-              </Text>
+              </Texte>
               <View style={[styles.barre, { backgroundColor: t.bgCard }]}>
                 <View
                   style={{
@@ -344,9 +344,9 @@ export default function JeCommence() {
                 <View style={{ flex: 1 - avancee }} />
               </View>
               {fini && (
-                <Text style={[styles.message, { color: t.textPrimary }]}>
+                <Texte style={[styles.message, { color: t.textPrimary }]}>
                   Le temps est passé.
-                </Text>
+                </Texte>
               )}
               <Bouton libelle="C'est fait" onPress={cEstFait} principal />
               {fini && <Bouton libelle="Encore un peu" onPress={encoreUnPeu} />}

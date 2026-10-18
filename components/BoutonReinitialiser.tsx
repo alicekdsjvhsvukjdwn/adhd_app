@@ -1,6 +1,11 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity } from "react-native";
+import {
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
+import { Texte } from "./Texte";
 import { toutReinitialiser } from "../lib/db/reinitialiser";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
@@ -43,12 +48,12 @@ export function BoutonReinitialiser() {
       onPress={confirmer}
       disabled={enCours}
     >
-      <Text style={[styles.titre, { color: t.danger }]}>
+      <Texte style={[styles.titre, { color: t.danger }]}>
         {enCours ? "Réinitialisation…" : "Tout réinitialiser"}
-      </Text>
-      <Text style={[styles.texte, { color: t.textMuted }]}>
+      </Texte>
+      <Texte style={[styles.texte, { color: t.textMuted }]}>
         Effacer toutes les données et repartir du début.
-      </Text>
+      </Texte>
     </TouchableOpacity>
   );
 }

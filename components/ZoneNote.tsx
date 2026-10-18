@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte, ChampTexte } from "./Texte";
 import { enregistrerNote, type Note } from "../lib/db/carnet";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
@@ -44,11 +49,11 @@ export function ZoneNote({
 
   return (
     <View style={[styles.zone, { backgroundColor: t.bgCard, borderColor: t.border }]}>
-      {titre ? <Text style={[styles.titre, { color: t.textPrimary }]}>{titre}</Text> : null}
+      {titre ? <Texte style={[styles.titre, { color: t.textPrimary }]}>{titre}</Texte> : null}
       {CHAMPS.map((c) => (
         <View key={c.cle}>
-          <Text style={[styles.libelle, { color: t.textSecondary }]}>{c.libelle}</Text>
-          <TextInput
+          <Texte style={[styles.libelle, { color: t.textSecondary }]}>{c.libelle}</Texte>
+          <ChampTexte
             style={[
               styles.champ,
               { borderColor: t.border, color: t.textPrimary, backgroundColor: t.bgApp },
@@ -66,14 +71,14 @@ export function ZoneNote({
       ))}
       <View style={styles.boutons}>
         <TouchableOpacity onPress={() => onFerme(false)} hitSlop={8} disabled={enCours}>
-          <Text style={[styles.plusTard, { color: t.textMuted }]}>Plus tard</Text>
+          <Texte style={[styles.plusTard, { color: t.textMuted }]}>Plus tard</Texte>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.bouton, { backgroundColor: t.accent }]}
           onPress={enregistrer}
           disabled={enCours}
         >
-          <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>Enregistrer</Text>
+          <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>Enregistrer</Texte>
         </TouchableOpacity>
       </View>
     </View>

@@ -1,5 +1,6 @@
 import {
   COLONNES_STATS,
+  SQL_COULEURS_LISTES,
   SQL_MOMENTS,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
@@ -670,6 +671,14 @@ const MIGRATIONS: Migration[] = [
     nom: "versions courte et longue devenues des étapes",
     run: async (db) => {
       await db.execAsync(SQL_VERSIONS_EN_ETAPES);
+    },
+  },
+
+  {
+    version: 21,
+    nom: "nouvelle palette des listes",
+    run: async (db) => {
+      await db.execAsync(SQL_COULEURS_LISTES);
     },
   },
 ];

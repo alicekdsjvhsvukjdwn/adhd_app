@@ -1,11 +1,11 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
-import { typography, useTheme } from "../../lib/theme";
+import { Texte } from "../../components/Texte";
+import { policeDe, typography, useTheme } from "../../lib/theme";
 
 /** Emoji plutôt qu'une police d'icônes : aucune dépendance en plus. */
 function Icone({ symbole, actif }: { symbole: string; actif: boolean }) {
   return (
-    <Text style={{ fontSize: 20, opacity: actif ? 1 : 0.45 }}>{symbole}</Text>
+    <Texte style={{ fontSize: 20, opacity: actif ? 1 : 0.45 }}>{symbole}</Texte>
   );
 }
 
@@ -22,7 +22,8 @@ export default function TabsLayout() {
           backgroundColor: t.bgApp,
           borderTopColor: t.border,
         },
-        tabBarLabelStyle: { fontSize: typography.tiny },
+        tabBarLabelStyle: { fontSize: typography.tiny, fontFamily: policeDe("600", false) },
+        sceneStyle: { backgroundColor: t.bgApp },
       }}
     >
       <Tabs.Screen

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import {
+  SQL_COULEURS_LISTES,
   SQL_LIGNES_DE_BASE,
   SQL_MOMENTS,
   SQL_TABLES_HORS_MIGRATIONS,
@@ -99,7 +100,26 @@ test("20 : versions écrites à la main → étapes, selon la règle", () => {
 });
 
 test("restauration : on ne rejoue que ce que la sauvegarde n'a pas connu", () => {
-  assert.deepEqual(transformationsApres(17), [SQL_MOMENTS, SQL_VERSIONS_EN_ETAPES]);
-  assert.deepEqual(transformationsApres(19), [SQL_VERSIONS_EN_ETAPES]);
-  assert.deepEqual(transformationsApres(20), []);
+  assert.deepEqual(transformationsApres(17), [SQL_MOMENTS, SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES]);
+  assert.deepEqual(transformationsApres(19), [SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES]);
+  assert.deepEqual(transformationsApres(20), [SQL_COULEURS_LISTES]);
+  assert.deepEqual(transformationsApres(21), []);
+});
+
+test("21 : anciennes couleurs de listes remappées une à une, rejouable", async () => {
+  const { ANCIENNES_CLES, COULEURS_LISTES } = await import("../lib/theme-listes.ts");
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE listes (id INTEGER PRIMARY KEY, couleur TEXT)");
+  const anciennes = Object.keys(ANCIENNES_CLES);
+  anciennes.forEach((c, i) => db.prepare("INSERT INTO listes VALUES (?, ?)").run(i + 1, c));
+  db.prepare("INSERT INTO listes VALUES (99, NULL)").run();
+  db.exec(SQL_COULEURS_LISTES);
+  db.exec(SQL_COULEURS_LISTES);
+  const apres = db.prepare("SELECT couleur FROM listes WHERE id < 99 ORDER BY id").all().map((r) => r.couleur);
+  // La migration recopie bien la correspondance du code.
+  assert.deepEqual(apres, anciennes.map((c) => ANCIENNES_CLES[c]));
+  // Toutes connues de la nouvelle palette, et toutes différentes.
+  for (const c of apres) assert.ok(c in COULEURS_LISTES, c);
+  assert.equal(new Set(apres).size, anciennes.length);
+  assert.equal(db.prepare("SELECT couleur FROM listes WHERE id = 99").get().couleur, null);
 });

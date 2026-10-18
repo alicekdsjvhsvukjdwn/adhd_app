@@ -1,6 +1,12 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import { resumeSommeil, type ResumeSommeil } from "../../lib/db/sommeil";
 import {
@@ -87,9 +93,9 @@ export default function Suivi() {
       accessibilityRole="radio"
       accessibilityState={{ selected: actif }}
     >
-      <Text style={[styles.puceTexte, { color: actif ? t.textOnAccent : t.textSecondary }]}>
+      <Texte style={[styles.puceTexte, { color: actif ? t.textOnAccent : t.textSecondary }]}>
         {libelle}
-      </Text>
+      </Texte>
     </TouchableOpacity>
   );
 
@@ -101,54 +107,54 @@ export default function Suivi() {
       style={[styles.container, { backgroundColor: t.bgApp }]}
       contentContainerStyle={{ paddingBottom: spacing.xxxl }}
     >
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Suivi</Text>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>Suivi</Texte>
 
       {/* ── Sommeil ── */}
-      <Text style={[styles.section, { color: t.textPrimary }]}>🌙 Sommeil</Text>
+      <Texte style={[styles.section, { color: t.textPrimary }]}>🌙 Sommeil</Texte>
       <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
         {derniere ? (
           <>
-            <Text style={[styles.ligneForte, { color: t.textPrimary }]}>
+            <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
               Dernière nuit : {dureeLisible(derniere.duree_min)} · {QUALITES[derniere.qualite]}
-            </Text>
-            <Text style={[styles.ligne, { color: t.textSecondary }]}>
+            </Texte>
+            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
               {derniere.coucher} → {derniere.lever} ·{" "}
               {derniere.ecrans ? "avec écrans" : "sans écrans"}
               {nuitDuJourNotee ? "" : ` · nuit du ${derniere.date.slice(8)}/${derniere.date.slice(5, 7)}`}
-            </Text>
-            <Text style={[styles.ligne, { color: t.textSecondary }]}>
+            </Texte>
+            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
               {sommeil.moyenne7j !== null
                 ? `Moyenne sur 7 jours : ${dureeLisible(sommeil.moyenne7j)} (${sommeil.nuits7j} nuit${sommeil.nuits7j > 1 ? "s" : ""})`
                 : "Aucune nuit notée ces 7 derniers jours."}
-            </Text>
-            <Text style={[styles.ligne, { color: t.textSecondary }]}>
+            </Texte>
+            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
               {phraseRegularite(sommeil.ecartCoucher)}
-            </Text>
+            </Texte>
           </>
         ) : (
-          <Text style={[styles.ligne, { color: t.textSecondary }]}>
+          <Texte style={[styles.ligne, { color: t.textSecondary }]}>
             Aucune nuit notée pour l&apos;instant.
-          </Text>
+          </Texte>
         )}
         <TouchableOpacity
           style={[styles.bouton, { backgroundColor: nuitDuJourNotee ? t.bgApp : t.accent }]}
           onPress={() => router.push("/sommeil")}
         >
-          <Text
+          <Texte
             style={[styles.boutonTexte, { color: nuitDuJourNotee ? t.accentText : t.textOnAccent }]}
           >
             {nuitDuJourNotee ? "Corriger cette nuit" : "Noter cette nuit"}
-          </Text>
+          </Texte>
         </TouchableOpacity>
       </View>
 
       {/* ── Sport ── */}
-      <Text style={[styles.section, { color: t.textPrimary }]}>💪 Sport</Text>
+      <Texte style={[styles.section, { color: t.textPrimary }]}>💪 Sport</Texte>
       {reglages && !reglages.configure ? (
         <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-          <Text style={[styles.ligneForte, { color: t.textPrimary }]}>
+          <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
             As-tu une barre de traction ?
-          </Text>
+          </Texte>
           <View style={styles.puces}>
             {puce(barre === true, "Oui", () => setBarre(true))}
             {puce(barre === false, "Non", () => setBarre(false))}
@@ -156,14 +162,14 @@ export default function Suivi() {
 
           {barre !== null && (
             <>
-              <Text style={[styles.ligneForte, { color: t.textPrimary, marginTop: spacing.lg }]}>
+              <Texte style={[styles.ligneForte, { color: t.textPrimary, marginTop: spacing.lg }]}>
                 Par où commencer ?
-              </Text>
+              </Texte>
               {FAMILLES.map((f) => (
                 <View key={f} style={{ marginTop: spacing.md }}>
-                  <Text style={[styles.ligne, { color: t.textSecondary }]}>
+                  <Texte style={[styles.ligne, { color: t.textSecondary }]}>
                     {LIBELLES_FAMILLE[f]}
-                  </Text>
+                  </Texte>
                   <View style={styles.puces}>
                     {puce(depart[f] === "inconnu", "Je ne sais pas", () =>
                       setDepart({ ...depart, [f]: "inconnu" }),
@@ -183,7 +189,7 @@ export default function Suivi() {
                   await charger();
                 }}
               >
-                <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>C&apos;est parti</Text>
+                <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>C&apos;est parti</Texte>
               </TouchableOpacity>
             </>
           )}
@@ -191,19 +197,19 @@ export default function Suivi() {
       ) : reglages?.configure ? (
         <>
           <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-            <Text style={[styles.ligneForte, { color: t.textPrimary }]}>
+            <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
               {semaine}/{SEANCES_PAR_SEMAINE} séances ces 7 derniers jours
-            </Text>
-            <Text style={[styles.ligne, { color: t.textMuted }]}>
+            </Texte>
+            <Texte style={[styles.ligne, { color: t.textMuted }]}>
               Rythme indicatif, sans jour imposé.
-            </Text>
+            </Texte>
             <TouchableOpacity
               style={[styles.bouton, { backgroundColor: t.accent }]}
               onPress={() => router.push("/seance")}
             >
-              <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>
+              <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>
                 Commencer une séance
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </View>
 
@@ -214,20 +220,20 @@ export default function Suivi() {
                 accessibilityRole="button"
                 accessibilityState={{ expanded: ouverte === ex.famille }}
               >
-                <Text style={[styles.famille, { color: t.accentText }]}>
+                <Texte style={[styles.famille, { color: t.accentText }]}>
                   {LIBELLES_FAMILLE[ex.famille]} · palier {ex.numero}/{ex.max}
-                </Text>
-                <Text style={[styles.ligneForte, { color: t.textPrimary }]}>
+                </Texte>
+                <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
                   {ex.palier.nom} {ouverte === ex.famille ? "−" : "+"}
-                </Text>
+                </Texte>
               </TouchableOpacity>
 
               {ex.montee && (
                 <View style={[styles.montee, { backgroundColor: t.bgHighlight }]}>
-                  <Text style={[styles.ligne, { color: t.textPrimary }]}>
+                  <Texte style={[styles.ligne, { color: t.textPrimary }]}>
                     Objectif atteint deux fois de suite. Passer à «{" "}
                     {palier(ex.famille, ex.numero + 1).nom} » ?
-                  </Text>
+                  </Texte>
                   <View style={styles.puces}>
                     {puce(true, "Monter", async () => {
                       await changerPalier(ex.famille, ex.numero + 1, "propose_accepte");
@@ -244,17 +250,17 @@ export default function Suivi() {
               {ouverte === ex.famille && (
                 <View style={{ marginTop: spacing.md }}>
                   {historique.length === 0 ? (
-                    <Text style={[styles.ligne, { color: t.textMuted }]}>
+                    <Texte style={[styles.ligne, { color: t.textMuted }]}>
                       Pas encore de séance.
-                    </Text>
+                    </Texte>
                   ) : (
                     (() => {
                       const max = Math.max(...historique.map((h) => h.meilleure));
                       return historique.map((h, i) => (
                         <View key={i} style={styles.histo}>
-                          <Text style={[styles.histoDate, { color: t.textMuted }]}>
+                          <Texte style={[styles.histoDate, { color: t.textMuted }]}>
                             {h.date.slice(8)}/{h.date.slice(5, 7)}
-                          </Text>
+                          </Texte>
                           <View style={[styles.barreFond, { backgroundColor: t.bgApp }]}>
                             <View
                               style={{
@@ -265,10 +271,10 @@ export default function Suivi() {
                               }}
                             />
                           </View>
-                          <Text style={[styles.histoTexte, { color: t.textSecondary }]}>
+                          <Texte style={[styles.histoTexte, { color: t.textSecondary }]}>
                             {h.series.join(" · ")} {h.unite === "s" ? "s" : ""}
                             {h.palier !== ex.numero ? ` (p. ${h.palier})` : ""}
-                          </Text>
+                          </Texte>
                         </View>
                       ));
                     })()
@@ -282,9 +288,9 @@ export default function Suivi() {
                       hitSlop={8}
                       style={{ marginTop: spacing.sm }}
                     >
-                      <Text style={[styles.lien, { color: t.accentText }]}>
+                      <Texte style={[styles.lien, { color: t.accentText }]}>
                         Redescendre à « {palier(ex.famille, ex.numero - 1).nom} »
-                      </Text>
+                      </Texte>
                     </TouchableOpacity>
                   )}
                 </View>

@@ -19,6 +19,16 @@ export const LIBELLES_MOMENT: Record<Moment, string> = {
   coucher: "Au coucher",
 };
 
+/** Nom court, au centre de l'anneau. */
+export const NOMS_MOMENT: Record<Moment, string> = {
+  reveil: "Réveil",
+  matin: "Matin",
+  midi: "Midi",
+  apres_midi: "Après-midi",
+  soir: "Soir",
+  coucher: "Coucher",
+};
+
 export const LIBELLES_TRANCHE: Record<Tranche | "a_tout_moment", string> = {
   matin: "Matin",
   apres_midi: "Après-midi",

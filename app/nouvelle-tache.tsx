@@ -6,11 +6,10 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte, ChampTexte } from "../components/Texte";
 import type { Categorie } from "../lib/catalogue";
 import { dateLocale, decalerJours, jourDeCreation } from "../lib/dates";
 import {
@@ -190,14 +189,14 @@ function Choix({
       accessibilityRole="button"
       accessibilityState={{ selected: actif }}
     >
-      <Text
+      <Texte
         style={[
           styles.choixTexte,
           { color: actif ? t.textOnAccent : t.textSecondary },
         ]}
       >
         {libelle}
-      </Text>
+      </Texte>
     </TouchableOpacity>
   );
 }
@@ -211,6 +210,8 @@ export default function Ajouter() {
     id?: string;
     nom?: string;
     liste?: string;
+    /** Domaine pré-rempli (« + Ajouter une routine ici » sur Routines). */
+    domaine?: string;
   }>();
   const idModifie = params.id ? Number(params.id) : null;
   // Type en base au chargement (passer de l'un à l'autre réactive l'item).
@@ -220,7 +221,11 @@ export default function Ajouter() {
     params.type === "routine" ? "routine" : "tache",
   );
   const [nom, setNom] = useState(params.nom ?? "");
-  const [categorie, setCategorie] = useState<Categorie | null>(null);
+  const [categorie, setCategorie] = useState<Categorie | null>(
+    params.domaine && CATEGORIES_VALIDES.includes(params.domaine)
+      ? (params.domaine as Categorie)
+      : null,
+  );
   const [duree, setDuree] = useState<number | null>(null);
   const [premiereAction, setPremiereAction] = useState("");
 
@@ -444,10 +449,10 @@ export default function Ajouter() {
     const pourRoutine = typeEffectif === "routine";
     return (
       <>
-        <Text style={[styles.label, { color: t.textSecondary }]}>
+        <Texte style={[styles.label, { color: t.textSecondary }]}>
           Étapes (facultatif)
-        </Text>
-        <Text
+        </Texte>
+        <Texte
           style={[
             styles.aide,
             { color: t.textMuted, marginTop: 0, marginBottom: spacing.sm },
@@ -456,16 +461,16 @@ export default function Ajouter() {
           {pourRoutine
             ? `Des petits pas, recochés chaque jour. Essentielles faites : ${POINTS_ESSENTIELLES} pts ; tout fait : ${POINTS_TOUTES}. Un jour difficile, les essentielles suffisent pour ${POINTS_TOUTES}.`
             : `${periodique ? "Remises à zéro après chaque fois faite. " : "Pour une grosse tâche, des petits morceaux. "}+${POINTS_ETAPE} par étape ; la dernière termine la tâche : +${POINTS_DERNIERE_ETAPE} en tout.`}
-        </Text>
+        </Texte>
         {etapes.map((e, i) => (
           <View
             key={e.id ?? `n${i}`}
             style={[styles.etape, { backgroundColor: t.bgCard }]}
           >
-            <Text style={[styles.etapeNumero, { color: t.textMuted }]}>
+            <Texte style={[styles.etapeNumero, { color: t.textMuted }]}>
               {!pourRoutine && e.faite ? "✓" : i + 1}
-            </Text>
-            <Text style={[styles.etapeNom, { color: t.textPrimary }]}>{e.nom}</Text>
+            </Texte>
+            <Texte style={[styles.etapeNom, { color: t.textPrimary }]}>{e.nom}</Texte>
             {pourRoutine && (
               <TouchableOpacity
                 onPress={() =>
@@ -480,26 +485,26 @@ export default function Ajouter() {
                 accessibilityState={{ checked: e.essentielle !== 0 }}
                 accessibilityLabel={`${e.nom} : étape essentielle`}
               >
-                <Text style={[styles.etapeType, { color: t.accentText }]}>
+                <Texte style={[styles.etapeType, { color: t.accentText }]}>
                   {e.essentielle === 0 ? "Bonus" : "Essentielle"}
-                </Text>
+                </Texte>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={() => setEtapes(etapes.filter((_, k) => k !== i))}
               hitSlop={10}
             >
-              <Text style={[styles.etapeRetirer, { color: t.textMuted }]}>✕</Text>
+              <Texte style={[styles.etapeRetirer, { color: t.textMuted }]}>✕</Texte>
             </TouchableOpacity>
           </View>
         ))}
         {pourRoutine && sansEssentielle && (
-          <Text style={[styles.aide, { color: t.danger, marginTop: 0, marginBottom: spacing.sm }]}>
+          <Texte style={[styles.aide, { color: t.danger, marginTop: 0, marginBottom: spacing.sm }]}>
             Il faut au moins une étape essentielle.
-          </Text>
+          </Texte>
         )}
         <View style={styles.etapeAjout}>
-          <TextInput
+          <ChampTexte
             style={[styleInput, { flex: 1 }]}
             placeholder={
               etapes.length === 0
@@ -519,7 +524,7 @@ export default function Ajouter() {
             style={[styles.etapeBouton, { backgroundColor: t.accent }]}
             onPress={ajouterEtape}
           >
-            <Text style={[styles.etapeBoutonTexte, { color: t.textOnAccent }]}>+</Text>
+            <Texte style={[styles.etapeBoutonTexte, { color: t.textOnAccent }]}>+</Texte>
           </TouchableOpacity>
         </View>
       </>
@@ -546,14 +551,14 @@ export default function Ajouter() {
         keyboardShouldPersistTaps="handled"
       >
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.annuler, { color: t.accentText }]}>
+          <Texte style={[styles.annuler, { color: t.accentText }]}>
             ← Annuler
-          </Text>
+          </Texte>
         </TouchableOpacity>
 
-        <Text style={[styles.titre, { color: t.textPrimary }]}>
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>
           {idModifie !== null ? "Modifier" : "Ajouter"}
-        </Text>
+        </Texte>
 
         {/* Routine / Tâche */}
         <View style={[styles.selecteur, { backgroundColor: t.bgCard }]}>
@@ -573,19 +578,19 @@ export default function Ajouter() {
                 ]}
                 onPress={() => setMode(m.valeur)}
               >
-                <Text
+                <Texte
                   style={[
                     styles.selecteurTexte,
                     { color: actif ? t.textOnAccent : t.textSecondary },
                   ]}
                 >
                   {m.libelle}
-                </Text>
+                </Texte>
               </TouchableOpacity>
             );
           })}
         </View>
-        <Text
+        <Texte
           style={[
             styles.aide,
             { color: t.textMuted, marginBottom: spacing.lg },
@@ -596,9 +601,9 @@ export default function Ajouter() {
             : periodique
               ? "Proposée tant que l'objectif de la période n'est pas atteint."
               : "Disparaît une fois faite. L'appli choisit quand te la proposer."}
-        </Text>
+        </Texte>
 
-        <TextInput
+        <ChampTexte
           style={styleInput}
           placeholder={
             mode === "tache"
@@ -615,9 +620,9 @@ export default function Ajouter() {
         {/* Tâche : liste, priorité, rythme, échéance, étapes */}
         {typeEffectif === "tache" && listes.length > 0 && (
           <>
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Liste
-            </Text>
+            </Texte>
             <View style={styles.ligneChoix}>
               {listes.map((l) => (
                 <Choix
@@ -634,9 +639,9 @@ export default function Ajouter() {
 
         {typeEffectif === "tache" && (
           <>
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Priorité
-            </Text>
+            </Texte>
             <View style={styles.ligneChoix}>
               {PRIORITES.map((i) => (
                 <Choix
@@ -648,9 +653,9 @@ export default function Ajouter() {
               ))}
             </View>
 
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Combien de fois ?
-            </Text>
+            </Texte>
             <View style={styles.ligneChoix}>
               {RYTHMES.map((r) => (
                 <Choix
@@ -668,17 +673,17 @@ export default function Ajouter() {
                   libelle={`Nombre de fois par ${rythme}`}
                   onPas={(sens) => setCible((c) => Math.max(1, Math.min(31, c + sens)))}
                 />
-                <Text style={[styles.aide, { color: t.textSecondary, marginTop: 0 }]}>
+                <Texte style={[styles.aide, { color: t.textSecondary, marginTop: 0 }]}>
                   fois par {rythme}
-                </Text>
+                </Texte>
               </View>
             )}
 
             {!periodique && (
               <>
-                <Text style={[styles.label, { color: t.textSecondary }]}>
+                <Texte style={[styles.label, { color: t.textSecondary }]}>
                   Pour quand ?
-                </Text>
+                </Texte>
                 <View style={styles.ligneChoix}>
                   {ECHEANCES.map((e) => (
                     <Choix
@@ -718,9 +723,9 @@ export default function Ajouter() {
 
         {typeEffectif === "routine" && (
           <>
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               À quel moment de la journée ?
-            </Text>
+            </Texte>
             <View style={styles.ligneChoix}>
               {MOMENTS.map((m) => (
                 <Choix
@@ -739,9 +744,9 @@ export default function Ajouter() {
               )}
             </View>
 
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Quels jours ?
-            </Text>
+            </Texte>
             <View style={styles.ligneJours}>
               {JOURS.map((j) => {
                 const actif = jours.includes(j.valeur);
@@ -757,39 +762,39 @@ export default function Ajouter() {
                     ]}
                     onPress={() => basculerJour(j.valeur)}
                   >
-                    <Text
+                    <Texte
                       style={[
                         styles.jourTexte,
                         { color: actif ? t.textOnAccent : t.textSecondary },
                       ]}
                     >
                       {j.libelle}
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 );
               })}
             </View>
-            <Text
+            <Texte
               style={[
                 styles.aide,
                 { color: jours.length === 0 ? t.danger : t.textMuted },
               ]}
             >
               {resumeJours(jours)}
-            </Text>
+            </Texte>
 
-                <Text style={[styles.label, { color: t.textSecondary }]}>
+                <Texte style={[styles.label, { color: t.textSecondary }]}>
                   Moment repère (facultatif)
-                </Text>
+                </Texte>
                 {ancresProposees.length === 0 ? (
                   <TouchableOpacity
                     onPress={() => router.push("/ancres")}
                     hitSlop={8}
                   >
-                    <Text style={[styles.aide, { color: t.accentText }]}>
+                    <Texte style={[styles.aide, { color: t.accentText }]}>
                       Aucun moment repère pour l&apos;instant · Mes moments
                       repères
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 ) : (
                   <>
@@ -822,9 +827,9 @@ export default function Ajouter() {
                         />
                       </View>
                     )}
-                    <Text style={[styles.aide, { color: t.textMuted }]}>
+                    <Texte style={[styles.aide, { color: t.textMuted }]}>
                       La routine se range au moment de son repère.
-                    </Text>
+                    </Texte>
                   </>
                 )}
 
@@ -837,22 +842,22 @@ export default function Ajouter() {
             style={[styles.plusOptions, { borderColor: t.border }]}
             onPress={() => setPlusOptions(true)}
           >
-            <Text style={[styles.plusOptionsTexte, { color: t.textPrimary }]}>
+            <Texte style={[styles.plusOptionsTexte, { color: t.textPrimary }]}>
               Plus d&apos;options
-            </Text>
-            <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
+            </Texte>
+            <Texte style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
               {typeEffectif === "routine"
                 ? "Difficulté, domaine, durée, première action"
                 : "Domaine, durée, première action"}
-            </Text>
+            </Texte>
           </TouchableOpacity>
         ) : (
           <>
             {typeEffectif === "routine" && (
               <>
-                <Text style={[styles.label, { color: t.textSecondary }]}>
+                <Texte style={[styles.label, { color: t.textSecondary }]}>
                   Difficulté
-                </Text>
+                </Texte>
                 <View style={styles.ligneChoix}>
                   {DIFFICULTES.map((d) => (
                     <Choix
@@ -863,17 +868,17 @@ export default function Ajouter() {
                     />
                   ))}
                 </View>
-                <Text style={[styles.aide, { color: t.textMuted }]}>
+                <Texte style={[styles.aide, { color: t.textMuted }]}>
                   Les jours difficiles, les routines exigeantes passent à part,
                   sans pression.
-                </Text>
+                </Texte>
 
               </>
             )}
 
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Domaine (facultatif)
-            </Text>
+            </Texte>
             <View style={styles.ligneChoix}>
               {ORDRE_CATEGORIES.map((c) => (
                 <Choix
@@ -886,9 +891,9 @@ export default function Ajouter() {
               ))}
             </View>
 
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Durée estimée (facultatif)
-            </Text>
+            </Texte>
             <View style={styles.ligneChoix}>
               {DUREES.map((d) => (
                 <Choix
@@ -900,10 +905,10 @@ export default function Ajouter() {
               ))}
             </View>
 
-            <Text style={[styles.label, { color: t.textSecondary }]}>
+            <Texte style={[styles.label, { color: t.textSecondary }]}>
               Première petite action (facultatif)
-            </Text>
-            <TextInput
+            </Texte>
+            <ChampTexte
               style={styleInput}
               placeholder={
                 mode === "tache"
@@ -915,10 +920,10 @@ export default function Ajouter() {
               onChangeText={setPremiereAction}
               returnKeyType="done"
             />
-            <Text style={[styles.aide, { color: t.textMuted }]}>
+            <Texte style={[styles.aide, { color: t.textMuted }]}>
               Le plus dur, c&apos;est de commencer. Une action de deux minutes
               suffit.
-            </Text>
+            </Texte>
           </>
         )}
 
@@ -930,7 +935,7 @@ export default function Ajouter() {
           onPress={onAjouter}
           disabled={!valide || enregistrement}
         >
-          <Text
+          <Texte
             style={[
               styles.boutonTexte,
               { color: valide ? t.textOnAccent : t.textMuted },
@@ -941,7 +946,7 @@ export default function Ajouter() {
               : mode === "tache"
                 ? "Ajouter la tâche"
                 : "Ajouter la routine"}
-          </Text>
+          </Texte>
         </TouchableOpacity>
 
         {idModifie !== null && (
@@ -950,11 +955,11 @@ export default function Ajouter() {
             onPress={onSupprimer}
             disabled={enregistrement}
           >
-            <Text style={[styles.boutonSupprimerTexte, { color: t.danger }]}>
+            <Texte style={[styles.boutonSupprimerTexte, { color: t.danger }]}>
               {typeInitial === "routine"
                 ? "Supprimer cette routine"
                 : "Supprimer cette tâche"}
-            </Text>
+            </Texte>
           </TouchableOpacity>
         )}
       </ScrollView>

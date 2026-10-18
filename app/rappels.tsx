@@ -1,14 +1,14 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { Texte } from "../components/Texte";
 import {
     ConfigRappel,
     getConfigRappel,
@@ -106,40 +106,40 @@ export default function RappelsScreen() {
       contentContainerStyle={styles.container}
     >
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+        <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Rappels quotidiens</Text>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>Rappels quotidiens</Texte>
 
-      <Text style={[styles.intro, { color: t.textSecondary }]}>
+      <Texte style={[styles.intro, { color: t.textSecondary }]}>
         Un seul rappel par jour, à l&apos;heure qui te convient, pour jeter un
         coup d&apos;œil à tes routines.
-      </Text>
+      </Texte>
 
       {expliquePermission && (
         <View style={[styles.explicationBox, { backgroundColor: t.bgHighlight }]}>
-          <Text style={[styles.explicationTitre, { color: t.accentText }]}>
+          <Texte style={[styles.explicationTitre, { color: t.accentText }]}>
             Avant d&apos;activer
-          </Text>
-          <Text style={[styles.explicationTexte, { color: t.textSecondary }]}>
+          </Texte>
+          <Texte style={[styles.explicationTexte, { color: t.textSecondary }]}>
             L&apos;appli va demander la permission d&apos;envoyer des
             notifications. Un seul rappel par jour, pas plus.
-          </Text>
+          </Texte>
           <View style={styles.explicationBoutons}>
             <TouchableOpacity
               style={styles.boutonAnnuler}
               onPress={() => setExpliquePermission(false)}
             >
-              <Text style={{ color: t.textSecondary, fontSize: typography.bodySmall }}>
+              <Texte style={{ color: t.textSecondary, fontSize: typography.bodySmall }}>
                 Annuler
-              </Text>
+              </Texte>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.boutonConfirmer, { backgroundColor: t.accent }]}
               onPress={onConfirmerPermission}
             >
-              <Text style={[styles.boutonConfirmerTexte, { color: t.textOnAccent }]}>
+              <Texte style={[styles.boutonConfirmerTexte, { color: t.textOnAccent }]}>
                 Continuer
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </View>
         </View>
@@ -147,9 +147,9 @@ export default function RappelsScreen() {
 
       <View style={styles.section}>
         <View style={styles.ligneToggle}>
-          <Text style={{ fontSize: typography.body, color: t.textPrimary }}>
+          <Texte style={{ fontSize: typography.body, color: t.textPrimary }}>
             Activer le rappel quotidien
-          </Text>
+          </Texte>
           <Switch
             value={config.actif && permission}
             onValueChange={onToggleActif}
@@ -157,17 +157,17 @@ export default function RappelsScreen() {
           />
         </View>
         {!permission && config.actif && (
-          <Text style={[styles.avertissement, { color: t.danger }]}>
+          <Texte style={[styles.avertissement, { color: t.danger }]}>
             Permission non accordée. Réactive-la dans les réglages de ton
             téléphone.
-          </Text>
+          </Texte>
         )}
       </View>
 
       {config.actif && permission && (
         <>
           <View style={styles.section}>
-            <Text style={[styles.sectionTitre, { color: t.accentText }]}>Heure du rappel</Text>
+            <Texte style={[styles.sectionTitre, { color: t.accentText }]}>Heure du rappel</Texte>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {HEURES_PROPOSEES.map((h) => {
                 const actif = config.heure === h;
@@ -180,7 +180,7 @@ export default function RappelsScreen() {
                     ]}
                     onPress={() => onChoisirHeure(h)}
                   >
-                    <Text
+                    <Texte
                       style={{
                         fontSize: typography.bodySmall,
                         color: actif ? t.textOnAccent : t.textSecondary,
@@ -188,7 +188,7 @@ export default function RappelsScreen() {
                       }}
                     >
                       {h}h
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 );
               })}
@@ -199,9 +199,9 @@ export default function RappelsScreen() {
             style={[styles.boutonTester, { backgroundColor: t.bgCard }]}
             onPress={onTester}
           >
-            <Text style={{ fontSize: typography.bodySmall, color: t.textSecondary, fontWeight: "500" }}>
+            <Texte style={{ fontSize: typography.bodySmall, color: t.textSecondary, fontWeight: "500" }}>
               Tester une notification
-            </Text>
+            </Texte>
           </TouchableOpacity>
         </>
       )}

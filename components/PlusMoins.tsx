@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
+import { Texte } from "./Texte";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /** Délai avant le défilement continu, puis intervalle entre deux pas. */
@@ -58,7 +63,7 @@ export function PlusMoins({
       accessibilityLabel={`${sens > 0 ? "Plus" : "Moins"} : ${libelle}`}
       hitSlop={4}
     >
-      <Text style={[styles.signe, { color: t.accentText }]}>{sens > 0 ? "+" : "−"}</Text>
+      <Texte style={[styles.signe, { color: t.accentText }]}>{sens > 0 ? "+" : "−"}</Texte>
     </Pressable>
   );
 
@@ -76,14 +81,14 @@ export function PlusMoins({
       }}
     >
       {bouton(-1)}
-      <Text
+      <Texte
         style={[
           styles.valeur,
           { color: t.textPrimary, fontSize: grand ? typography.h1 : typography.h3 },
         ]}
       >
         {valeur}
-      </Text>
+      </Texte>
       {bouton(1)}
     </View>
   );

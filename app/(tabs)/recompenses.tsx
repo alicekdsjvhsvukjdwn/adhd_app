@@ -2,18 +2,17 @@ import { useFocusEffect } from "expo-router";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { Texte, ChampTexte } from "../../components/Texte";
 import { Swipeable } from "react-native-gesture-handler";
 import {
     IDEES_RECOMPENSES,
@@ -196,28 +195,28 @@ export default function Recompenses() {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }}
       >
-        <Text style={[styles.titre, { color: t.textPrimary }]}>
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>
           Récompenses
-        </Text>
+        </Texte>
 
         {/* Solde */}
         <View style={[styles.solde, { backgroundColor: t.bgHighlight }]}>
-          <Text style={[styles.soldeChiffre, { color: t.textPrimary }]}>
+          <Texte style={[styles.soldeChiffre, { color: t.textPrimary }]}>
             {solde} pts
-          </Text>
-          <Text style={[styles.soldeTexte, { color: t.accentText }]}>
+          </Texte>
+          <Texte style={[styles.soldeTexte, { color: t.accentText }]}>
             à dépenser
-          </Text>
-          <Text style={[styles.soldeDetail, { color: t.textSecondary }]}>
+          </Texte>
+          <Texte style={[styles.soldeDetail, { color: t.textSecondary }]}>
             Niveau {niveau} · {totalAffiche(total)} points gagnés au total
-          </Text>
+          </Texte>
         </View>
 
         {/* Mes récompenses */}
         <View style={styles.titreLigne}>
-          <Text style={[styles.section, { color: t.textPrimary }]}>
+          <Texte style={[styles.section, { color: t.textPrimary }]}>
             Mes récompenses
-          </Text>
+          </Texte>
           <TouchableOpacity
             style={[styles.plus, { backgroundColor: t.accent }]}
             onPress={() =>
@@ -225,15 +224,15 @@ export default function Recompenses() {
             }
             accessibilityLabel="Créer une récompense"
           >
-            <Text style={[styles.plusTexte, { color: t.textOnAccent }]}>+</Text>
+            <Texte style={[styles.plusTexte, { color: t.textOnAccent }]}>+</Texte>
           </TouchableOpacity>
         </View>
 
         {liste.length === 0 && (
-          <Text style={[styles.vide, { color: t.textMuted }]}>
+          <Texte style={[styles.vide, { color: t.textMuted }]}>
             Choisis ce qui te fait vraiment plaisir : c'est ce qui rend les
             points utiles.
-          </Text>
+          </Texte>
         )}
 
         {liste.map((r) => {
@@ -255,35 +254,35 @@ export default function Recompenses() {
                       })
                     }
                   >
-                    <Text
+                    <Texte
                       style={[styles.actionTexte, { color: t.textOnAccent }]}
                     >
                       Modifier
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.action, { backgroundColor: t.danger }]}
                     onPress={() => onSupprimer(r)}
                   >
-                    <Text
+                    <Texte
                       style={[styles.actionTexte, { color: t.textOnAccent }]}
                     >
                       Supprimer
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 </View>
               )}
             >
               <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
                 <View style={styles.carteHaut}>
-                  <Text style={styles.icone}>{r.icone ?? "🎁"}</Text>
+                  <Texte style={styles.icone}>{r.icone ?? "🎁"}</Texte>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.nom, { color: t.textPrimary }]}>
+                    <Texte style={[styles.nom, { color: t.textPrimary }]}>
                       {r.nom}
-                    </Text>
-                    <Text style={[styles.prix, { color: t.textSecondary }]}>
+                    </Texte>
+                    <Texte style={[styles.prix, { color: t.textSecondary }]}>
                       {r.prix} pts
-                    </Text>
+                    </Texte>
                   </View>
                   <TouchableOpacity
                     style={[
@@ -294,14 +293,14 @@ export default function Recompenses() {
                     ]}
                     onPress={() => onOffrir(r)}
                   >
-                    <Text
+                    <Texte
                       style={[
                         styles.offrirTexte,
                         { color: pret ? t.textOnAccent : t.textMuted },
                       ]}
                     >
                       {pret ? "Je me l'offre" : `Encore ${r.prix - solde}`}
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 </View>
                 {!pret && (
@@ -324,11 +323,11 @@ export default function Recompenses() {
         {/* Idées à ajouter d'un tap */}
         {idees.length > 0 && (
           <>
-            <Text style={[styles.sousSection, { color: t.textSecondary }]}>
+            <Texte style={[styles.sousSection, { color: t.textSecondary }]}>
               {liste.length === 0
                 ? "Des idées pour commencer"
                 : "D'autres idées"}
-            </Text>
+            </Texte>
             <View style={styles.idees}>
               {idees.map((i) => (
                 <TouchableOpacity
@@ -342,12 +341,12 @@ export default function Recompenses() {
                     await charger();
                   }}
                 >
-                  <Text style={[styles.ideeTexte, { color: t.textPrimary }]}>
+                  <Texte style={[styles.ideeTexte, { color: t.textPrimary }]}>
                     {i.icone} {i.nom}
-                  </Text>
-                  <Text style={[styles.ideePrix, { color: t.textMuted }]}>
+                  </Texte>
+                  <Texte style={[styles.ideePrix, { color: t.textMuted }]}>
                     + {i.prix} pts
-                  </Text>
+                  </Texte>
                 </TouchableOpacity>
               ))}
             </View>
@@ -361,33 +360,33 @@ export default function Recompenses() {
           activeOpacity={0.8}
         >
           <View style={styles.reglesEntete}>
-            <Text style={[styles.reglesTitre, { color: t.textPrimary }]}>
+            <Texte style={[styles.reglesTitre, { color: t.textPrimary }]}>
               Comment gagner des points
-            </Text>
-            <Text style={[styles.chevron, { color: t.textMuted }]}>
+            </Texte>
+            <Texte style={[styles.chevron, { color: t.textMuted }]}>
               {voirRegles ? "−" : "+"}
-            </Text>
+            </Texte>
           </View>
           {voirRegles && (
             <>
               {REGLES_POINTS.map((r) => (
                 <View key={r.action} style={styles.regle}>
-                  <Text
+                  <Texte
                     style={[styles.regleAction, { color: t.textSecondary }]}
                   >
                     {r.action}
-                  </Text>
-                  <Text style={[styles.reglePoints, { color: t.accentText }]}>
+                  </Texte>
+                  <Texte style={[styles.reglePoints, { color: t.accentText }]}>
                     {r.points}
-                  </Text>
+                  </Texte>
                 </View>
               ))}
-              <Text style={[styles.reglesNote, { color: t.textMuted }]}>
+              <Texte style={[styles.reglesNote, { color: t.textMuted }]}>
                 Avec 3 routines et 3 tâches, on gagne environ 60
                 points par jour : un café vaut une journée, un ciné une semaine.
                 Ton niveau dépend du total gagné : dépenser ne le fait pas
                 baisser, décocher reprend les points.
-              </Text>
+              </Texte>
             </>
           )}
         </TouchableOpacity>
@@ -395,23 +394,23 @@ export default function Recompenses() {
         {/* Historique */}
         {achats.length > 0 && (
           <>
-            <Text
+            <Texte
               style={[
                 styles.section,
                 { color: t.textPrimary, marginTop: spacing.xl },
               ]}
             >
               Dernières récompenses
-            </Text>
+            </Texte>
             {achats.some((a) => a.date === aujourdhui) && (
-              <Text
+              <Texte
                 style={[
                   styles.vide,
                   { color: t.textMuted, fontStyle: "normal" },
                 ]}
               >
                 Achat par erreur ? Touche-le pour l'annuler, le jour même.
-              </Text>
+              </Texte>
             )}
             {achats.map((a) => (
               <TouchableOpacity
@@ -420,16 +419,16 @@ export default function Recompenses() {
                 onPress={() => onAnnulerAchat(a)}
                 style={[styles.achat, { borderBottomColor: t.border }]}
               >
-                <Text style={styles.achatIcone}>{a.icone ?? "🎁"}</Text>
-                <Text style={[styles.achatNom, { color: t.textPrimary }]}>
+                <Texte style={styles.achatIcone}>{a.icone ?? "🎁"}</Texte>
+                <Texte style={[styles.achatNom, { color: t.textPrimary }]}>
                   {a.nom}
-                </Text>
-                <Text style={[styles.achatDate, { color: t.textMuted }]}>
+                </Texte>
+                <Texte style={[styles.achatDate, { color: t.textMuted }]}>
                   {dateCourte(a.date, aujourdhui)}
-                </Text>
-                <Text style={[styles.achatPrix, { color: t.textSecondary }]}>
+                </Texte>
+                <Texte style={[styles.achatPrix, { color: t.textSecondary }]}>
                   −{a.prix}
-                </Text>
+                </Texte>
               </TouchableOpacity>
             ))}
           </>
@@ -438,7 +437,7 @@ export default function Recompenses() {
 
       {bravo && (
         <View style={[styles.bandeau, { backgroundColor: t.textPrimary }]}>
-          <Text style={[styles.bandeauTexte, { color: t.bgApp }]}>{bravo}</Text>
+          <Texte style={[styles.bandeauTexte, { color: t.bgApp }]}>{bravo}</Texte>
         </View>
       )}
 
@@ -454,14 +453,14 @@ export default function Recompenses() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <Pressable style={styles.fond} onPress={() => setFormulaire(null)}>
-            <Pressable style={[styles.formCarte, { backgroundColor: t.bgApp }]}>
+            <Pressable style={[styles.formCarte, { backgroundColor: t.bgCard, borderColor: t.border, borderWidth: 1 }]}>
               {formulaire && (
                 <>
-                  <Text style={[styles.formTitre, { color: t.textPrimary }]}>
+                  <Texte style={[styles.formTitre, { color: t.textPrimary }]}>
                     {formulaire.id
                       ? "Modifier la récompense"
                       : "Nouvelle récompense"}
-                  </Text>
+                  </Texte>
 
                   <View style={styles.icones}>
                     {ICONES.map((i) => (
@@ -480,12 +479,12 @@ export default function Recompenses() {
                           },
                         ]}
                       >
-                        <Text style={{ fontSize: 20 }}>{i}</Text>
+                        <Texte style={{ fontSize: 20 }}>{i}</Texte>
                       </TouchableOpacity>
                     ))}
                   </View>
 
-                  <TextInput
+                  <ChampTexte
                     style={[
                       styles.champ,
                       {
@@ -503,9 +502,9 @@ export default function Recompenses() {
                     autoFocus={!formulaire.id}
                   />
 
-                  <Text style={[styles.formLabel, { color: t.textSecondary }]}>
+                  <Texte style={[styles.formLabel, { color: t.textSecondary }]}>
                     Prix
-                  </Text>
+                  </Texte>
                   <View style={styles.prixChoix}>
                     {PRIX.map((p) => {
                       const actif = formulaire.prix === String(p);
@@ -523,7 +522,7 @@ export default function Recompenses() {
                             },
                           ]}
                         >
-                          <Text
+                          <Texte
                             style={{
                               color: actif ? t.textOnAccent : t.textSecondary,
                               fontSize: typography.small,
@@ -531,12 +530,12 @@ export default function Recompenses() {
                             }}
                           >
                             {p}
-                          </Text>
+                          </Texte>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
-                  <TextInput
+                  <ChampTexte
                     style={[
                       styles.champ,
                       {
@@ -556,9 +555,9 @@ export default function Recompenses() {
                       })
                     }
                   />
-                  <Text style={[styles.formAide, { color: t.textMuted }]}>
+                  <Texte style={[styles.formAide, { color: t.textMuted }]}>
                     Repère : environ 60 points gagnés par jour.
-                  </Text>
+                  </Texte>
 
                   <TouchableOpacity
                     style={[
@@ -569,7 +568,7 @@ export default function Recompenses() {
                     ]}
                     onPress={enregistrer}
                   >
-                    <Text
+                    <Texte
                       style={[
                         styles.enregistrerTexte,
                         {
@@ -580,17 +579,17 @@ export default function Recompenses() {
                       ]}
                     >
                       {formulaireValide ? "Enregistrer" : "Un nom et un prix"}
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.annulerForm}
                     onPress={() => setFormulaire(null)}
                   >
-                    <Text
+                    <Texte
                       style={[styles.annulerFormTexte, { color: t.accentText }]}
                     >
                       Annuler
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 </>
               )}

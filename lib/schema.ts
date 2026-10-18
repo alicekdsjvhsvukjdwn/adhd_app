@@ -106,6 +106,24 @@ export const SQL_VERSIONS_EN_ETAPES = `
 `;
 
 /**
+ * Migration 21 : nouvelle palette des listes (bleus, verts, cyans, indigo).
+ * Recopie volontaire de la correspondance (lib/theme-listes.ts, ANCIENNES_CLES) :
+ * une migration ne doit pas changer si la palette change plus tard.
+ * Une à une, donc deux listes restent distinctes. Rejouable.
+ */
+export const SQL_COULEURS_LISTES = `
+  UPDATE listes SET couleur = CASE couleur
+    WHEN 'orange' THEN 'cyan'
+    WHEN 'violet' THEN 'indigo'
+    WHEN 'rose' THEN 'lavande'
+    WHEN 'ocre' THEN 'foret'
+    WHEN 'ardoise' THEN 'glacier'
+    ELSE couleur
+  END
+  WHERE couleur IN ('orange', 'violet', 'rose', 'ocre', 'ardoise');
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */
@@ -113,5 +131,6 @@ export function transformationsApres(schemaSauvegarde: number): string[] {
   return [
     ...(schemaSauvegarde < 19 ? [SQL_MOMENTS] : []),
     ...(schemaSauvegarde < 20 ? [SQL_VERSIONS_EN_ETAPES] : []),
+    ...(schemaSauvegarde < 21 ? [SQL_COULEURS_LISTES] : []),
   ];
 }

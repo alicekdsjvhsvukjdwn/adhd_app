@@ -1,7 +1,23 @@
+// Une graisse par import : seules les 8 utilisées entrent dans l'appli.
+import { Manrope_400Regular } from "@expo-google-fonts/manrope/400Regular";
+import { Manrope_500Medium } from "@expo-google-fonts/manrope/500Medium";
+import { Manrope_600SemiBold } from "@expo-google-fonts/manrope/600SemiBold";
+import { Manrope_700Bold } from "@expo-google-fonts/manrope/700Bold";
+import { SpaceGrotesk_400Regular } from "@expo-google-fonts/space-grotesk/400Regular";
+import { SpaceGrotesk_500Medium } from "@expo-google-fonts/space-grotesk/500Medium";
+import { SpaceGrotesk_600SemiBold } from "@expo-google-fonts/space-grotesk/600SemiBold";
+import { SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk/700Bold";
+import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  ScrollView,
+  View,
+} from "react-native";
+import { FournisseurTheme } from "../components/FournisseurTheme";
+import { Texte } from "../components/Texte";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { initialiserBase } from "../lib/db/demarrage";
 import { logEvent } from "../lib/db/events";
@@ -10,7 +26,27 @@ import { permissionAccordee, reprogrammerRappel } from "../lib/notifications";
 import { spacing, typography, useTheme } from "../lib/theme";
 
 export default function RootLayout() {
+  return (
+    <FournisseurTheme>
+      <StatusBar style="light" />
+      <Contenu />
+    </FournisseurTheme>
+  );
+}
+
+function Contenu() {
   const t = useTheme();
+  // Une erreur de police ne bloque rien : l'appli s'affiche avec la police du système.
+  const [policesChargees, erreurPolices] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
   const [pret, setPret] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -61,27 +97,29 @@ export default function RootLayout() {
         style={{ flex: 1, backgroundColor: t.bgApp }}
         contentContainerStyle={{ padding: spacing.xl, paddingTop: 80 }}
       >
-        <Text style={{ fontSize: typography.h2, fontWeight: "600", color: t.textPrimary }}>
-          Les données ne s'ouvrent pas
-        </Text>
-        <Text style={{ fontSize: typography.body, color: t.textSecondary, marginTop: spacing.md }}>
-          Rien n'a été effacé. Ferme l'appli complètement puis rouvre-la. Si ça
+        <Texte style={{ fontSize: typography.h2, fontWeight: "600", color: t.textPrimary }}>
+          Les données ne s&apos;ouvrent pas
+        </Texte>
+        <Texte style={{ fontSize: typography.body, color: t.textSecondary, marginTop: spacing.md }}>
+          Rien n&apos;a été effacé. Ferme l&apos;appli complètement puis rouvre-la. Si ça
           recommence, note le message ci-dessous.
-        </Text>
-        <Text selectable style={{ fontSize: typography.bodySmall, color: t.textMuted, marginTop: spacing.lg }}>
+        </Texte>
+        <Texte selectable style={{ fontSize: typography.bodySmall, color: t.textMuted, marginTop: spacing.lg }}>
           {erreur}
-        </Text>
+        </Texte>
       </ScrollView>
     );
   }
 
-  if (!pret) {
-    return <View style={{ flex: 1 }} />;
+  if (!pret || !(policesChargees || erreurPolices)) {
+    return <View style={{ flex: 1, backgroundColor: t.bgApp }} />;
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }} />
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: t.bgApp }}>
+      <Stack
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.bgApp } }}
+      />
     </GestureHandlerRootView>
   );
 }

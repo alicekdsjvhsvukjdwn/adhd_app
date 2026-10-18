@@ -1,6 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte } from "../components/Texte";
 import { PlusMoins } from "../components/PlusMoins";
 import { decalerJours } from "../lib/dates";
 import { getAujourdhui } from "../lib/db/completions";
@@ -93,9 +99,9 @@ export default function Sommeil() {
       accessibilityRole="radio"
       accessibilityState={{ selected: actif }}
     >
-      <Text style={[styles.choixTexte, { color: actif ? t.textOnAccent : t.textSecondary }]}>
+      <Texte style={[styles.choixTexte, { color: actif ? t.textOnAccent : t.textSecondary }]}>
         {libelle}
-      </Text>
+      </Texte>
     </TouchableOpacity>
   );
 
@@ -105,7 +111,7 @@ export default function Sommeil() {
       contentContainerStyle={styles.contenu}
     >
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+        <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
 
       <View style={styles.jours}>
@@ -114,17 +120,17 @@ export default function Sommeil() {
           hitSlop={12}
           accessibilityLabel="Nuit précédente"
         >
-          <Text style={[styles.fleche, { color: t.accentText }]}>‹</Text>
+          <Texte style={[styles.fleche, { color: t.accentText }]}>‹</Texte>
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={[styles.titre, { color: t.textPrimary }]}>{jourLisible(date)}</Text>
-          <Text style={[styles.aide, { color: t.textMuted }]}>
+          <Texte style={[styles.titre, { color: t.textPrimary }]}>{jourLisible(date)}</Texte>
+          <Texte style={[styles.aide, { color: t.textMuted }]}>
             {dejaNotee
               ? "Déjà notée : tu peux la corriger."
               : nuitRapporte(date, aujourdhui)
                 ? `Nuit à noter · +${POINTS_NUIT} pts`
                 : "Nuit à noter (plus de 7 jours : sans points)"}
-          </Text>
+          </Texte>
         </View>
         <TouchableOpacity
           onPress={() => setDate(decalerJours(date, 1))}
@@ -132,17 +138,17 @@ export default function Sommeil() {
           hitSlop={12}
           accessibilityLabel="Nuit suivante"
         >
-          <Text
+          <Texte
             style={[styles.fleche, { color: date >= aujourdhui ? t.border : t.accentText }]}
           >
             ›
-          </Text>
+          </Texte>
         </TouchableOpacity>
       </View>
 
       <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
         <View style={styles.heure}>
-          <Text style={[styles.labelHeure, { color: t.textSecondary }]}>Coucher</Text>
+          <Texte style={[styles.labelHeure, { color: t.textSecondary }]}>Coucher</Texte>
           <PlusMoins
             valeur={coucher}
             libelle="Heure de coucher"
@@ -150,19 +156,19 @@ export default function Sommeil() {
           />
         </View>
         <View style={styles.heure}>
-          <Text style={[styles.labelHeure, { color: t.textSecondary }]}>Lever</Text>
+          <Texte style={[styles.labelHeure, { color: t.textSecondary }]}>Lever</Texte>
           <PlusMoins
             valeur={lever}
             libelle="Heure de lever"
             onPas={(s) => setLever((h) => decalerHeure(h, s * PAS_MIN))}
           />
         </View>
-        <Text style={[styles.duree, { color: t.textPrimary }]}>
+        <Texte style={[styles.duree, { color: t.textPrimary }]}>
           {dureeLisible(dureeSommeilMin(coucher, lever))} de nuit
-        </Text>
+        </Texte>
       </View>
 
-      <Text style={[styles.label, { color: t.textSecondary }]}>Comment as-tu dormi ?</Text>
+      <Texte style={[styles.label, { color: t.textSecondary }]}>Comment as-tu dormi ?</Texte>
       <View style={styles.ligneChoix}>
         {([1, 2, 3] as Qualite[]).map((q) =>
           choix(qualite === q, QUALITES[q][0].toUpperCase() + QUALITES[q].slice(1), () =>
@@ -171,9 +177,9 @@ export default function Sommeil() {
         )}
       </View>
 
-      <Text style={[styles.label, { color: t.textSecondary }]}>
+      <Texte style={[styles.label, { color: t.textSecondary }]}>
         Des écrans avant de dormir ?
-      </Text>
+      </Texte>
       <View style={styles.ligneChoix}>
         {choix(ecrans === 1, "Oui", () => setEcrans(1))}
         {choix(ecrans === 0, "Non", () => setEcrans(0))}
@@ -184,7 +190,7 @@ export default function Sommeil() {
         onPress={enregistrer}
         disabled={!valide || enregistrement}
       >
-        <Text style={[styles.boutonTexte, { color: t.textOnAccent }]}>Enregistrer</Text>
+        <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>Enregistrer</Texte>
       </TouchableOpacity>
     </ScrollView>
   );

@@ -4,11 +4,10 @@ import {
   Linking,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte, ChampTexte } from "./Texte";
 import { getFamille, type FamilleTemplate } from "../lib/catalogue";
 import {
   DEMARRAGE_UNIVERSEL,
@@ -297,21 +296,21 @@ export function MiseEnPlace() {
         activeOpacity={0.7}
       >
         <View style={styles.tuileHaut}>
-          <Text style={styles.tuileIcone}>{d.icone}</Text>
-          {actif && <Text style={[styles.coche, { color: t.accent }]}>✓</Text>}
+          <Texte style={styles.tuileIcone}>{d.icone}</Texte>
+          {actif && <Texte style={[styles.coche, { color: t.accent }]}>✓</Texte>}
         </View>
-        <Text
+        <Texte
           style={[
             styles.tuileTexte,
             { color: actif ? t.accentText : t.textPrimary },
           ]}
         >
           {d.libelle}
-        </Text>
+        </Texte>
         {precedente && (
-          <Text style={[styles.tuileNote, { color: t.textMuted }]}>
+          <Texte style={[styles.tuileNote, { color: t.textMuted }]}>
             Déjà choisie
-          </Text>
+          </Texte>
         )}
       </TouchableOpacity>
     );
@@ -378,9 +377,9 @@ export function MiseEnPlace() {
           }
           hitSlop={12}
         >
-          <Text style={[styles.retour, { color: t.accentText }]}>
+          <Texte style={[styles.retour, { color: t.accentText }]}>
             {etape === 1 ? "← Annuler" : "← Retour"}
-          </Text>
+          </Texte>
         </TouchableOpacity>
 
         {etape <= 3 && (
@@ -397,18 +396,18 @@ export function MiseEnPlace() {
           </View>
         )}
 
-        <Text style={[styles.titre, { color: t.textPrimary }]}>
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>
           {titreEtape}
-        </Text>
-        <Text style={[styles.sousTitre, { color: t.textSecondary }]}>
+        </Texte>
+        <Texte style={[styles.sousTitre, { color: t.textSecondary }]}>
           {sousTitre}
-        </Text>
+        </Texte>
 
         {message && (
           <View style={[styles.message, { backgroundColor: t.bgHighlight }]}>
-            <Text style={[styles.messageTexte, { color: t.accentText }]}>
+            <Texte style={[styles.messageTexte, { color: t.accentText }]}>
               {message}
-            </Text>
+            </Texte>
           </View>
         )}
 
@@ -422,16 +421,16 @@ export function MiseEnPlace() {
                   style={[styles.lienLarge, { borderColor: t.border }]}
                   onPress={() => setVoirTout(true)}
                 >
-                  <Text
+                  <Texte
                     style={[styles.lienLargeTexte, { color: t.textPrimary }]}
                   >
                     Voir d'autres difficultés
-                  </Text>
+                  </Texte>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <TextInput
+                <ChampTexte
                   style={[
                     styles.recherche,
                     {
@@ -450,10 +449,10 @@ export function MiseEnPlace() {
                   resultatsRecherche.length > 0 ? (
                     <Grille liste={resultatsRecherche} />
                   ) : (
-                    <Text style={[styles.vide, { color: t.textMuted }]}>
+                    <Texte style={[styles.vide, { color: t.textMuted }]}>
                       Rien de proche. Essaie un autre mot, ou parcours les
                       thèmes.
-                    </Text>
+                    </Texte>
                   )
                 ) : (
                   THEMES.map((th) => {
@@ -468,30 +467,30 @@ export function MiseEnPlace() {
                           style={[styles.theme, { backgroundColor: t.bgCard }]}
                           onPress={() => setThemeOuvert(ouvert ? null : th.id)}
                         >
-                          <Text style={styles.themeIcone}>{th.icone}</Text>
-                          <Text
+                          <Texte style={styles.themeIcone}>{th.icone}</Texte>
+                          <Texte
                             style={[
                               styles.themeTitre,
                               { color: t.textPrimary },
                             ]}
                           >
                             {th.titre}
-                          </Text>
+                          </Texte>
                           {nbChoisies > 0 && (
-                            <Text
+                            <Texte
                               style={[
                                 styles.themeCompte,
                                 { color: t.accentText },
                               ]}
                             >
                               {nbChoisies} ✓
-                            </Text>
+                            </Texte>
                           )}
-                          <Text
+                          <Texte
                             style={[styles.chevron, { color: t.textMuted }]}
                           >
                             {ouvert ? "−" : "+"}
-                          </Text>
+                          </Texte>
                         </TouchableOpacity>
                         {ouvert && <Grille liste={liste} />}
                       </View>
@@ -507,23 +506,23 @@ export function MiseEnPlace() {
         {etape === 2 && (
           <>
             {totalProposees === 0 && (
-              <Text style={[styles.vide, { color: t.textSecondary }]}>
+              <Texte style={[styles.vide, { color: t.textSecondary }]}>
                 Tout ce qui répond à ces difficultés est déjà dans ta journée.
-              </Text>
+              </Texte>
             )}
             {groupes.map((g, i) => (
               <View key={i} style={styles.groupe}>
                 {g.titre && (
-                  <Text
+                  <Texte
                     style={[styles.groupeTitre, { color: t.textSecondary }]}
                   >
                     {g.titre}
-                  </Text>
+                  </Texte>
                 )}
                 {g.familles.length === 0 && g.dejaEnPlace > 0 && (
-                  <Text style={[styles.vide, { color: t.textMuted }]}>
+                  <Texte style={[styles.vide, { color: t.textMuted }]}>
                     Déjà en place dans ta journée.
-                  </Text>
+                  </Texte>
                 )}
                 {g.familles.map((f) => {
                   const v = premiereVariante(f);
@@ -552,22 +551,22 @@ export function MiseEnPlace() {
                     >
                       <View style={styles.routineLigne}>
                         <View style={{ flex: 1 }}>
-                          <Text
+                          <Texte
                             style={[
                               styles.routineNom,
                               { color: t.textPrimary },
                             ]}
                           >
                             {v.libelle}
-                          </Text>
-                          <Text
+                          </Texte>
+                          <Texte
                             style={[
                               styles.routineDetails,
                               { color: t.textSecondary },
                             ]}
                           >
                             {details}
-                          </Text>
+                          </Texte>
                         </View>
                         <TouchableOpacity
                           onPress={() => basculerRoutine(f.id)}
@@ -581,7 +580,7 @@ export function MiseEnPlace() {
                               : { borderColor: t.border },
                           ]}
                         >
-                          <Text
+                          <Texte
                             style={[
                               styles.prendreTexte,
                               {
@@ -590,38 +589,38 @@ export function MiseEnPlace() {
                             ]}
                           >
                             {coche ? "✓ Je prends" : "Je prends"}
-                          </Text>
+                          </Texte>
                         </TouchableOpacity>
                       </View>
                       <TouchableOpacity
                         onPress={() => setPourquoi(ouvert ? null : f.id)}
                         hitSlop={8}
                       >
-                        <Text
+                        <Texte
                           style={[styles.pourquoi, { color: t.accentText }]}
                         >
                           {ouvert ? "Masquer" : "Pourquoi ça aide"}
-                        </Text>
+                        </Texte>
                       </TouchableOpacity>
                       {ouvert && (
-                        <Text
+                        <Texte
                           style={[
                             styles.justification,
                             { color: t.textSecondary },
                           ]}
                         >
                           {f.justification}
-                        </Text>
+                        </Texte>
                       )}
                     </View>
                   );
                 })}
                 {g.lienAide && (
                   <TouchableOpacity onPress={() => Linking.openURL("tel:3114")}>
-                    <Text style={[styles.aide, { color: t.textMuted }]}>
+                    <Texte style={[styles.aide, { color: t.textMuted }]}>
                       Si ça ne va vraiment pas : le 3114, gratuit, 24 h/24.
                       Toucher pour appeler.
-                    </Text>
+                    </Texte>
                   </TouchableOpacity>
                 )}
               </View>
@@ -635,9 +634,9 @@ export function MiseEnPlace() {
             const choisie = ancreDe[f.id] ?? null;
             return (
               <View key={f.id} style={styles.groupe}>
-                <Text style={[styles.routineNom, { color: t.textPrimary }]}>
+                <Texte style={[styles.routineNom, { color: t.textPrimary }]}>
                   {premiereVariante(f).libelle}
-                </Text>
+                </Texte>
                 <View style={styles.pastilles}>
                   {[{ id: null as number | null, nom: "Aucun" }, ...ancres].map(
                     (a) => {
@@ -656,7 +655,7 @@ export function MiseEnPlace() {
                             },
                           ]}
                         >
-                          <Text
+                          <Texte
                             style={[
                               styles.pastilleTexte,
                               {
@@ -665,7 +664,7 @@ export function MiseEnPlace() {
                             ]}
                           >
                             {a.nom}
-                          </Text>
+                          </Texte>
                         </TouchableOpacity>
                       );
                     },
@@ -686,9 +685,9 @@ export function MiseEnPlace() {
             if (dans.length === 0) return null;
             return (
               <View key={bloc} style={styles.groupe}>
-                <Text style={[styles.bloc, { color: t.accentText }]}>
+                <Texte style={[styles.bloc, { color: t.accentText }]}>
                   {bloc}
-                </Text>
+                </Texte>
                 {dans.map((f) => {
                   const a = ancres.find((x) => x.id === ancreDe[f.id]);
                   return (
@@ -696,17 +695,17 @@ export function MiseEnPlace() {
                       key={f.id}
                       style={[styles.apercu, { backgroundColor: t.bgCard }]}
                     >
-                      <Text
+                      <Texte
                         style={[styles.routineNom, { color: t.textPrimary }]}
                       >
                         ○{" "}
                         {a ? (
-                          <Text style={{ color: t.accentText }}>
+                          <Texte style={{ color: t.accentText }}>
                             Après {a.nom.toLowerCase()} →{" "}
-                          </Text>
+                          </Texte>
                         ) : null}
                         {premiereVariante(f).libelle}
-                      </Text>
+                      </Texte>
                     </View>
                   );
                 })}
@@ -730,17 +729,17 @@ export function MiseEnPlace() {
                 choisies.length > 0 ? versEtape2(false) : quitter()
               }
             >
-              <Text style={[styles.principalTexte, { color: t.textOnAccent }]}>
+              <Texte style={[styles.principalTexte, { color: t.textOnAccent }]}>
                 {choisies.length > 0 ? "Continuer" : "Passer"}
-              </Text>
+              </Texte>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaire}
               onPress={() => versEtape2(true)}
             >
-              <Text style={[styles.secondaireTexte, { color: t.accentText }]}>
+              <Texte style={[styles.secondaireTexte, { color: t.accentText }]}>
                 Je ne sais pas par où commencer
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </>
         )}
@@ -750,19 +749,19 @@ export function MiseEnPlace() {
               style={[styles.principal, { backgroundColor: t.accent }]}
               onPress={() => (cochees.length > 0 ? versEtape3() : quitter())}
             >
-              <Text style={[styles.principalTexte, { color: t.textOnAccent }]}>
+              <Texte style={[styles.principalTexte, { color: t.textOnAccent }]}>
                 {cochees.length > 0
                   ? `Continuer (${cochees.length})`
                   : "Passer"}
-              </Text>
+              </Texte>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaire}
               onPress={() => router.push("/nouvelle-tache?type=routine")}
             >
-              <Text style={[styles.secondaireTexte, { color: t.accentText }]}>
+              <Texte style={[styles.secondaireTexte, { color: t.accentText }]}>
                 Créer la mienne
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </>
         )}
@@ -772,9 +771,9 @@ export function MiseEnPlace() {
               style={[styles.principal, { backgroundColor: t.accent }]}
               onPress={() => allerA(4)}
             >
-              <Text style={[styles.principalTexte, { color: t.textOnAccent }]}>
+              <Texte style={[styles.principalTexte, { color: t.textOnAccent }]}>
                 Continuer
-              </Text>
+              </Texte>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaire}
@@ -785,9 +784,9 @@ export function MiseEnPlace() {
                 allerA(4);
               }}
             >
-              <Text style={[styles.secondaireTexte, { color: t.accentText }]}>
+              <Texte style={[styles.secondaireTexte, { color: t.accentText }]}>
                 Passer cette étape
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </>
         )}
@@ -796,9 +795,9 @@ export function MiseEnPlace() {
             style={[styles.principal, { backgroundColor: t.accent }]}
             onPress={terminer}
           >
-            <Text style={[styles.principalTexte, { color: t.textOnAccent }]}>
+            <Texte style={[styles.principalTexte, { color: t.textOnAccent }]}>
               {enregistrement ? "Un instant…" : "C'est parti"}
-            </Text>
+            </Texte>
           </TouchableOpacity>
         )}
       </View>

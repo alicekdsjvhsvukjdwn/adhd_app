@@ -3,10 +3,10 @@ import {
   Linking,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte } from "../../components/Texte";
 import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
 import { CarteSauvegarde } from "../../components/CarteSauvegarde";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
@@ -42,7 +42,7 @@ export default function Profil() {
   return (
     <View style={[styles.container, { backgroundColor: t.bgApp }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={[styles.titre, { color: t.textPrimary }]}>Profil</Text>
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>Profil</Texte>
 
         {ENTREES.map((e) => (
           <TouchableOpacity
@@ -50,12 +50,12 @@ export default function Profil() {
             style={[styles.entree, { backgroundColor: t.bgCard }]}
             onPress={() => router.push(e.route as never)}
           >
-            <Text style={[styles.entreeTitre, { color: t.textPrimary }]}>
+            <Texte style={[styles.entreeTitre, { color: t.textPrimary }]}>
               {e.titre}
-            </Text>
-            <Text style={[styles.entreeTexte, { color: t.textSecondary }]}>
+            </Texte>
+            <Texte style={[styles.entreeTexte, { color: t.textSecondary }]}>
               {e.description}
-            </Text>
+            </Texte>
           </TouchableOpacity>
         ))}
 
@@ -67,10 +67,10 @@ export default function Profil() {
           style={styles.aide}
           onPress={() => Linking.openURL("tel:3114")}
         >
-          <Text style={[styles.aideTexte, { color: t.textMuted }]}>
+          <Texte style={[styles.aideTexte, { color: t.textMuted }]}>
             Si ça ne va vraiment pas : le 3114, numéro national de prévention du
             suicide, gratuit, 24 h/24. Toucher pour appeler.
-          </Text>
+          </Texte>
         </TouchableOpacity>
 
         <View style={{ height: spacing.xxxl }} />

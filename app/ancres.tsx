@@ -4,11 +4,10 @@ import {
   Keyboard,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte, ChampTexte } from "../components/Texte";
 import { addAncre, getAncres, toggleAncre, type Ancre, type MomentJournee } from "../lib/db";
 import { LIBELLES_MOMENT } from "../lib/moments";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -55,24 +54,24 @@ export default function AncresScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+        <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>Mes moments repères</Text>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>Mes moments repères</Texte>
 
-      <Text style={[styles.intro, { color: t.textSecondary }]}>
+      <Texte style={[styles.intro, { color: t.textSecondary }]}>
         Coche les moments de ta journée qui sont déjà bien ancrés dans tes
         habitudes. Tu pourras ensuite y accrocher tes routines pour que ton
         cerveau les associe naturellement.
-      </Text>
+      </Texte>
 
       {MOMENTS.map((m) => {
         const dans = ancres.filter((a) => a.moment === m);
         if (dans.length === 0) return null;
         return (
           <View key={m} style={styles.section}>
-            <Text style={[styles.sectionTitre, { color: t.accentText }]}>
+            <Texte style={[styles.sectionTitre, { color: t.accentText }]}>
               {LIBELLES_MOMENT[m]}
-            </Text>
+            </Texte>
             {dans.map((ancre) => (
               <TouchableOpacity
                 key={ancre.id}
@@ -84,10 +83,10 @@ export default function AncresScreen() {
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: ancre.active === 1 }}
               >
-                <Text style={[styles.texteItem, { color: t.textPrimary }]}>
+                <Texte style={[styles.texteItem, { color: t.textPrimary }]}>
                   {ancre.active ? "✓ " : "○ "}
                   {ancre.nom}
-                </Text>
+                </Texte>
               </TouchableOpacity>
             ))}
           </View>
@@ -95,8 +94,8 @@ export default function AncresScreen() {
       })}
 
       {/* Ajouter un moment repère */}
-      <Text style={[styles.sectionTitre, { color: t.accentText }]}>Ajouter</Text>
-      <TextInput
+      <Texte style={[styles.sectionTitre, { color: t.accentText }]}>Ajouter</Texte>
+      <ChampTexte
         style={[
           styles.champ,
           { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
@@ -125,9 +124,9 @@ export default function AncresScreen() {
               accessibilityRole="radio"
               accessibilityState={{ selected: actif }}
             >
-              <Text style={{ color: actif ? t.textOnAccent : t.textSecondary, fontSize: typography.small }}>
+              <Texte style={{ color: actif ? t.textOnAccent : t.textSecondary, fontSize: typography.small }}>
                 {LIBELLES_MOMENT[m]}
-              </Text>
+              </Texte>
             </TouchableOpacity>
           );
         })}
@@ -137,11 +136,11 @@ export default function AncresScreen() {
         onPress={onAjouter}
         disabled={!nom.trim()}
       >
-        <Text
+        <Texte
           style={[styles.boutonTexte, { color: nom.trim() ? t.textOnAccent : t.textMuted }]}
         >
           Ajouter ce moment repère
-        </Text>
+        </Texte>
       </TouchableOpacity>
     </ScrollView>
   );

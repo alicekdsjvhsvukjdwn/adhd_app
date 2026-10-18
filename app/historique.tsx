@@ -1,6 +1,12 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Texte } from "../components/Texte";
 import { ZoneNote } from "../components/ZoneNote";
 import { getItem } from "../lib/db";
 import {
@@ -70,9 +76,9 @@ export default function Historique() {
       {n.retenu ? <Ligne libelle="Retenu" texte={n.retenu} /> : null}
       {idees(n.idees).map((idee, i) => (
         <View key={i} style={styles.idee}>
-          <Text style={[styles.texte, { color: t.textPrimary, flex: 1 }]}>💡 {idee}</Text>
+          <Texte style={[styles.texte, { color: t.textPrimary, flex: 1 }]}>💡 {idee}</Texte>
           <TouchableOpacity onPress={() => enTache(idee)} hitSlop={8}>
-            <Text style={[styles.lien, { color: t.accentText }]}>→ En faire une tâche</Text>
+            <Texte style={[styles.lien, { color: t.accentText }]}>→ En faire une tâche</Texte>
           </TouchableOpacity>
         </View>
       ))}
@@ -86,17 +92,17 @@ export default function Historique() {
       keyboardShouldPersistTaps="handled"
     >
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+        <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>{titre}</Text>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>{titre}</Texte>
 
       {itemId !== null && (
         <>
-          <Text style={[styles.aide, { color: t.textMuted }]}>
+          <Texte style={[styles.aide, { color: t.textMuted }]}>
             {fois.length === 0
               ? "Pas encore faite."
               : `Faite ${fois.length} fois. Touche une date pour écrire ou modifier sa note.`}
-          </Text>
+          </Texte>
           {fois.map((f) =>
             enEdition === f.date ? (
               <ZoneNote
@@ -117,11 +123,11 @@ export default function Historique() {
                 onPress={() => setEnEdition(f.date)}
                 accessibilityHint="Écrire ou modifier la note"
               >
-                <Text style={[styles.date, { color: t.textPrimary }]}>✓ {dateLisible(f.date)}</Text>
+                <Texte style={[styles.date, { color: t.textPrimary }]}>✓ {dateLisible(f.date)}</Texte>
                 {f.fait || f.retenu || f.idees ? (
                   contenuNote(f)
                 ) : (
-                  <Text style={[styles.texte, { color: t.textMuted }]}>+ Ajouter une note</Text>
+                  <Texte style={[styles.texte, { color: t.textMuted }]}>+ Ajouter une note</Texte>
                 )}
               </TouchableOpacity>
             ),
@@ -131,16 +137,16 @@ export default function Historique() {
 
       {itemId === null && (
         <>
-          <Text style={[styles.aide, { color: t.textMuted }]}>
+          <Texte style={[styles.aide, { color: t.textMuted }]}>
             {carnet.length === 0
               ? "Aucune note dans cette liste pour l'instant."
               : "Les notes de toutes les tâches de la liste, de la plus récente à la plus ancienne."}
-          </Text>
+          </Texte>
           {carnet.map((n) => (
             <View key={`${n.item_id}-${n.date}`} style={[styles.carte, { backgroundColor: t.bgCard }]}>
               <TouchableOpacity onPress={() => router.push(`/historique?id=${n.item_id}`)}>
-                <Text style={[styles.date, { color: t.textPrimary }]}>{n.nom}</Text>
-                <Text style={[styles.texte, { color: t.textMuted }]}>{dateLisible(n.date)}</Text>
+                <Texte style={[styles.date, { color: t.textPrimary }]}>{n.nom}</Texte>
+                <Texte style={[styles.texte, { color: t.textMuted }]}>{dateLisible(n.date)}</Texte>
               </TouchableOpacity>
               {contenuNote(n)}
             </View>
@@ -154,10 +160,10 @@ export default function Historique() {
 function Ligne({ libelle, texte }: { libelle: string; texte: string }) {
   const t = useTheme();
   return (
-    <Text style={[styles.texte, { color: t.textSecondary }]}>
-      <Text style={{ fontWeight: "600", color: t.textPrimary }}>{libelle} : </Text>
+    <Texte style={[styles.texte, { color: t.textSecondary }]}>
+      <Texte style={{ fontWeight: "600", color: t.textPrimary }}>{libelle} : </Texte>
       {texte}
-    </Text>
+    </Texte>
   );
 }
 

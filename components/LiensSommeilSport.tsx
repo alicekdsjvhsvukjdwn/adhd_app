@@ -1,6 +1,10 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import {
+  StyleSheet,
+  View,
+} from "react-native";
+import { Texte } from "./Texte";
 import { liensSommeilSport, type LiensSommeilSport } from "../lib/db/progression";
 import { phraseAttente, type Comparaison } from "../lib/suivi-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -32,25 +36,25 @@ export function LiensSommeilSport() {
     format: (x: number) => string,
   ) => (
     <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-      <Text style={[styles.titre, { color: t.textPrimary }]}>{titre}</Text>
+      <Texte style={[styles.titre, { color: t.textPrimary }]}>{titre}</Texte>
       {c.ok ? (
         <>
-          <Text style={[styles.texte, { color: t.textSecondary }]}>
+          <Texte style={[styles.texte, { color: t.textSecondary }]}>
             {libA} : {format(c.moyA)} ({c.nA} j) · {libB} : {format(c.moyB)} ({c.nB} j)
-          </Text>
-          <Text style={[styles.note, { color: t.textMuted }]}>
+          </Texte>
+          <Texte style={[styles.note, { color: t.textMuted }]}>
             Tendance observée sur tes jours, pas une cause.
-          </Text>
+          </Texte>
         </>
       ) : (
-        <Text style={[styles.texte, { color: t.textMuted }]}>{phraseAttente(c)}</Text>
+        <Texte style={[styles.texte, { color: t.textMuted }]}>{phraseAttente(c)}</Texte>
       )}
     </View>
   );
 
   return (
     <View style={{ marginTop: spacing.xl }}>
-      <Text style={[styles.section, { color: t.textPrimary }]}>Sommeil et sport</Text>
+      <Texte style={[styles.section, { color: t.textPrimary }]}>Sommeil et sport</Texte>
       {ligne(
         "Routines faites selon la nuit",
         liens.routinesSelonNuit,

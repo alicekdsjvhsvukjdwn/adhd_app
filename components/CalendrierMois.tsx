@@ -2,14 +2,14 @@ import { useFocusEffect } from "expo-router";
 import { useJourCourant } from "../hooks/useJourCourant";
 import { useCallback, useState } from "react";
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { Texte } from "./Texte";
 import { intensiteJours, recapJour, type RecapJour } from "../lib/db/progression";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { useCouleurCategorie } from "../lib/theme-categories";
@@ -124,32 +124,32 @@ export function CalendrierMois() {
     <View>
       <View style={styles.entete}>
         <TouchableOpacity onPress={() => changerMois(-1)} hitSlop={12}>
-          <Text style={[styles.fleche, { color: t.accentText }]}>‹</Text>
+          <Texte style={[styles.fleche, { color: t.accentText }]}>‹</Texte>
         </TouchableOpacity>
-        <Text style={[styles.titre, { color: t.textPrimary }]}>
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>
           {MOIS[mois.mois]} {mois.annee}
-        </Text>
+        </Texte>
         <TouchableOpacity
           onPress={() => changerMois(1)}
           disabled={estMoisCourant}
           hitSlop={12}
         >
-          <Text
+          <Texte
             style={[
               styles.fleche,
               { color: estMoisCourant ? t.border : t.accentText },
             ]}
           >
             ›
-          </Text>
+          </Texte>
         </TouchableOpacity>
       </View>
 
       <View style={styles.semaine}>
         {ENTETES.map((j, i) => (
-          <Text key={i} style={[styles.enteteJour, { color: t.textMuted }]}>
+          <Texte key={i} style={[styles.enteteJour, { color: t.textMuted }]}>
             {j}
-          </Text>
+          </Texte>
         ))}
       </View>
       {semaines.map((s, i) => (
@@ -172,7 +172,7 @@ export function CalendrierMois() {
                   },
                 ]}
               >
-                <Text
+                <Texte
                   style={[
                     styles.numero,
                     {
@@ -186,15 +186,15 @@ export function CalendrierMois() {
                   ]}
                 >
                   {jour}
-                </Text>
+                </Texte>
               </TouchableOpacity>
             );
           })}
         </View>
       ))}
-      <Text style={[styles.aide, { color: t.textMuted }]}>
+      <Texte style={[styles.aide, { color: t.textMuted }]}>
         Touche un jour pour voir ce qui a été fait.
-      </Text>
+      </Texte>
 
       <Modal
         visible={recap !== null}
@@ -203,30 +203,30 @@ export function CalendrierMois() {
         onRequestClose={() => setRecap(null)}
       >
         <Pressable style={styles.fond} onPress={() => setRecap(null)}>
-          <Pressable style={[styles.carte, { backgroundColor: t.bgApp, maxHeight: "80%" }]}>
+          <Pressable style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border, borderWidth: 1, maxHeight: "80%" }]}>
             {recap && (
               <>
-                <Text style={[styles.recapTitre, { color: t.textPrimary }]}>
+                <Texte style={[styles.recapTitre, { color: t.textPrimary }]}>
                   {recap.date === aujourdhui
                     ? "Aujourd'hui"
                     : dateLongue(recap.date)}
-                </Text>
-                <Text style={[styles.recapSous, { color: t.textSecondary }]}>
+                </Texte>
+                <Texte style={[styles.recapSous, { color: t.textSecondary }]}>
                   {recap.faits.length === 0
                     ? "Rien de coché ce jour-là."
                     : recap.global === null
                       ? "Pas de routine prévue ce jour-là."
                       : `${Math.round(recap.global * 100)} % des routines prévues`}
-                </Text>
+                </Texte>
                 <ScrollView style={{ flexGrow: 0 }}>
                 {(["routine", "tache"] as const).map((type) => {
                   const faits = recap.faits.filter((f) => f.type === type);
                   if (faits.length === 0) return null;
                   return (
                     <View key={type}>
-                      <Text style={[styles.recapGroupe, { color: t.textMuted }]}>
+                      <Texte style={[styles.recapGroupe, { color: t.textMuted }]}>
                         {type === "routine" ? "Routines" : "Tâches"} · {faits.length}
-                      </Text>
+                      </Texte>
                       {faits.map((f) => (
                         <View key={f.id} style={styles.ligne}>
                           <View
@@ -239,9 +239,9 @@ export function CalendrierMois() {
                               },
                             ]}
                           />
-                          <Text style={[styles.ligneNom, { color: t.textPrimary }]}>
+                          <Texte style={[styles.ligneNom, { color: t.textPrimary }]}>
                             {f.nom}
-                          </Text>
+                          </Texte>
                         </View>
                       ))}
                     </View>
@@ -249,12 +249,12 @@ export function CalendrierMois() {
                 })}
                 </ScrollView>
                 <TouchableOpacity
-                  style={[styles.fermer, { backgroundColor: t.bgCard }]}
+                  style={[styles.fermer, { backgroundColor: t.bgCardActive }]}
                   onPress={() => setRecap(null)}
                 >
-                  <Text style={[styles.fermerTexte, { color: t.textPrimary }]}>
+                  <Texte style={[styles.fermerTexte, { color: t.textPrimary }]}>
                     Fermer
-                  </Text>
+                  </Texte>
                 </TouchableOpacity>
               </>
             )}

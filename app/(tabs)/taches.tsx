@@ -7,11 +7,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Texte, ChampTexte } from "../../components/Texte";
 import { Swipeable } from "react-native-gesture-handler";
 import { BarresObjectif } from "../../components/BarresObjectif";
 import { PlusMoins } from "../../components/PlusMoins";
@@ -211,19 +210,19 @@ export default function Taches() {
         style={[styles.action, { backgroundColor: t.textMuted }]}
         onPress={() => historique(p)}
       >
-        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>Historique</Text>
+        <Texte style={[styles.actionTexte, { color: t.textOnAccent }]}>Historique</Texte>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.action, { backgroundColor: t.accentText }]}
         onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
       >
-        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>Modifier</Text>
+        <Texte style={[styles.actionTexte, { color: t.textOnAccent }]}>Modifier</Texte>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.action, { backgroundColor: t.danger }]}
         onPress={() => onSupprimer(p)}
       >
-        <Text style={[styles.actionTexte, { color: t.textOnAccent }]}>Supprimer</Text>
+        <Texte style={[styles.actionTexte, { color: t.textOnAccent }]}>Supprimer</Texte>
       </TouchableOpacity>
     </View>
   );
@@ -287,9 +286,9 @@ export default function Taches() {
         }
         hitSlop={6}
       >
-        <Text style={[styles.jeCommenceTexte, { color: t.accentText }]}>
+        <Texte style={[styles.jeCommenceTexte, { color: t.accentText }]}>
           ▶ Je commence
-        </Text>
+        </Texte>
       </TouchableOpacity>
     );
   };
@@ -301,17 +300,17 @@ export default function Taches() {
         {prochaine ? (
           <>
             {/* Tâche découpée : seulement sa prochaine étape */}
-            <Text style={[styles.premiere, { color: t.textMuted, marginTop: 0 }]}>
+            <Texte style={[styles.premiere, { color: t.textMuted, marginTop: 0 }]}>
               {p.nom}
-            </Text>
+            </Texte>
             <TouchableOpacity
               onPress={() => onEtape(p, prochaine)}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: false }}
             >
-              <Text style={[styles.nom, { color: t.textPrimary }]}>
+              <Texte style={[styles.nom, { color: t.textPrimary }]}>
                 ○ {prochaine.nom}
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </>
         ) : (
@@ -320,16 +319,16 @@ export default function Taches() {
             accessibilityRole="checkbox"
             accessibilityState={{ checked: false }}
           >
-            <Text style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Text>
+            <Texte style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Texte>
             {p.premiere_action ? (
-              <Text style={[styles.premiere, { color: t.textSecondary }]}>
+              <Texte style={[styles.premiere, { color: t.textSecondary }]}>
                 Commencer par : {p.premiere_action}
-              </Text>
+              </Texte>
             ) : null}
             {p.duree_min ? (
-              <Text style={[styles.premiere, { color: t.textMuted }]}>
+              <Texte style={[styles.premiere, { color: t.textMuted }]}>
                 {p.duree_min} min
-              </Text>
+              </Texte>
             ) : null}
           </TouchableOpacity>
         )}
@@ -353,22 +352,22 @@ export default function Taches() {
               >
                 <View style={styles.carteEntete}>
                   <View style={[styles.raison, { backgroundColor: t.bgHighlight }]}>
-                    <Text style={[styles.raisonTexte, { color: t.accentText }]}>
+                    <Texte style={[styles.raisonTexte, { color: t.accentText }]}>
                       {p.exploration ? "🔄 " : ""}
                       {p.raison}
-                    </Text>
+                    </Texte>
                   </View>
-                  <Text style={[styles.duree, { color: t.textMuted }]}>
+                  <Texte style={[styles.duree, { color: t.textMuted }]}>
                     {filtre === null && nomListe(p.liste_id)
                       ? `${nomListe(p.liste_id)!.icone ?? ""} ${nomListe(p.liste_id)!.nom}`
                       : ""}
                     {p.duree_min ? `${filtre === null && nomListe(p.liste_id) ? " · " : ""}${p.duree_min} min` : ""}
-                  </Text>
+                  </Texte>
                 </View>
                 {p.compte && (
-                  <Text style={[styles.compte, { color: t.accentText }]}>
+                  <Texte style={[styles.compte, { color: t.accentText }]}>
                     {libelleCompte(p.compte.fait, p.compte.cible, p.compte.periode)}
-                  </Text>
+                  </Texte>
                 )}
 
                 {liste.length === 0 ? (
@@ -378,20 +377,20 @@ export default function Taches() {
                       onLongPress={() => historique(p)}
                       accessibilityHint="Appui long : historique"
                     >
-                      <Text style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Text>
+                      <Texte style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Texte>
                       {p.premiere_action ? (
-                        <Text style={[styles.premiere, { color: t.textSecondary }]}>
+                        <Texte style={[styles.premiere, { color: t.textSecondary }]}>
                           Commencer par : {p.premiere_action}
-                        </Text>
+                        </Texte>
                       ) : null}
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
                       hitSlop={8}
                     >
-                      <Text style={[styles.decouper, { color: t.accentText }]}>
+                      <Texte style={[styles.decouper, { color: t.accentText }]}>
                         Découper en étapes
-                      </Text>
+                      </Texte>
                     </TouchableOpacity>
                   </>
                 ) : (
@@ -400,7 +399,7 @@ export default function Taches() {
                       onLongPress={() => historique(p)}
                       accessibilityHint="Appui long : historique"
                     >
-                      <Text style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Text>
+                      <Texte style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Texte>
                     </TouchableOpacity>
                     <View style={styles.progressionLigne}>
                       <View style={[styles.barre, { backgroundColor: t.bgApp }]}>
@@ -413,9 +412,9 @@ export default function Taches() {
                         />
                         <View style={{ flex: liste.length - faites }} />
                       </View>
-                      <Text style={[styles.progressionTexte, { color: t.textMuted }]}>
+                      <Texte style={[styles.progressionTexte, { color: t.textMuted }]}>
                         {faites}/{liste.length}
-                      </Text>
+                      </Texte>
                     </View>
                     {liste.map((e) => {
                       const estSuivante = suivante?.id === e.id;
@@ -425,15 +424,15 @@ export default function Taches() {
                           style={styles.etape}
                           onPress={() => onEtape(p, e)}
                         >
-                          <Text
+                          <Texte
                             style={[
                               styles.etapeCase,
                               { color: e.faite ? t.success : t.textMuted },
                             ]}
                           >
                             {e.faite ? "✓" : "○"}
-                          </Text>
-                          <Text
+                          </Texte>
+                          <Texte
                             style={[
                               styles.etapeNom,
                               {
@@ -448,14 +447,14 @@ export default function Taches() {
                             ]}
                           >
                             {e.nom}
-                          </Text>
+                          </Texte>
                         </TouchableOpacity>
                       );
                     })}
-                    <Text style={[styles.bonus, { color: t.textMuted }]}>
+                    <Texte style={[styles.bonus, { color: t.textMuted }]}>
                       +{POINTS_ETAPE} pts par étape, +{POINTS_DERNIERE_ETAPE} pour la dernière
                       {p.compte ? " · remises à zéro après chaque fois" : ""}
-                    </Text>
+                    </Texte>
                   </>
                 )}
                 {rang === 0 && boutonJeCommence(p)}
@@ -483,7 +482,7 @@ export default function Taches() {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }}
       >
-        <Text style={[styles.titre, { color: t.textPrimary }]}>Tâches</Text>
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>Tâches</Texte>
 
         <ScrollView
           horizontal
@@ -523,7 +522,7 @@ export default function Taches() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: actif }}
                 >
-                  <Text
+                  <Texte
                     style={[
                       styles.filtreTexte,
                       { color: actif ? c.texte : t.textSecondary },
@@ -532,7 +531,7 @@ export default function Taches() {
                     {l.icone ? `${l.icone} ` : ""}
                     {l.nom}
                     {n > 0 ? ` · ${n}` : ""}
-                  </Text>
+                  </Texte>
                 </TouchableOpacity>
               );
             },
@@ -542,13 +541,13 @@ export default function Taches() {
             style={[styles.filtre, { borderColor: t.border }]}
             accessibilityLabel="Gérer les listes"
           >
-            <Text style={[styles.filtreTexte, { color: t.textMuted }]}>✎ Listes</Text>
+            <Texte style={[styles.filtreTexte, { color: t.textMuted }]}>✎ Listes</Texte>
           </TouchableOpacity>
         </ScrollView>
 
         {/* Noter en une ligne : l'appli devine le domaine et trie */}
         <View style={styles.ajout}>
-          <TextInput
+          <ChampTexte
             style={[
               styles.champ,
               { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
@@ -566,15 +565,15 @@ export default function Taches() {
             style={[styles.boutonNoter, { backgroundColor: t.accent }]}
             onPress={onNoter}
           >
-            <Text style={[styles.boutonNoterTexte, { color: t.textOnAccent }]}>Noter</Text>
+            <Texte style={[styles.boutonNoterTexte, { color: t.textOnAccent }]}>Noter</Texte>
           </TouchableOpacity>
         </View>
         <View style={styles.ajoutPied}>
           {tacheNotee ? (
-            <Text style={[styles.confirmation, { color: t.textSecondary }]}>
+            <Texte style={[styles.confirmation, { color: t.textSecondary }]}>
               ✓ « {tacheNotee} » est notée
               {filtre === null && listes[0] ? ` dans ${listes[0].nom}` : ""}.
-            </Text>
+            </Texte>
           ) : (
             <View />
           )}
@@ -592,16 +591,16 @@ export default function Taches() {
             }}
             hitSlop={8}
           >
-            <Text style={[styles.lien, { color: t.accentText }]}>Plus d'options</Text>
+            <Texte style={[styles.lien, { color: t.accentText }]}>Plus d'options</Texte>
           </TouchableOpacity>
         </View>
 
         {filtre !== null ? (
           <>
-            <Text style={[styles.section, { color: t.textPrimary }]}>
+            <Texte style={[styles.section, { color: t.textPrimary }]}>
               {listeActive?.icone ? `${listeActive.icone} ` : ""}
               {listeActive?.nom}
-            </Text>
+            </Texte>
             {suivi && (
               <BarresObjectif suivi={suivi} couleur={couleurListe(listeActive?.couleur ?? null).fond} />
             )}
@@ -619,22 +618,22 @@ export default function Taches() {
                 }
                 hitSlop={8}
               >
-                <Text style={[styles.lien, { color: t.accentText }]}>
+                <Texte style={[styles.lien, { color: t.accentText }]}>
                   🎯 {listeActive?.objectif ? "Changer l'objectif" : "Fixer un objectif"}
-                </Text>
+                </Texte>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => listeActive && router.push(`/historique?liste=${listeActive.id}`)}
                 hitSlop={8}
               >
-                <Text style={[styles.lien, { color: t.accentText }]}>📓 Carnet</Text>
+                <Texte style={[styles.lien, { color: t.accentText }]}>📓 Carnet</Texte>
               </TouchableOpacity>
             </View>
             {editionObjectif && (
               <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-                <Text style={[styles.premiere, { color: t.textSecondary, marginTop: 0 }]}>
+                <Texte style={[styles.premiere, { color: t.textSecondary, marginTop: 0 }]}>
                   Tâches à faire dans cette liste
-                </Text>
+                </Texte>
                 <View style={styles.objectifLigne}>
                   <PlusMoins
                     valeur={String(editionObjectif.cible)}
@@ -655,21 +654,21 @@ export default function Taches() {
                         },
                       ]}
                     >
-                      <Text
+                      <Texte
                         style={[
                           styles.filtreTexte,
                           { color: editionObjectif.periode === per ? t.textOnAccent : t.textSecondary },
                         ]}
                       >
                         par {per}
-                      </Text>
+                      </Texte>
                     </TouchableOpacity>
                   ))}
                 </View>
                 <View style={styles.liensListe}>
                   {listeActive?.objectif ? (
                     <TouchableOpacity onPress={() => enregistrerObjectif(null, "semaine")} hitSlop={8}>
-                      <Text style={[styles.lien, { color: t.danger }]}>Retirer l&apos;objectif</Text>
+                      <Texte style={[styles.lien, { color: t.danger }]}>Retirer l&apos;objectif</Texte>
                     </TouchableOpacity>
                   ) : (
                     <View />
@@ -678,34 +677,34 @@ export default function Taches() {
                     onPress={() => enregistrerObjectif(editionObjectif.cible, editionObjectif.periode)}
                     hitSlop={8}
                   >
-                    <Text style={[styles.lien, { color: t.accentText }]}>Enregistrer</Text>
+                    <Texte style={[styles.lien, { color: t.accentText }]}>Enregistrer</Texte>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
             {zoneNote}
             {dansListe.length === 0 ? (
-              <Text style={[styles.vide, { color: t.textMuted }]}>
+              <Texte style={[styles.vide, { color: t.textMuted }]}>
                 Rien dans cette liste pour l'instant.
-              </Text>
+              </Texte>
             ) : (
-              <Text style={[styles.vide, { color: t.textMuted, fontStyle: "normal" }]}>
+              <Texte style={[styles.vide, { color: t.textMuted, fontStyle: "normal" }]}>
                 Dans l'ordre où l'appli te les conseille.
-              </Text>
+              </Texte>
             )}
             {dansListe.map(carte)}
           </>
         ) : (
           <>
-        <Text style={[styles.section, { color: t.textPrimary }]}>
+        <Texte style={[styles.section, { color: t.textPrimary }]}>
           {modeUnique ? "Une seule chose" : "À faire maintenant"}
-        </Text>
+        </Texte>
         {zoneNote}
         {modeUnique && unique && (
           <>
-            <Text style={[styles.vide, { color: t.textMuted, marginTop: 0 }]}>
+            <Texte style={[styles.vide, { color: t.textMuted, marginTop: 0 }]}>
               Jour difficile : le reste attend.
-            </Text>
+            </Texte>
             {carteJourDifficile(unique)}
             {ordre.length > 1 && (
               <TouchableOpacity
@@ -713,15 +712,15 @@ export default function Taches() {
                 hitSlop={8}
                 style={styles.uneAutre}
               >
-                <Text style={[styles.lien, { color: t.accentText }]}>Une autre</Text>
+                <Texte style={[styles.lien, { color: t.accentText }]}>Une autre</Texte>
               </TouchableOpacity>
             )}
           </>
         )}
         {(modeUnique ? !unique : maintenant.length === 0) && (
-          <Text style={[styles.vide, { color: t.textMuted }]}>
+          <Texte style={[styles.vide, { color: t.textMuted }]}>
             Aucune tâche en cours.
-          </Text>
+          </Texte>
         )}
 
         {maintenant.map(carte)}
@@ -732,17 +731,17 @@ export default function Taches() {
               style={styles.plusTardEntete}
               onPress={() => setVoirPlusTard(!voirPlusTard)}
             >
-              <Text style={[styles.section, { color: t.textPrimary, marginTop: 0 }]}>
+              <Texte style={[styles.section, { color: t.textPrimary, marginTop: 0 }]}>
                 Plus tard · {plusTard.length}
-              </Text>
-              <Text style={[styles.chevron, { color: t.textMuted }]}>
+              </Texte>
+              <Texte style={[styles.chevron, { color: t.textMuted }]}>
                 {voirPlusTard ? "−" : "+"}
-              </Text>
+              </Texte>
             </TouchableOpacity>
             {!voirPlusTard && (
-              <Text style={[styles.vide, { color: t.textMuted }]}>
+              <Texte style={[styles.vide, { color: t.textMuted }]}>
                 L'appli les proposera au bon moment.
-              </Text>
+              </Texte>
             )}
             {voirPlusTard &&
               plusTard.map((p) => {
@@ -758,13 +757,13 @@ export default function Taches() {
                           : onTerminer(p)
                       }
                     >
-                      <Text style={[styles.ligneNom, { color: t.textPrimary }]}>
+                      <Texte style={[styles.ligneNom, { color: t.textPrimary }]}>
                         ○ {p.nom}
-                      </Text>
+                      </Texte>
                       {liste.length > 0 && (
-                        <Text style={[styles.progressionTexte, { color: t.textMuted }]}>
+                        <Texte style={[styles.progressionTexte, { color: t.textMuted }]}>
                           {faites}/{liste.length}
-                        </Text>
+                        </Texte>
                       )}
                     </TouchableOpacity>
                   </Swipeable>
@@ -785,12 +784,12 @@ export default function Taches() {
         onRequestClose={() => setGestion(false)}
       >
         <Pressable style={styles.fond} onPress={() => setGestion(false)}>
-          <Pressable style={[styles.gestion, { backgroundColor: t.bgApp }]}>
-            <Text style={[styles.gestionTitre, { color: t.textPrimary }]}>Mes listes</Text>
+          <Pressable style={[styles.gestion, { backgroundColor: t.bgCard, borderColor: t.border, borderWidth: 1 }]}>
+            <Texte style={[styles.gestionTitre, { color: t.textPrimary }]}>Mes listes</Texte>
             {listes.map((l) => (
               <View key={l.id} style={styles.gestionBloc}>
               <View style={styles.gestionLigne}>
-                <TextInput
+                <ChampTexte
                   style={[
                     styles.gestionIcone,
                     { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
@@ -807,7 +806,7 @@ export default function Taches() {
                   maxLength={8}
                   accessibilityLabel={`Icône de ${l.nom}`}
                 />
-                <TextInput
+                <ChampTexte
                   style={[
                     styles.gestionChamp,
                     { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
@@ -849,7 +848,7 @@ export default function Taches() {
                     );
                   }}
                 >
-                  <Text style={[styles.gestionSupprimer, { color: t.danger }]}>✕</Text>
+                  <Texte style={[styles.gestionSupprimer, { color: t.danger }]}>✕</Texte>
                 </TouchableOpacity>
               </View>
               <View style={styles.gestionCouleurs}>
@@ -880,8 +879,8 @@ export default function Taches() {
               </View>
             ))}
             <View style={styles.gestionLigne}>
-              <Text style={{ fontSize: 18 }}>＋</Text>
-              <TextInput
+              <Texte style={{ fontSize: 18 }}>＋</Texte>
+              <ChampTexte
                 style={[
                   styles.gestionChamp,
                   { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
@@ -910,9 +909,9 @@ export default function Taches() {
                 await charger();
               }}
             >
-              <Text style={[styles.gestionFermerTexte, { color: t.textOnAccent }]}>
+              <Texte style={[styles.gestionFermerTexte, { color: t.textOnAccent }]}>
                 Terminé
-              </Text>
+              </Texte>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -920,11 +919,11 @@ export default function Taches() {
 
       {annulable && (
         <View style={[styles.bandeau, { backgroundColor: t.textPrimary }]}>
-          <Text style={[styles.bandeauTexte, { color: t.bgApp }]} numberOfLines={1}>
+          <Texte style={[styles.bandeauTexte, { color: t.bgApp }]} numberOfLines={1}>
             {annulable.texte}
-          </Text>
+          </Texte>
           <TouchableOpacity onPress={onAnnuler} hitSlop={10}>
-            <Text style={[styles.bandeauAction, { color: t.bgApp }]}>Annuler</Text>
+            <Texte style={[styles.bandeauAction, { color: t.bgApp }]}>Annuler</Texte>
           </TouchableOpacity>
         </View>
       )}
