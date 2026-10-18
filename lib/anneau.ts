@@ -34,9 +34,6 @@ export function vueValide(v: string | null | undefined): Vue | null {
 
 // ─── Remplissage ────────────────────────────────────────────────────────
 
-/** Part d'une routine à étapes quand ses essentielles sont faites (hors jour difficile). */
-export const PART_ESSENTIELLES = 2 / 3;
-
 export type RoutineAnneau = {
   categorie: string | null;
   faitAujourdhui: boolean;
@@ -46,35 +43,31 @@ export type RoutineAnneau = {
   moment: Moment | null;
 };
 
+type EtapeAnneau = RoutineAnneau["etapes"][number];
+
 /**
- * Part d'une routine dans son domaine, de 0 à 1. Sans étapes : faite = 1.
- * À étapes, chaque étape cochée fait avancer :
- * - les essentielles mènent jusqu'à 2/3 (jusqu'au bout un jour difficile,
- *   où elles suffisent, comme pour les points) ;
- * - les bonus font le dernier tiers ; tout coché = 1.
- * Sans étape essentielle, la première cochée compte comme les essentielles
- * (même règle que palierEtapes).
+ * Essentielles et bonus d'une routine à étapes. Sans étape essentielle, la
+ * première cochée (sinon la première) en tient lieu, comme pour les points
+ * (palierEtapes) : les autres sont des bonus.
  */
-export function partRoutine(r: RoutineAnneau, jourDifficile: boolean): number {
-  const etapes = r.etapes;
-  if (etapes.length === 0) return r.faitAujourdhui ? 1 : 0;
-  if (etapes.every((e) => e.cochee)) return 1;
-  const palier1 = jourDifficile ? 1 : PART_ESSENTIELLES;
-
-  let essentielles = etapes.filter((e) => e.essentielle);
-  let bonus = etapes.filter((e) => !e.essentielle);
-  if (essentielles.length === 0) {
-    // La première étape cochée tient lieu d'essentielle.
-    const premiere = etapes.find((e) => e.cochee);
-    if (!premiere) return 0;
-    essentielles = [premiere];
-    bonus = etapes.filter((e) => e !== premiere);
+function separer(etapes: EtapeAnneau[]): { essentielles: EtapeAnneau[]; bonus: EtapeAnneau[] } {
+  const essentielles = etapes.filter((e) => e.essentielle);
+  if (essentielles.length > 0) {
+    return { essentielles, bonus: etapes.filter((e) => !e.essentielle) };
   }
+  const tete = etapes.find((e) => e.cochee) ?? etapes[0];
+  return { essentielles: tete ? [tete] : [], bonus: etapes.filter((e) => e !== tete) };
+}
 
-  const faites = essentielles.filter((e) => e.cochee).length;
-  if (faites < essentielles.length) return (faites / essentielles.length) * palier1;
-  if (jourDifficile || bonus.length === 0) return 1;
-  return palier1 + (bonus.filter((e) => e.cochee).length / bonus.length) * (1 - palier1);
+/**
+ * Part d'une routine dans l'arc de son domaine, de 0 à 1 : faite = 1 ; à
+ * étapes, chaque essentielle cochée fait avancer, toutes faites = 1.
+ * Les bonus ne comptent pas ici : ils ont leur halo (bonusDomaine).
+ */
+export function partRoutine(r: RoutineAnneau): number {
+  if (r.etapes.length === 0) return r.faitAujourdhui ? 1 : 0;
+  const { essentielles } = separer(r.etapes);
+  return essentielles.filter((e) => e.cochee).length / essentielles.length;
 }
 
 /** Domaine d'une routine pour l'anneau, ou « autres » sans domaine. */
@@ -85,17 +78,26 @@ export function selectionDe(categorie: string | null): Selection {
 }
 
 /**
- * Remplissage d'un domaine (0 à 1) : la moyenne des parts de ses routines
- * prévues aujourd'hui. null pour un domaine sans routine aujourd'hui.
+ * Remplissage de l'arc d'un domaine (0 à 1) : la moyenne des parts de ses
+ * routines prévues aujourd'hui. null pour un domaine sans routine aujourd'hui.
  */
-export function remplissage(
-  routines: RoutineAnneau[],
-  domaine: Selection,
-  jourDifficile: boolean,
-): number | null {
+export function remplissage(routines: RoutineAnneau[], domaine: Selection): number | null {
   const siennes = routines.filter((r) => selectionDe(r.categorie) === domaine);
   if (siennes.length === 0) return null;
-  return siennes.reduce((s, r) => s + partRoutine(r, jourDifficile), 0) / siennes.length;
+  return siennes.reduce((s, r) => s + partRoutine(r), 0) / siennes.length;
+}
+
+/**
+ * Halo d'un domaine (0 à 1) : la part des étapes bonus cochées aujourd'hui
+ * parmi celles de ses routines, même avant les essentielles. null s'il n'y
+ * a aucune étape bonus (pas de halo).
+ */
+export function bonusDomaine(routines: RoutineAnneau[], domaine: Selection): number | null {
+  const bonus = routines
+    .filter((r) => selectionDe(r.categorie) === domaine)
+    .flatMap((r) => separer(r.etapes).bonus);
+  if (bonus.length === 0) return null;
+  return bonus.filter((e) => e.cochee).length / bonus.length;
 }
 
 // ─── Domaine sélectionné par défaut ─────────────────────────────────────

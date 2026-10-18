@@ -21,12 +21,14 @@ const CERCLE_JOURNEE = "#1A2629";
 
 /**
  * L'anneau des domaines : 6 arcs (fond pâle, partie remplie au fil des
- * routines faites), le cercle de la journée avec sa bille-soleil, et au
+ * routines et étapes essentielles faites), un halo fin autour de chaque arc
+ * pour les étapes bonus, le cercle de la journée avec sa bille-soleil, et au
  * centre le moment. Aucun chiffre. Toucher un arc sélectionne son domaine.
  */
 export function AnneauDomaines({
   taille,
   remplissages,
+  bonus,
   selection,
   heure,
   onSelection,
@@ -34,6 +36,8 @@ export function AnneauDomaines({
   taille: number;
   /** Par domaine, de 0 à 1 ; null = aucune routine aujourd'hui. */
   remplissages: Record<Domaine, number | null>;
+  /** Halo des étapes bonus, par domaine (0 à 1) ; null = pas d'étape bonus. */
+  bonus: Record<Domaine, number | null>;
   /** Vue « Tout » : aucun arc mis en avant. */
   selection: Vue;
   /** Heure locale décimale, pour la bille. */
@@ -44,7 +48,10 @@ export function AnneauDomaines({
   const c = taille / 2;
   const epaisseur = taille * 0.055;
   const epaisseurChoisie = epaisseur * 1.7;
-  const rayonArcs = c - epaisseurChoisie / 2 - 2;
+  // Le halo des bonus, fin, juste à l'extérieur des arcs.
+  const epaisseurHalo = Math.max(2, taille * 0.012);
+  const rayonHalo = c - epaisseurHalo / 2 - 1;
+  const rayonArcs = rayonHalo - epaisseurHalo / 2 - taille * 0.012 - epaisseurChoisie / 2;
   const rayonJournee = rayonArcs - epaisseurChoisie - taille * 0.04;
   const angle = angleBille(heure);
   const bille = point(c, c, rayonJournee, angle);
@@ -70,7 +77,28 @@ export function AnneauDomaines({
           const { debut, fin } = bornesArc(i);
           const part = remplissages[d] ?? 0;
           const largeur = d === selection ? epaisseurChoisie : epaisseur;
+          const halo = bonus[d];
           return [
+            halo !== null ? (
+              <Path
+                key={`${d}-halo-fond`}
+                d={cheminArc(c, c, rayonHalo, debut, fin)}
+                stroke={avecAlpha(COULEURS_CATEGORIE[d], 0.15)}
+                strokeWidth={epaisseurHalo}
+                strokeLinecap="round"
+                fill="none"
+              />
+            ) : null,
+            halo ? (
+              <Path
+                key={`${d}-halo`}
+                d={cheminArc(c, c, rayonHalo, debut, debut + (fin - debut) * Math.min(1, halo))}
+                stroke={COULEURS_CATEGORIE[d]}
+                strokeWidth={epaisseurHalo}
+                strokeLinecap="round"
+                fill="none"
+              />
+            ) : null,
             <Path
               key={`${d}-fond`}
               d={cheminArc(c, c, rayonArcs, debut, fin)}

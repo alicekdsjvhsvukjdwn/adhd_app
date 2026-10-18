@@ -22,6 +22,7 @@ import { useJourCourant } from "../../hooks/useJourCourant";
 import { useRoutines } from "../../hooks/useRoutines";
 import {
   DOMAINES,
+  bonusDomaine,
   domaineParDefaut,
   grouperParMoment,
   remplissage,
@@ -204,7 +205,10 @@ export default function Routines() {
     };
   });
   const remplissages = Object.fromEntries(
-    DOMAINES.map((d) => [d, remplissage(pourAnneau, d, jourDifficile)]),
+    DOMAINES.map((d) => [d, remplissage(pourAnneau, d)]),
+  ) as Record<Domaine, number | null>;
+  const bonus = Object.fromEntries(
+    DOMAINES.map((d) => [d, bonusDomaine(pourAnneau, d)]),
   ) as Record<Domaine, number | null>;
   // Nouveau jour : on revient au domaine de la prochaine routine.
   const selection: Vue =
@@ -434,6 +438,7 @@ export default function Routines() {
         <AnneauDomaines
           taille={tailleAnneau}
           remplissages={remplissages}
+          bonus={bonus}
           selection={selection}
           heure={heure}
           onSelection={setChoix}
@@ -463,7 +468,7 @@ export default function Routines() {
             d === "tout"
               ? null
               : d === "autres"
-                ? remplissage(pourAnneau, "autres", jourDifficile)
+                ? remplissage(pourAnneau, "autres")
                 : remplissages[d];
           return (
             <TouchableOpacity
