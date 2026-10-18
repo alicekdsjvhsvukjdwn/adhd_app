@@ -2,8 +2,7 @@
  * L'anneau de l'onglet Routines : remplissage des domaines, position de la
  * bille-soleil, domaine sélectionné par défaut, géométrie des arcs.
  * Sans accès à la base ni au téléphone, et sans import : testable seul
- * (tests/anneau.test.mjs). Le palier des étapes et le moment arrivent déjà
- * calculés (palierEtapes, momentStocke).
+ * (tests/anneau.test.mjs). Le moment arrive déjà calculé (momentStocke).
  */
 import type { Categorie } from "./catalogue";
 import type { Moment } from "./moments";
@@ -23,6 +22,15 @@ export const DOMAINES: Categorie[] = [
 export type Domaine = Categorie;
 /** Routines sans domaine : une puce à part, sans arc. */
 export type Selection = Domaine | "autres";
+/** Ce que montre la liste : un domaine, « Autres », ou toutes les routines du jour. */
+export type Vue = Selection | "tout";
+
+/** Valeur lue en base (choix retenu du jour) : une vue connue, sinon null. */
+export function vueValide(v: string | null | undefined): Vue | null {
+  return v === "tout" || v === "autres" || (DOMAINES as string[]).includes(v ?? "")
+    ? (v as Vue)
+    : null;
+}
 
 // ─── Remplissage ────────────────────────────────────────────────────────
 
@@ -32,22 +40,41 @@ export const PART_ESSENTIELLES = 2 / 3;
 export type RoutineAnneau = {
   categorie: string | null;
   faitAujourdhui: boolean;
-  /** Palier des étapes du jour (palierEtapes) ; null pour une routine sans étapes. */
-  palier: 0 | 1 | 2 | null;
+  /** Étapes du jour ; vide pour une routine sans étapes. */
+  etapes: { essentielle: boolean; cochee: boolean }[];
   /** Moment repère, sinon moment déclaré (momentStocke) ; null = à tout moment. */
   moment: Moment | null;
 };
 
 /**
- * Part d'une routine dans son domaine, de 0 à 1.
- * Sans étapes : faite = 1. À étapes : essentielles faites = 2/3, tout = 1 ;
- * un jour difficile, les essentielles suffisent (comme pour les points).
+ * Part d'une routine dans son domaine, de 0 à 1. Sans étapes : faite = 1.
+ * À étapes, chaque étape cochée fait avancer :
+ * - les essentielles mènent jusqu'à 2/3 (jusqu'au bout un jour difficile,
+ *   où elles suffisent, comme pour les points) ;
+ * - les bonus font le dernier tiers ; tout coché = 1.
+ * Sans étape essentielle, la première cochée compte comme les essentielles
+ * (même règle que palierEtapes).
  */
 export function partRoutine(r: RoutineAnneau, jourDifficile: boolean): number {
-  if (r.palier === null) return r.faitAujourdhui ? 1 : 0;
-  if (r.palier === 2) return 1;
-  if (r.palier === 1) return jourDifficile ? 1 : PART_ESSENTIELLES;
-  return 0;
+  const etapes = r.etapes;
+  if (etapes.length === 0) return r.faitAujourdhui ? 1 : 0;
+  if (etapes.every((e) => e.cochee)) return 1;
+  const palier1 = jourDifficile ? 1 : PART_ESSENTIELLES;
+
+  let essentielles = etapes.filter((e) => e.essentielle);
+  let bonus = etapes.filter((e) => !e.essentielle);
+  if (essentielles.length === 0) {
+    // La première étape cochée tient lieu d'essentielle.
+    const premiere = etapes.find((e) => e.cochee);
+    if (!premiere) return 0;
+    essentielles = [premiere];
+    bonus = etapes.filter((e) => e !== premiere);
+  }
+
+  const faites = essentielles.filter((e) => e.cochee).length;
+  if (faites < essentielles.length) return (faites / essentielles.length) * palier1;
+  if (jourDifficile || bonus.length === 0) return 1;
+  return palier1 + (bonus.filter((e) => e.cochee).length / bonus.length) * (1 - palier1);
 }
 
 /** Domaine d'une routine pour l'anneau, ou « autres » sans domaine. */
@@ -157,4 +184,44 @@ export function domaineAuPoint(
   if (Math.abs(d - rayonArcs) > tolerance) return null;
   const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
   return DOMAINES[Math.floor(angle / (360 / DOMAINES.length)) % DOMAINES.length];
+}
+
+// ─── Vue « Tout » : les routines du jour par moment ─────────────────────
+
+export type GroupeMoments = {
+  cle: "matin" | "jour" | "soir" | "sans";
+  titre: string;
+  /** Icône du titre ; null pour « Sans moment ». */
+  icone: Moment | null;
+  moments: Moment[];
+};
+
+export const GROUPES_MOMENTS: GroupeMoments[] = [
+  { cle: "matin", titre: "Réveil · Matin", icone: "reveil", moments: ["reveil", "matin"] },
+  { cle: "jour", titre: "Midi · Après-midi", icone: "midi", moments: ["midi", "apres_midi"] },
+  { cle: "soir", titre: "Soir · Coucher", icone: "soir", moments: ["soir", "coucher"] },
+  { cle: "sans", titre: "Sans moment", icone: null, moments: [] },
+];
+
+/**
+ * Les routines rangées par groupe de moments, dans l'ordre de la journée,
+ * puis sans moment. Groupes vides omis ; dans un groupe, réveil avant
+ * matin (etc.), l'ordre d'origine départageant le reste.
+ */
+export function grouperParMoment<R extends { moment: Moment | null }>(
+  routines: R[],
+): { groupe: GroupeMoments; routines: R[] }[] {
+  const rang = (m: Moment | null) => (m ? ORDRE_MOMENTS.indexOf(m) : ORDRE_MOMENTS.length);
+  return GROUPES_MOMENTS.map((groupe) => ({
+    groupe,
+    routines: routines
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) =>
+        groupe.cle === "sans"
+          ? !r.moment || !ORDRE_MOMENTS.includes(r.moment)
+          : groupe.moments.includes(r.moment as Moment),
+      )
+      .sort((a, b) => rang(a.r.moment) - rang(b.r.moment) || a.i - b.i)
+      .map(({ r }) => r),
+  })).filter((g) => g.routines.length > 0);
 }

@@ -44,3 +44,23 @@ export async function choisirEnergie(niveau: 1 | 2 | 3): Promise<void> {
   // Les routines à étapes déjà cochées suivent le barème du nouvel état.
   await recalculerPointsEtapesDuJour();
 }
+
+// ─── Vue de l'onglet Routines ───────────────────────────────────────────
+
+/** Domaine, « Autres » ou « Tout » choisi aujourd'hui (meta vue_routines:AAAA-MM-JJ). */
+const cleVue = () => `vue_routines:${getAujourdhui()}`;
+
+/** Vue choisie aujourd'hui, ou null : le lendemain, rien n'est retenu. */
+export async function vueDuJour(): Promise<string | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ valeur: string }>(
+    "SELECT valeur FROM meta WHERE cle = ?",
+    cleVue(),
+  );
+  return row?.valeur ?? null;
+}
+
+export async function choisirVue(vue: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)", cleVue(), vue);
+}

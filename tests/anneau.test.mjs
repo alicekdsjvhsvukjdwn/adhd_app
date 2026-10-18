@@ -1,7 +1,6 @@
 // Lancer : npm test
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { palierEtapes } from "../lib/regles-taches.ts";
 import { ORDRE_CATEGORIES } from "../lib/theme-categories.ts";
 import {
   angleBille,
@@ -9,17 +8,19 @@ import {
   bornesArc,
   domaineAuPoint,
   domaineParDefaut,
+  grouperParMoment,
+  vueValide,
   PART_ESSENTIELLES,
   partRoutine,
   remplissage,
 } from "../lib/anneau.ts";
 
 const E = (essentielle, cochee) => ({ essentielle, cochee });
-// Comme l'écran : palier des étapes et moment (repère d'abord) déjà calculés.
-const R = (categorie, { etapes = [], ancre_moment = null, moment = null, ...o } = {}) => ({
+// Comme l'écran : moment (repère d'abord) déjà calculé.
+const R = (categorie, { ancre_moment = null, moment = null, ...o } = {}) => ({
   categorie,
   faitAujourdhui: false,
-  palier: etapes.length ? palierEtapes(etapes) : null,
+  etapes: [],
   moment: ancre_moment || moment,
   ...o,
 });
@@ -42,7 +43,9 @@ test("part d'une routine : simple, puis à étapes (2/3 aux essentielles, pleine
   assert.equal(partRoutine(R("focus"), false), 0);
   assert.equal(partRoutine(R("focus", { faitAujourdhui: true }), false), 1);
   const etapes = (e1, e2, b) => R("focus", { etapes: [E(true, e1), E(true, e2), E(false, b)] });
-  assert.equal(partRoutine(etapes(true, false, true), false), 0);
+  // Une essentielle sur deux : à mi-chemin des 2/3 (un bonus seul n'avance pas avant).
+  assert.ok(Math.abs(partRoutine(etapes(true, false, true), false) - PART_ESSENTIELLES / 2) < 1e-9);
+  assert.equal(partRoutine(etapes(false, false, false), false), 0);
   assert.equal(partRoutine(etapes(true, true, false), false), PART_ESSENTIELLES);
   assert.equal(partRoutine(etapes(true, true, true), false), 1);
   // Jour difficile : les essentielles suffisent, comme pour les points.
@@ -111,4 +114,66 @@ test("arcs : 6 parts égales séparées d'un écart ; toucher l'anneau choisit l
   assert.equal(domaineAuPoint(20, 130, 260, 110, 18), "focus"); // à gauche (270°)
   assert.equal(domaineAuPoint(130, 130, 260, 110, 18), null); // au centre
   assert.equal(domaineAuPoint(130, 60, 260, 110, 18), null); // dans le cercle intérieur
+});
+
+test("vue Tout : routines du jour par groupe de moments, puis sans moment", () => {
+  const r = (nom, moment) => ({ nom, moment });
+  const groupes = grouperParMoment([
+    r("lire", "soir"),
+    r("eau", null),
+    r("café", "matin"),
+    r("lever", "reveil"),
+    r("dents", "coucher"),
+    r("marche", "apres_midi"),
+  ]);
+  assert.deepEqual(
+    groupes.map((g) => [g.groupe.titre, g.routines.map((x) => x.nom)]),
+    [
+      ["Réveil · Matin", ["lever", "café"]],
+      ["Midi · Après-midi", ["marche"]],
+      ["Soir · Coucher", ["lire", "dents"]],
+      ["Sans moment", ["eau"]],
+    ],
+  );
+  // Groupes vides omis ; l'ordre d'origine départage un même moment.
+  assert.deepEqual(
+    grouperParMoment([r("b", "midi"), r("a", "midi")]).map((g) => g.routines.map((x) => x.nom)),
+    [["b", "a"]],
+  );
+  assert.deepEqual(grouperParMoment([]), []);
+});
+
+test("choix retenu du jour : seules les vues connues sont reprises", () => {
+  assert.equal(vueValide("tout"), "tout");
+  assert.equal(vueValide("autres"), "autres");
+  assert.equal(vueValide("focus"), "focus");
+  assert.equal(vueValide("inconnu"), null);
+  assert.equal(vueValide(null), null);
+});
+
+test("chaque étape cochée remplit un peu : essentielles jusqu'à 2/3, bonus jusqu'au bout", () => {
+  const part = (etapes, jd = false) => partRoutine(R("focus", { etapes }), jd);
+  const proche = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≠ ${b}`);
+  // 3 essentielles, 2 bonus.
+  const e = (n, b) => [
+    ...[0, 1, 2].map((i) => E(true, i < n)),
+    ...[0, 1].map((i) => E(false, i < b)),
+  ];
+  const suite = [part(e(0, 0)), part(e(1, 0)), part(e(2, 0)), part(e(3, 0)), part(e(3, 1)), part(e(3, 2))];
+  proche(suite[0], 0);
+  proche(suite[1], 2 / 9);
+  proche(suite[2], 4 / 9);
+  proche(suite[3], 2 / 3);
+  proche(suite[4], 5 / 6);
+  proche(suite[5], 1);
+  for (let i = 1; i < suite.length; i++) assert.ok(suite[i] > suite[i - 1]);
+  // Jour difficile : les essentielles mènent jusqu'au bout.
+  proche(part(e(1, 0), true), 1 / 3);
+  proche(part(e(3, 0), true), 1);
+  // Sans étape essentielle : la première cochée vaut les essentielles.
+  const sansEss = (n) => [0, 1, 2].map((i) => E(false, i < n));
+  proche(part(sansEss(0)), 0);
+  proche(part(sansEss(1)), 2 / 3);
+  proche(part(sansEss(2)), 2 / 3 + 1 / 6);
+  proche(part(sansEss(3)), 1);
 });

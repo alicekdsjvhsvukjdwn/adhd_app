@@ -15,23 +15,26 @@ import {
 import { Swipeable } from "react-native-gesture-handler";
 import { AnneauDomaines } from "../../components/AnneauDomaines";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
-import { PastilleDomaine } from "../../components/PastilleDomaine";
+import { IconeMoment } from "../../components/IconeMoment";
+import { PastilleDomaine, PastilleTout } from "../../components/PastilleDomaine";
 import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import { useRoutines } from "../../hooks/useRoutines";
 import {
   DOMAINES,
   domaineParDefaut,
+  grouperParMoment,
   remplissage,
   selectionDe,
+  vueValide,
   type Domaine,
   type RoutineAnneau,
-  type Selection,
+  type Vue,
 } from "../../lib/anneau";
 import { annulerCompletion, completer, confirmationSuppression } from "../../lib/db";
 import { routinesParCategorie, type RoutineResumee } from "../../lib/db/categories";
-import type { RoutineAvecStatut } from "../../lib/db/completions";
-import { choisirEnergie, energieDuJour } from "../../lib/db/energie";
+import { getAujourdhui, type RoutineAvecStatut } from "../../lib/db/completions";
+import { choisirEnergie, choisirVue, energieDuJour, vueDuJour } from "../../lib/db/energie";
 import { basculerEtapeRoutine, getEtapesRoutines, type EtapeRoutine } from "../../lib/db/etapes";
 import { suggestionDuJour, type Suggestion } from "../../lib/db/suggestions";
 import {
@@ -40,7 +43,6 @@ import {
   momentStocke,
   trancheDeRoutine,
 } from "../../lib/moments";
-import { palierEtapes } from "../../lib/regles-taches";
 import { heureDecimale, radius, spacing, typography, useTheme } from "../../lib/theme";
 import { COULEURS_CATEGORIE, LIBELLES_CATEGORIE } from "../../lib/theme-categories";
 
@@ -75,9 +77,17 @@ export default function Routines() {
   const [etapesRoutines, setEtapesRoutines] = useState<Record<number, EtapeRoutine[]>>({});
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [voirSuggestion, setVoirSuggestion] = useState(false);
-  /** Domaine touché, valable pour son jour ; sinon, celui de la prochaine routine à faire. */
-  const [choix, setChoixJour] = useState<{ jour: string; selection: Selection } | null>(null);
-  const setChoix = (selection: Selection) => setChoixJour({ jour, selection });
+  /**
+   * Vue choisie (domaine, « Autres » ou « Tout »), retenue en base jusqu'au
+   * lendemain ; sans choix, le domaine de la prochaine routine à faire.
+   */
+  const [choix, setChoixJour] = useState<{ jour: string; vue: Vue } | null>(null);
+  const setChoix = (vue: Vue) => {
+    setChoixJour({ jour, vue });
+    choisirVue(vue).catch(() => {});
+  };
+  /** Routines à étapes dépliées dans la vue « Tout ». */
+  const [depliees, setDepliees] = useState<Set<number>>(new Set());
   const [heure, setHeure] = useState(heureDecimale);
 
   // La bille avance : toutes les 5 minutes et au retour au premier plan.
@@ -106,6 +116,8 @@ export default function Routines() {
 
   const chargerAnnexes = useCallback(async () => {
     setEnergie((await energieDuJour()).niveau);
+    const vue = vueValide(await vueDuJour());
+    if (vue) setChoixJour({ jour: getAujourdhui(), vue });
     setNonPrevues(await routinesParCategorie());
     // Une suggestion ratée ne doit jamais bloquer l'écran.
     setSuggestion(await suggestionDuJour().catch(() => null));
@@ -187,9 +199,7 @@ export default function Routines() {
     return {
       categorie: r.categorie,
       faitAujourdhui: r.faitAujourdhui,
-      palier: etapes.length
-        ? palierEtapes(etapes.map((e) => ({ essentielle: e.essentielle === 1, cochee: e.cochee })))
-        : null,
+      etapes: etapes.map((e) => ({ essentielle: e.essentielle === 1, cochee: e.cochee })),
       moment: momentStocke(r.ancre_moment || r.moment),
     };
   });
@@ -197,33 +207,143 @@ export default function Routines() {
     DOMAINES.map((d) => [d, remplissage(pourAnneau, d, jourDifficile)]),
   ) as Record<Domaine, number | null>;
   // Nouveau jour : on revient au domaine de la prochaine routine.
-  const selection: Selection =
-    choix?.jour === jour ? choix.selection : domaineParDefaut(pourAnneau, t.moment);
+  const selection: Vue =
+    choix?.jour === jour ? choix.vue : domaineParDefaut(pourAnneau, t.moment);
+  const vueTout = selection === "tout";
   const aDesAutres =
     routines.some((r) => selectionDe(r.categorie) === "autres") ||
     (nonPrevues?.sansDomaine.length ?? 0) > 0;
 
   // ── Routines du domaine choisi ───────────────────────────────────────
-  const duDomaine = routines.filter((r) => selectionDe(r.categorie) === selection);
+  const duDomaine = vueTout ? routines : routines.filter((r) => selectionDe(r.categorie) === selection);
   const exigeantes = duDomaine.filter((r) => estExigeanteDuJour(r, jourDifficile));
   const principales = duDomaine.filter((r) => !estExigeanteDuJour(r, jourDifficile));
   const idsDuJour = new Set(routines.map((r) => r.id));
   const pasPrevues = (
-    selection === "autres"
-      ? (nonPrevues?.sansDomaine ?? [])
-      : (nonPrevues?.parCategorie[selection] ?? [])
+    vueTout
+      ? [...Object.values(nonPrevues?.parCategorie ?? {}).flat(), ...(nonPrevues?.sansDomaine ?? [])]
+      : selection === "autres"
+        ? (nonPrevues?.sansDomaine ?? [])
+        : (nonPrevues?.parCategorie[selection] ?? [])
   ).filter((r) => !idsDuJour.has(r.id));
 
-  // L'anneau prend la place qu'il peut, sans faire défiler la page.
-  const tailleAnneau = Math.min(260, width - spacing.xl * 2, Math.max(170, height * 0.32));
+  // L'anneau prend la place qu'il peut, sans faire défiler la page ;
+  // plus petit dans la vue « Tout », pour laisser la place à la liste.
+  const tailleAnneau = Math.min(
+    vueTout ? 200 : 260,
+    width - spacing.xl * 2,
+    Math.max(160, height * (vueTout ? 0.25 : 0.32)),
+  );
+  const couleurDe = (categorie: string | null) => {
+    const d = selectionDe(categorie);
+    return d === "autres" ? t.textSecondary : COULEURS_CATEGORIE[d];
+  };
+
+  /** Étapes en pastilles cochables. Jour difficile : les essentielles (et les bonus déjà cochés). */
+  const pastillesEtapes = (r: RoutineAvecStatut, couleur: string) => {
+    const etapesR = etapesRoutines[r.id] ?? [];
+    const visibles = jourDifficile ? etapesR.filter((e) => e.essentielle === 1 || e.cochee) : etapesR;
+    if (visibles.length === 0) return null;
+    return (
+      <View style={styles.etapes}>
+        {visibles.map((e) => (
+          <TouchableOpacity
+            key={e.id}
+            onPress={() => onEtapeRoutine(e)}
+            style={[
+              styles.etape,
+              {
+                borderColor: e.cochee ? couleur : t.border,
+                backgroundColor: e.cochee ? couleur : "transparent",
+              },
+            ]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: e.cochee }}
+            hitSlop={4}
+          >
+            <Texte
+              style={[
+                styles.etapeTexte,
+                {
+                  color: e.cochee ? t.bgApp : t.textPrimary,
+                  textDecorationLine: e.cochee ? "line-through" : "none",
+                },
+              ]}
+            >
+              {e.nom}
+              {e.essentielle ? "" : " · bonus"}
+            </Texte>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  /** Vue « Tout » : une ligne compacte (≈ 44 px) ; une routine à étapes se déplie. */
+  const ligneRoutine = (r: RoutineAvecStatut) => {
+    const aEtapes = (etapesRoutines[r.id]?.length ?? 0) > 0;
+    const ouverte = depliees.has(r.id);
+    const couleur = couleurDe(r.categorie);
+    return (
+      <Swipeable key={r.id} renderRightActions={() => actionsRoutine(r)}>
+        <View
+          style={[
+            styles.ligne,
+            {
+              backgroundColor: r.faitAujourdhui ? t.bgCardActive : t.bgCard,
+              borderColor: t.border,
+              borderLeftColor: couleur,
+              opacity: estExigeanteDuJour(r, jourDifficile) ? 0.5 : 1,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.ligneHaut}
+            onPress={() => {
+              if (!aEtapes) return onToggle(r);
+              const n = new Set(depliees);
+              if (ouverte) n.delete(r.id);
+              else n.add(r.id);
+              setDepliees(n);
+            }}
+            accessibilityRole={aEtapes ? "button" : "checkbox"}
+            accessibilityState={aEtapes ? { expanded: ouverte } : { checked: r.faitAujourdhui }}
+          >
+            <View
+              style={[
+                styles.casePetite,
+                { borderColor: couleur, backgroundColor: r.faitAujourdhui ? couleur : "transparent" },
+              ]}
+            >
+              {r.faitAujourdhui && <Texte style={[styles.cochePetite, { color: t.bgApp }]}>✓</Texte>}
+            </View>
+            <Texte
+              style={[
+                styles.ligneNom,
+                {
+                  color: r.faitAujourdhui ? t.textSecondary : t.textPrimary,
+                  textDecorationLine: r.faitAujourdhui ? "line-through" : "none",
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {r.nom}
+            </Texte>
+            {aEtapes && (
+              <Texte style={[styles.ligneEtapes, { color: t.textMuted }]}>
+                étapes {ouverte ? "▴" : "▾"}
+              </Texte>
+            )}
+          </TouchableOpacity>
+          {aEtapes && ouverte && <View style={styles.ligneDepliee}>{pastillesEtapes(r, couleur)}</View>}
+        </View>
+      </Swipeable>
+    );
+  };
 
   const carteRoutine = (r: RoutineAvecStatut) => {
     const etapesR = etapesRoutines[r.id] ?? [];
-    // Jour difficile : les essentielles seules (et les bonus déjà cochés).
-    const etapesVisibles = jourDifficile
-      ? etapesR.filter((e) => e.essentielle === 1 || e.cochee)
-      : etapesR;
-    const couleur = selection === "autres" ? t.accent : COULEURS_CATEGORIE[selection];
+    const couleur = couleurDe(r.categorie);
     return (
       <Swipeable key={r.id} renderRightActions={() => actionsRoutine(r)}>
         <TouchableOpacity
@@ -271,39 +391,7 @@ export default function Routines() {
               {LIBELLES_TRANCHE[trancheDeRoutine(r)]}
               {r.duree_min ? ` · ${r.duree_min} min` : ""}
             </Texte>
-            {etapesVisibles.length > 0 && (
-              <View style={styles.etapes}>
-                {etapesVisibles.map((e) => (
-                  <TouchableOpacity
-                    key={e.id}
-                    onPress={() => onEtapeRoutine(e)}
-                    style={[
-                      styles.etape,
-                      {
-                        borderColor: e.cochee ? couleur : t.border,
-                        backgroundColor: e.cochee ? couleur : "transparent",
-                      },
-                    ]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: e.cochee }}
-                    hitSlop={4}
-                  >
-                    <Texte
-                      style={[
-                        styles.etapeTexte,
-                        {
-                          color: e.cochee ? t.bgApp : t.textPrimary,
-                          textDecorationLine: e.cochee ? "line-through" : "none",
-                        },
-                      ]}
-                    >
-                      {e.nom}
-                      {e.essentielle ? "" : " · bonus"}
-                    </Texte>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            {pastillesEtapes(r, couleur)}
           </View>
         </TouchableOpacity>
       </Swipeable>
@@ -367,11 +455,16 @@ export default function Routines() {
 
       {/* Les domaines */}
       <View style={styles.domaines}>
-        {[...DOMAINES, ...(aDesAutres ? (["autres"] as const) : [])].map((d) => {
+        {(["tout", ...DOMAINES, ...(aDesAutres ? ["autres"] : [])] as Vue[]).map((d) => {
           const actif = d === selection;
-          const couleur = d === "autres" ? t.textSecondary : COULEURS_CATEGORIE[d];
+          const couleur =
+            d === "autres" || d === "tout" ? t.textSecondary : COULEURS_CATEGORIE[d];
           const part =
-            d === "autres" ? remplissage(pourAnneau, "autres", jourDifficile) : remplissages[d];
+            d === "tout"
+              ? null
+              : d === "autres"
+                ? remplissage(pourAnneau, "autres", jourDifficile)
+                : remplissages[d];
           return (
             <TouchableOpacity
               key={d}
@@ -383,7 +476,11 @@ export default function Routines() {
               accessibilityRole="tab"
               accessibilityState={{ selected: actif }}
             >
-              <PastilleDomaine couleur={couleur} part={part} fond={t.bgApp} />
+              {d === "tout" ? (
+                <PastilleTout remplissages={remplissages} />
+              ) : (
+                <PastilleDomaine couleur={couleur} part={part} fond={t.bgApp} />
+              )}
               <Texte
                 style={[
                   styles.domaineNom,
@@ -393,7 +490,7 @@ export default function Routines() {
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
               >
-                {d === "autres" ? "Autres" : LIBELLES_CATEGORIE[d]}
+                {d === "tout" ? "Tout" : d === "autres" ? "Autres" : LIBELLES_CATEGORIE[d]}
               </Texte>
             </TouchableOpacity>
           );
@@ -411,6 +508,18 @@ export default function Routines() {
               <Texte style={[styles.lien, { color: t.accent }]}>Idées de routines</Texte>
             </TouchableOpacity>
           </View>
+        ) : vueTout ? (
+          grouperParMoment(
+            routines.map((r) => ({ r, moment: momentStocke(r.ancre_moment || r.moment) })),
+          ).map(({ groupe, routines: du }) => (
+            <View key={groupe.cle} style={styles.groupe}>
+              <View style={styles.groupeTitre}>
+                {groupe.icone && <IconeMoment moment={groupe.icone} couleur={t.accent} taille={18} />}
+                <Texte style={[styles.groupeTexte, { color: t.textSecondary }]}>{groupe.titre}</Texte>
+              </View>
+              {du.map(({ r }) => ligneRoutine(r))}
+            </View>
+          ))
         ) : (
           <>
             {principales.map(carteRoutine)}
@@ -456,7 +565,7 @@ export default function Routines() {
         <TouchableOpacity
           onPress={() =>
             router.push(
-              selection === "autres"
+              selection === "autres" || vueTout
                 ? "/nouvelle-tache?type=routine"
                 : `/nouvelle-tache?type=routine&domaine=${selection}`,
             )
@@ -535,6 +644,34 @@ const styles = StyleSheet.create({
   domaineNom: { fontSize: 10, fontWeight: "600" },
 
   liste: { flex: 1, marginTop: spacing.md },
+  groupe: { marginBottom: spacing.sm },
+  groupeTitre: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  groupeTexte: { fontSize: typography.small, fontWeight: "600" },
+  ligne: {
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    borderRadius: radius.md,
+    marginBottom: 6,
+  },
+  ligneHaut: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  casePetite: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cochePetite: { fontSize: 11, fontWeight: "700" },
+  ligneNom: { flex: 1, fontSize: typography.bodySmall, fontWeight: "500" },
+  ligneEtapes: { fontSize: typography.tiny },
+  ligneDepliee: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   carte: {
     flexDirection: "row",
     alignItems: "flex-start",

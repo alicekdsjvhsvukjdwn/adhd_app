@@ -8,7 +8,7 @@ import {
   domaineAuPoint,
   point,
   type Domaine,
-  type Selection,
+  type Vue,
 } from "../lib/anneau";
 import { NOMS_MOMENT } from "../lib/moments";
 import { avecAlpha, useTheme } from "../lib/theme";
@@ -34,7 +34,8 @@ export function AnneauDomaines({
   taille: number;
   /** Par domaine, de 0 à 1 ; null = aucune routine aujourd'hui. */
   remplissages: Record<Domaine, number | null>;
-  selection: Selection;
+  /** Vue « Tout » : aucun arc mis en avant. */
+  selection: Vue;
   /** Heure locale décimale, pour la bille. */
   heure: number;
   onSelection: (d: Domaine) => void;

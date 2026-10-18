@@ -253,7 +253,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   meta: {
     table: "Valeurs diverses, clé → valeur.",
     colonnes: {
-      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'negligence_dernier_jour_traite'",
+      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite'",
       valeur: "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1",
     },
   },
