@@ -1,35 +1,24 @@
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { recalculerPointsEtapesDuJour } from "./etapes";
-import { changerJourDifficile } from "./jour-difficile";
+import { logEvent } from "./events";
+import { cleEnergie, estJourDifficile } from "./jour-difficile";
 
 /**
- * Énergie qui choisit la version des routines aujourd'hui : le choix fait
- * à la main sur l'onglet Routines (Jour difficile / Normal / En forme),
- * sinon rien (version normale). Le bilan de la journée n'est jamais lu ici.
- *
- * « Jour difficile » active aussi l'interrupteur de lib/db/jour-difficile.ts,
- * lu par l'onglet Tâches (une seule tâche) et l'historique des jours difficiles.
+ * Énergie du jour, choisie à la main sur l'onglet Routines
+ * (🪫 Jour difficile / 🔋 Normal / ⚡ En forme). Rien tant qu'on n'a pas choisi.
+ * 🪫 fait le « Jour difficile » (voir jour-difficile.ts) ; ⚡ n'est pour
+ * l'instant qu'enregistré, pour l'analyse.
  */
-
-async function assurerMeta() {
-  const db = await getDatabase();
-  await db.execAsync(
-    "CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);",
-  );
-}
-
-const cle = () => `energie_routines:${getAujourdhui()}`;
 
 export async function energieDuJour(): Promise<{
   niveau: 1 | 2 | 3 | null;
   source: "choix" | null;
 }> {
-  await assurerMeta();
   const db = await getDatabase();
   const choix = await db.getFirstAsync<{ valeur: string }>(
     "SELECT valeur FROM meta WHERE cle = ?",
-    cle(),
+    cleEnergie(),
   );
   if (choix)
     return { niveau: Number(choix.valeur) as 1 | 2 | 3, source: "choix" };
@@ -37,14 +26,21 @@ export async function energieDuJour(): Promise<{
 }
 
 export async function choisirEnergie(niveau: 1 | 2 | 3): Promise<void> {
-  await assurerMeta();
+  const etaitDifficile = await estJourDifficile();
   const db = await getDatabase();
   await db.runAsync(
     "INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)",
-    cle(),
+    cleEnergie(),
     String(niveau),
   );
-  await changerJourDifficile(niveau === 1);
+  // Historique des jours difficiles, comme avant.
+  if (etaitDifficile !== (niveau === 1)) {
+    await logEvent(
+      niveau === 1 ? "jour_difficile_active" : "jour_difficile_desactive",
+      null,
+      { date: getAujourdhui() },
+    );
+  }
   // Les routines à étapes déjà cochées suivent le barème du nouvel état.
   await recalculerPointsEtapesDuJour();
 }

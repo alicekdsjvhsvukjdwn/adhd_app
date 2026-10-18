@@ -1,19 +1,31 @@
-import { deltaPoints, palierEtapes, pointsPalier } from "../regles-taches";
+import {
+  BONUS_FIN,
+  debutEtapesEnCours,
+  deltaPoints,
+  lireFrequence,
+  palierEtapes,
+  pointsEtapesARetirer,
+  pointsPalier,
+  POINTS_ETAPE,
+  type Frequence,
+} from "../regles-taches";
 import { getDatabase } from "./client";
 import { annulerCompletion, completer, getAujourdhui } from "./completions";
 import { estJourDifficile } from "./jour-difficile";
 import { addPoints } from "./stats";
 
 /**
- * Étapes d'une grosse tâche. Chaque étape cochée rapporte des points ;
- * cocher la dernière termine la tâche et ajoute un bonus.
+ * Étapes d'une tâche. Chaque étape cochée rapporte des points ; cocher la
+ * dernière termine la tâche et ajoute un bonus (lib/regles-taches.ts).
+ * - tâche unique : etapes.faite, cochée une fois pour toutes ;
+ * - tâche « x fois par semaine / par mois » : etapes_cochees, remises à
+ *   zéro après chaque fois faite (debutEtapesEnCours).
  *
  * Étapes d'une routine : essentielles ou bonus, recochées chaque jour
- * (table etapes_cochees). Points par palier (lib/regles-taches.ts).
+ * (etapes_cochees). Points par palier.
  */
 
-export const POINTS_ETAPE = 5;
-export const BONUS_FIN = 10;
+export { BONUS_FIN, POINTS_ETAPE };
 
 export type Etape = {
   id: number;
@@ -25,6 +37,8 @@ export type Etape = {
   essentielle: number;
 };
 
+type Db = Awaited<ReturnType<typeof getDatabase>>;
+
 export async function getEtapes(itemId: number): Promise<Etape[]> {
   const db = await getDatabase();
   return db.getAllAsync<Etape>(
@@ -33,7 +47,44 @@ export async function getEtapes(itemId: number): Promise<Etape[]> {
   );
 }
 
-/** Étapes de plusieurs tâches d'un coup, rangées par tâche. */
+/** Fréquence de la tâche, ou null (tâche unique, routine). */
+async function frequenceDe(db: Db, itemId: number): Promise<Frequence | null> {
+  const item = await db.getFirstAsync<{ type: string; recurrence: string | null }>(
+    "SELECT type, recurrence FROM items WHERE id = ?",
+    itemId,
+  );
+  return item?.type === "tache" ? lireFrequence(item.recurrence) : null;
+}
+
+/** Premier jour où une étape cochée compte encore, pour une tâche récurrente, au jour `jour`. */
+async function debutEnCours(db: Db, itemId: number, f: Frequence, jour: string): Promise<string> {
+  const avant = await db.getFirstAsync<{ d: string | null }>(
+    "SELECT MAX(date) AS d FROM completions WHERE item_id = ? AND date < ?",
+    itemId,
+    jour,
+  );
+  return debutEtapesEnCours(jour, f.periode, avant?.d ?? null);
+}
+
+/** Ids des étapes cochées en cours d'une tâche récurrente, avec la date de chaque coche. */
+async function cocheesEnCours(
+  db: Db,
+  itemId: number,
+  f: Frequence,
+  jour: string,
+): Promise<{ id: number; etape_id: number }[]> {
+  return db.getAllAsync<{ id: number; etape_id: number }>(
+    "SELECT id, etape_id FROM etapes_cochees WHERE item_id = ? AND date >= ? AND date <= ?",
+    itemId,
+    await debutEnCours(db, itemId, f, jour),
+    jour,
+  );
+}
+
+/**
+ * Étapes de plusieurs tâches d'un coup, rangées par tâche. Pour une tâche
+ * récurrente, `faite` dit si l'étape est cochée pour la fois en cours.
+ */
 export async function getEtapesPour(
   itemIds: number[],
 ): Promise<Record<number, Etape[]>> {
@@ -46,6 +97,14 @@ export async function getEtapesPour(
     ...itemIds,
   );
   for (const e of rows) (resultat[e.item_id] ??= []).push(e);
+
+  const aujourdhui = getAujourdhui();
+  for (const id of Object.keys(resultat).map(Number)) {
+    const f = await frequenceDe(db, id);
+    if (!f) continue;
+    const cochees = new Set((await cocheesEnCours(db, id, f, aujourdhui)).map((c) => c.etape_id));
+    resultat[id] = resultat[id].map((e) => ({ ...e, faite: cochees.has(e.id) ? 1 : 0 }));
+  }
   return resultat;
 }
 
@@ -94,27 +153,46 @@ export async function enregistrerEtapes(
   }
 }
 
-/** Coche une étape. Renvoie true si c'était la dernière (tâche terminée). */
+/** Coche une étape de tâche. Renvoie true si c'était la dernière (tâche faite). */
 export async function cocherEtape(etapeId: number): Promise<boolean> {
   const db = await getDatabase();
-  const etape = await db.getFirstAsync<Etape>(
-    "SELECT * FROM etapes WHERE id = ?",
-    etapeId,
-  );
-  if (!etape || etape.faite === 1) return false;
+  const etape = await db.getFirstAsync<Etape>("SELECT * FROM etapes WHERE id = ?", etapeId);
+  if (!etape) return false;
+  const aujourdhui = getAujourdhui();
+  const f = await frequenceDe(db, etape.item_id);
 
-  await db.runAsync(
-    "UPDATE etapes SET faite = 1, faite_le = ? WHERE id = ?",
-    getAujourdhui(),
-    etapeId,
-  );
+  let restantes: number;
+  if (f) {
+    const deja = await cocheesEnCours(db, etape.item_id, f, aujourdhui);
+    if (deja.some((c) => c.etape_id === etapeId)) return false;
+    await db.runAsync(
+      "INSERT INTO etapes_cochees (etape_id, item_id, date, horodatage) VALUES (?, ?, ?, ?)",
+      etapeId,
+      etape.item_id,
+      aujourdhui,
+      new Date().toISOString(),
+    );
+    const total = await db.getFirstAsync<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM etapes WHERE item_id = ?",
+      etape.item_id,
+    );
+    restantes = (total?.n ?? 0) - deja.length - 1;
+  } else {
+    if (etape.faite === 1) return false;
+    await db.runAsync(
+      "UPDATE etapes SET faite = 1, faite_le = ? WHERE id = ?",
+      aujourdhui,
+      etapeId,
+    );
+    const r = await db.getFirstAsync<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM etapes WHERE item_id = ? AND faite = 0",
+      etape.item_id,
+    );
+    restantes = r?.n ?? 0;
+  }
   await addPoints(POINTS_ETAPE);
 
-  const restantes = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM etapes WHERE item_id = ? AND faite = 0",
-    etape.item_id,
-  );
-  if ((restantes?.n ?? 0) === 0) {
+  if (restantes <= 0) {
     await completer(etape.item_id, "complet");
     await addPoints(BONUS_FIN);
     return true;
@@ -122,30 +200,72 @@ export async function cocherEtape(etapeId: number): Promise<boolean> {
   return false;
 }
 
-/** Décoche une étape ; si la tâche était terminée, elle redevient à faire. */
+/** Décoche une étape de tâche ; si la tâche était faite par elle, elle redevient à faire. */
 export async function decocherEtape(etapeId: number): Promise<void> {
   const db = await getDatabase();
-  const etape = await db.getFirstAsync<Etape>(
-    "SELECT * FROM etapes WHERE id = ?",
-    etapeId,
-  );
-  if (!etape || etape.faite === 0) return;
+  const etape = await db.getFirstAsync<Etape>("SELECT * FROM etapes WHERE id = ?", etapeId);
+  if (!etape) return;
+  const aujourdhui = getAujourdhui();
+  const f = await frequenceDe(db, etape.item_id);
 
-  const item = await db.getFirstAsync<{ statut: string }>(
-    "SELECT statut FROM items WHERE id = ?",
+  if (f) {
+    const coche = (await cocheesEnCours(db, etape.item_id, f, aujourdhui)).find(
+      (c) => c.etape_id === etapeId,
+    );
+    if (!coche) return;
+    await db.runAsync("DELETE FROM etapes_cochees WHERE id = ?", coche.id);
+    await addPoints(-POINTS_ETAPE);
+    // Faite aujourd'hui par la dernière étape : on l'annule avec son bonus.
+    const faite = await db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM completions WHERE item_id = ? AND date = ?",
+      etape.item_id,
+      aujourdhui,
+    );
+    if (faite) {
+      await annulerCompletion(etape.item_id, aujourdhui);
+      await addPoints(-BONUS_FIN);
+    }
+    return;
+  }
+
+  if (etape.faite === 0) return;
+  await db.runAsync("UPDATE etapes SET faite = 0, faite_le = NULL WHERE id = ?", etapeId);
+  await addPoints(-POINTS_ETAPE);
+  // Tâche terminée : on annule sa complétion (quel que soit son jour) et le bonus.
+  const faite = await db.getFirstAsync<{ date: string }>(
+    "SELECT date FROM completions WHERE item_id = ? ORDER BY date DESC LIMIT 1",
     etape.item_id,
   );
-
-  await db.runAsync(
-    "UPDATE etapes SET faite = 0, faite_le = NULL WHERE id = ?",
-    etapeId,
-  );
-  await addPoints(-POINTS_ETAPE);
-
-  if (item?.statut === "termine") {
-    await annulerCompletion(etape.item_id);
+  if (faite) {
+    await annulerCompletion(etape.item_id, faite.date);
     await addPoints(-BONUS_FIN);
   }
+}
+
+/**
+ * « Remettre à faire » une tâche faite un jour donné (Progression) :
+ * retire la complétion et ses points, et aussi les étapes cochées pour
+ * cette fois-là, leurs points et le bonus. Refaire la tâche redonne tout,
+ * une seule fois.
+ */
+export async function remettreAFaire(itemId: number, date: string): Promise<void> {
+  const db = await getDatabase();
+  const etapes = await getEtapes(itemId);
+  const f = await frequenceDe(db, itemId);
+
+  let cochees = 0;
+  if (f) {
+    const lignes = await cocheesEnCours(db, itemId, f, date);
+    cochees = lignes.length;
+    for (const l of lignes) await db.runAsync("DELETE FROM etapes_cochees WHERE id = ?", l.id);
+  } else {
+    cochees = etapes.filter((e) => e.faite === 1).length;
+    await db.runAsync("UPDATE etapes SET faite = 0, faite_le = NULL WHERE item_id = ?", itemId);
+  }
+
+  await annulerCompletion(itemId, date);
+  const aRetirer = etapes.length > 0 ? pointsEtapesARetirer(cochees, etapes.length) : 0;
+  if (aRetirer > 0) await addPoints(-aRetirer);
 }
 
 // ─── Routines à étapes ──────────────────────────────────────────────────
@@ -172,15 +292,15 @@ export async function getEtapesRoutines(
   return resultat;
 }
 
+/** Valeur de completions.version pour une routine à étapes : le palier atteint. */
+const VERSION_PALIER = { 1: "essentielles", 2: "toutes" } as const;
+
 /**
  * Coche ou décoche une étape de routine pour aujourd'hui, puis ajuste la
  * complétion du jour au palier atteint. Les points donnés sont gardés
  * dans completions.points : on ne verse que la différence.
  */
-export async function basculerEtapeRoutine(
-  etapeId: number,
-  version: string,
-): Promise<void> {
+export async function basculerEtapeRoutine(etapeId: number): Promise<void> {
   const db = await getDatabase();
   const date = getAujourdhui();
   const etape = await db.getFirstAsync<Etape>("SELECT * FROM etapes WHERE id = ?", etapeId);
@@ -208,8 +328,8 @@ export async function basculerEtapeRoutine(
     etapes.map((e) => ({ essentielle: e.essentielle === 1, cochee: e.cochee })),
   );
   const points = pointsPalier(palier, await estJourDifficile());
-  if (points === 0) await annulerCompletion(etape.item_id);
-  else await completer(etape.item_id, "complet", undefined, version, points);
+  if (palier === 0) await annulerCompletion(etape.item_id);
+  else await completer(etape.item_id, "complet", undefined, VERSION_PALIER[palier], points);
 }
 
 /**
@@ -222,9 +342,12 @@ export async function recalculerPointsEtapesDuJour(): Promise<void> {
   const db = await getDatabase();
   const date = getAujourdhui();
   const jourDifficile = await estJourDifficile();
+  // Routines seulement : les tâches récurrentes ont aussi des lignes ici.
   const ids = (
     await db.getAllAsync<{ item_id: number }>(
-      "SELECT DISTINCT item_id FROM etapes_cochees WHERE date = ?",
+      `SELECT DISTINCT ec.item_id FROM etapes_cochees ec
+       JOIN items i ON i.id = ec.item_id AND i.type = 'routine'
+       WHERE ec.date = ?`,
       date,
     )
   ).map((r) => r.item_id);

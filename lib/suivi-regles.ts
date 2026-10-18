@@ -72,6 +72,15 @@ export type Qualite = 1 | 2 | 3;
 export const POINTS_NUIT = 5;
 export const POINTS_SEANCE = 10;
 
+/** Une nuit ne rapporte que si elle est des 7 derniers jours (aujourd'hui compris). */
+export const JOURS_NUIT_POINTS = 7;
+
+/** La nuit du `date` rapporte-t-elle des points, notée `aujourdhui` (dates YYYY-MM-DD) ? */
+export function nuitRapporte(date: string, aujourdhui: string): boolean {
+  const ecartJ = Math.round((Date.parse(aujourdhui) - Date.parse(date)) / 86400000);
+  return ecartJ >= 0 && ecartJ < JOURS_NUIT_POINTS;
+}
+
 // ─── Sport : échelles de callisthénie ───────────────────────────────────
 
 export type Famille = "pousser" | "tirer" | "jambes" | "gainage";

@@ -1,4 +1,5 @@
 import { decalerJours } from "../dates";
+import { niveauDePoints, SQL_AJOUTER_POINTS } from "../regles-taches";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -15,44 +16,9 @@ export type ConfigRappel = {
   minute: number;
 };
 
-export async function initStats() {
-  const db = await getDatabase();
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS stats (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      points_total INTEGER NOT NULL DEFAULT 0,
-      best_streak INTEGER NOT NULL DEFAULT 0,
-      rappel_actif INTEGER NOT NULL DEFAULT 0,
-      rappel_heure INTEGER NOT NULL DEFAULT 20,
-      rappel_minute INTEGER NOT NULL DEFAULT 0
-    );
-  `);
-  await db.runAsync("INSERT OR IGNORE INTO stats (id) VALUES (1)");
-  // Migrations (au cas où la table existait déjà sans ces colonnes)
-  try {
-    await db.execAsync(
-      "ALTER TABLE stats ADD COLUMN rappel_actif INTEGER NOT NULL DEFAULT 0",
-    );
-  } catch {}
-  try {
-    await db.execAsync(
-      "ALTER TABLE stats ADD COLUMN rappel_heure INTEGER NOT NULL DEFAULT 20",
-    );
-  } catch {}
-  try {
-    await db.execAsync(
-      "ALTER TABLE stats ADD COLUMN rappel_minute INTEGER NOT NULL DEFAULT 0",
-    );
-  } catch {}
-}
-
 export async function addPoints(delta: number) {
-  await initStats();
   const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE stats SET points_total = MAX(0, points_total + ?) WHERE id = 1",
-    delta,
-  );
+  await db.runAsync(SQL_AJOUTER_POINTS, delta);
 }
 
 /**
@@ -80,7 +46,6 @@ async function computeCurrentStreak(): Promise<number> {
 }
 
 export async function getStats(): Promise<Stats> {
-  await initStats();
   const db = await getDatabase();
   const row = await db.getFirstAsync<{
     points_total: number;
@@ -100,14 +65,13 @@ export async function getStats(): Promise<Stats> {
 
   return {
     points,
-    niveau: Math.floor(points / 100) + 1,
+    niveau: niveauDePoints(points),
     currentStreak,
     bestStreak: Math.max(bestStreakEnBase, currentStreak),
   };
 }
 
 export async function getConfigRappel(): Promise<ConfigRappel> {
-  await initStats();
   const db = await getDatabase();
   const row = await db.getFirstAsync<{
     rappel_actif: number;
@@ -124,7 +88,6 @@ export async function getConfigRappel(): Promise<ConfigRappel> {
 }
 
 export async function setConfigRappel(config: ConfigRappel) {
-  await initStats();
   const db = await getDatabase();
   await db.runAsync(
     "UPDATE stats SET rappel_actif = ?, rappel_heure = ?, rappel_minute = ? WHERE id = 1",

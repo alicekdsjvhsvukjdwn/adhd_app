@@ -1,21 +1,21 @@
 import { useFocusEffect } from "expo-router";
+import { useJourCourant } from "../hooks/useJourCourant";
 import { useCallback, useState } from "react";
 import {
     Modal,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from "react-native";
-import type { Categorie } from "../lib/catalogue";
-import { getAujourdhui } from "../lib/db/completions";
-import { faitsDuJour, intensiteJours } from "../lib/db/progression";
+import { intensiteJours, recapJour, type RecapJour } from "../lib/db/progression";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { useCouleurCategorie } from "../lib/theme-categories";
 
 /**
- * Calendrier du mois pour un type d'item (routines ou tâches).
+ * Le calendrier du mois (onglet Progression), routines et tâches ensemble.
  * Chaque jour est coloré selon ce qui a été fait ; toucher un jour
  * montre ce qui a été fait, jamais ce qui manque.
  */
@@ -56,16 +56,10 @@ const iso = (a: number, m: number, j: number) =>
 const joursDansMois = (a: number, m: number) =>
   new Date(Date.UTC(a, m + 1, 0)).getUTCDate();
 
-export function CalendrierMois({
-  type,
-  titre,
-}: {
-  type: "routine" | "tache";
-  titre?: string;
-}) {
+export function CalendrierMois() {
   const t = useTheme();
   const couleurCat = useCouleurCategorie();
-  const aujourdhui = getAujourdhui();
+  const aujourdhui = useJourCourant();
   const [anneeCourante, moisCourant] = aujourdhui.split("-").map(Number);
 
   const [mois, setMois] = useState({
@@ -73,14 +67,7 @@ export function CalendrierMois({
     mois: moisCourant - 1,
   });
   const [niveaux, setNiveaux] = useState<Record<string, number | null>>({});
-  const [recap, setRecap] = useState<{
-    date: string;
-    faits: {
-      nom: string;
-      categorie: Categorie | null;
-      version: string | null;
-    }[];
-  } | null>(null);
+  const [recap, setRecap] = useState<RecapJour | null>(null);
 
   const charger = useCallback(async () => {
     const nb = joursDansMois(mois.annee, mois.mois);
@@ -88,15 +75,14 @@ export function CalendrierMois({
       await intensiteJours(
         iso(mois.annee, mois.mois, 1),
         iso(mois.annee, mois.mois, nb),
-        type,
       ),
     );
-  }, [mois, type]);
+  }, [mois]);
 
   useFocusEffect(
     useCallback(() => {
       charger();
-    }, [charger]),
+    }, [charger, aujourdhui]),
   );
 
   const estMoisCourant =
@@ -126,7 +112,7 @@ export function CalendrierMois({
     semaines.push(cases.slice(i, i + 7));
 
   const ouvrir = async (d: string) => {
-    setRecap({ date: d, faits: await faitsDuJour(d, type) });
+    setRecap(await recapJour(d));
   };
 
   const dateLongue = (d: string) => {
@@ -141,7 +127,6 @@ export function CalendrierMois({
           <Text style={[styles.fleche, { color: t.accentText }]}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.titre, { color: t.textPrimary }]}>
-          {titre ? `${titre} · ` : ""}
           {MOIS[mois.mois]} {mois.annee}
         </Text>
         <TouchableOpacity
@@ -218,7 +203,7 @@ export function CalendrierMois({
         onRequestClose={() => setRecap(null)}
       >
         <Pressable style={styles.fond} onPress={() => setRecap(null)}>
-          <Pressable style={[styles.carte, { backgroundColor: t.bgApp }]}>
+          <Pressable style={[styles.carte, { backgroundColor: t.bgApp, maxHeight: "80%" }]}>
             {recap && (
               <>
                 <Text style={[styles.recapTitre, { color: t.textPrimary }]}>
@@ -229,38 +214,40 @@ export function CalendrierMois({
                 <Text style={[styles.recapSous, { color: t.textSecondary }]}>
                   {recap.faits.length === 0
                     ? "Rien de coché ce jour-là."
-                    : `${recap.faits.length} ${
-                        type === "routine"
-                          ? recap.faits.length > 1
-                            ? "routines faites"
-                            : "routine faite"
-                          : recap.faits.length > 1
-                            ? "tâches faites"
-                            : "tâche faite"
-                      }`}
+                    : recap.global === null
+                      ? "Pas de routine prévue ce jour-là."
+                      : `${Math.round(recap.global * 100)} % des routines prévues`}
                 </Text>
-                {recap.faits.map((f, i) => (
-                  <View key={i} style={styles.ligne}>
-                    <View
-                      style={[
-                        styles.pastille,
-                        {
-                          backgroundColor: f.categorie
-                            ? couleurCat(f.categorie)
-                            : t.border,
-                        },
-                      ]}
-                    />
-                    <Text style={[styles.ligneNom, { color: t.textPrimary }]}>
-                      {f.nom}
-                    </Text>
-                    {f.version && f.version !== "normale" && (
-                      <Text style={[styles.version, { color: t.textMuted }]}>
-                        {f.version}
+                <ScrollView style={{ flexGrow: 0 }}>
+                {(["routine", "tache"] as const).map((type) => {
+                  const faits = recap.faits.filter((f) => f.type === type);
+                  if (faits.length === 0) return null;
+                  return (
+                    <View key={type}>
+                      <Text style={[styles.recapGroupe, { color: t.textMuted }]}>
+                        {type === "routine" ? "Routines" : "Tâches"} · {faits.length}
                       </Text>
-                    )}
-                  </View>
-                ))}
+                      {faits.map((f) => (
+                        <View key={f.id} style={styles.ligne}>
+                          <View
+                            style={[
+                              styles.pastille,
+                              {
+                                backgroundColor: f.categorie
+                                  ? couleurCat(f.categorie)
+                                  : t.border,
+                              },
+                            ]}
+                          />
+                          <Text style={[styles.ligneNom, { color: t.textPrimary }]}>
+                            {f.nom}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })}
+                </ScrollView>
                 <TouchableOpacity
                   style={[styles.fermer, { backgroundColor: t.bgCard }]}
                   onPress={() => setRecap(null)}
@@ -331,7 +318,12 @@ const styles = StyleSheet.create({
   },
   pastille: { width: 10, height: 10, borderRadius: 5 },
   ligneNom: { flex: 1, fontSize: typography.bodySmall },
-  version: { fontSize: typography.tiny, fontStyle: "italic" },
+  recapGroupe: {
+    fontSize: typography.tiny,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginTop: spacing.sm,
+  },
   fermer: {
     marginTop: spacing.lg,
     padding: spacing.md,

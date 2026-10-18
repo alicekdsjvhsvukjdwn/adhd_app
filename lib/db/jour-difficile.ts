@@ -2,48 +2,22 @@ import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
 /**
- * Interrupteur « Jour difficile », valable pour la journée seulement :
- * la clé porte la date, donc le lendemain il repart désactivé.
- * Chaque changement est journalisé, pour garder l'historique des jours difficiles.
+ * « Jour difficile » = l'énergie du jour choisie à 🪫 sur Routines.
+ * Une seule clé (meta energie_routines:AAAA-MM-JJ), écrite par energie.ts :
+ * le lendemain, rien n'est choisi.
  *
- * Effets (dans les écrans) : routines en version courte, routines exigeantes
- * mises de côté, une seule tâche proposée, pas de suggestion.
+ * Effets (dans les écrans) : étapes essentielles seulement, routines
+ * exigeantes mises de côté, une seule tâche proposée, pas de suggestion.
+ * Les anciennes clés jour_difficile:… restent en base comme historique.
  */
 
-async function assurerMeta() {
-  const db = await getDatabase();
-  await db.execAsync(
-    "CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);",
-  );
-}
-
-const cle = () => `jour_difficile:${getAujourdhui()}`;
+export const cleEnergie = (date: string = getAujourdhui()) => `energie_routines:${date}`;
 
 export async function estJourDifficile(): Promise<boolean> {
-  await assurerMeta();
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ valeur: string }>(
     "SELECT valeur FROM meta WHERE cle = ?",
-    cle(),
+    cleEnergie(),
   );
   return row?.valeur === "1";
-}
-
-export async function changerJourDifficile(actif: boolean): Promise<void> {
-  if ((await estJourDifficile()) === actif) return;
-  const db = await getDatabase();
-  if (actif) {
-    await db.runAsync(
-      "INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, '1')",
-      cle(),
-    );
-  } else {
-    await db.runAsync("DELETE FROM meta WHERE cle = ?", cle());
-  }
-  const { logEvent } = await import("./events");
-  await logEvent(
-    actif ? "jour_difficile_active" : "jour_difficile_desactive",
-    null,
-    { date: getAujourdhui() },
-  );
 }

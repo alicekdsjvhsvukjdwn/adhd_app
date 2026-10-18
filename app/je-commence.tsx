@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { completer, getItem } from "../lib/db";
+import { ZoneNote } from "../components/ZoneNote";
+import { completer, getAujourdhui, getItem } from "../lib/db";
 import { cocherEtape, getEtapes } from "../lib/db/etapes";
 import { demarrerSession, terminerSession } from "../lib/db/sessions";
 import {
@@ -90,6 +91,8 @@ export default function JeCommence() {
   const [duree, setDuree] = useState(dureeParDefaut(null));
   const [session, setSession] = useState<SessionOuverte | null>(null);
   const [arrete, setArrete] = useState(false);
+  /** Date de la complétion à noter dans le carnet, après « C'est fait ». */
+  const [noteOuverte, setNoteOuverte] = useState<string | null>(null);
   const [maintenant, setMaintenant] = useState(() => Date.now());
   // Copie lue au démontage de l'écran, où l'état React n'est plus à jour.
   const ouverte = useRef<SessionOuverte | null>(null);
@@ -205,16 +208,20 @@ export default function JeCommence() {
   const cEstFait = async () => {
     if (!cible) return;
     const minutes = await fermer("fait");
+    let tacheFaite = false;
     if (cible.etape) {
       // Sans effet si l'étape a été cochée ailleurs entre-temps.
-      await cocherEtape(cible.etape.id);
+      tacheFaite = await cocherEtape(cible.etape.id);
     } else {
       const item = await getItem(cible.itemId);
       if (item && item.statut !== "termine") {
         await completer(cible.itemId, "complet", minutes);
+        tacheFaite = true;
       }
     }
-    router.back();
+    // Tâche faite : la note du carnet est proposée, comme dans Tâches.
+    if (tacheFaite) setNoteOuverte(getAujourdhui());
+    else router.back();
   };
 
   const jArreteLa = async () => {
@@ -253,7 +260,16 @@ export default function JeCommence() {
             </Text>
           )}
 
-          {arrete ? (
+          {noteOuverte ? (
+            <View style={styles.bloc}>
+              <ZoneNote
+                itemId={cible.itemId}
+                date={noteOuverte}
+                titre={`✓ ${cible.nom} · une note ? (facultatif)`}
+                onFerme={() => router.back()}
+              />
+            </View>
+          ) : arrete ? (
             <View style={styles.bloc}>
               <Text style={[styles.message, { color: t.textPrimary }]}>
                 C&apos;est noté. La tâche t&apos;attendra.

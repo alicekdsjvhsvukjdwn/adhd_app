@@ -1,6 +1,7 @@
 import { decalerJours } from "../dates";
 import {
   dureeSommeilMin,
+  nuitRapporte,
   ecartTypeCoucherMin,
   POINTS_NUIT,
   type Qualite,
@@ -43,7 +44,10 @@ export async function heuresParDefaut(
   return veille ?? { coucher: "23:00", lever: "07:00" };
 }
 
-/** Enregistre ou corrige une nuit. Les points ne sont donnés qu'à la première saisie. */
+/**
+ * Enregistre ou corrige une nuit. Les points ne sont donnés qu'à la première
+ * saisie, et seulement pour une nuit des 7 derniers jours.
+ */
 export async function enregistrerNuit(n: Omit<Nuit, "duree_min">): Promise<void> {
   const db = await getDatabase();
   const maintenant = new Date().toISOString();
@@ -64,7 +68,7 @@ export async function enregistrerNuit(n: Omit<Nuit, "duree_min">): Promise<void>
     maintenant,
     maintenant,
   );
-  if (!existante) await addPoints(POINTS_NUIT);
+  if (!existante && nuitRapporte(n.date, getAujourdhui())) await addPoints(POINTS_NUIT);
 }
 
 export type ResumeSommeil = {

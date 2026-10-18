@@ -73,7 +73,7 @@ export async function configurerSport(
   }
 }
 
-export async function getPaliers(): Promise<Record<Famille, number>> {
+async function getPaliers(): Promise<Record<Famille, number>> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<{ famille: Famille; palier: number }>(
     "SELECT famille, palier FROM sport_paliers",

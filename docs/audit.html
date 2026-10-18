@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit tdah-routines</title>
+<style>
+:root{
+  --bg:#f7f5f1;--card:#fff;--ink:#1f1d1a;--mute:#6b665e;--line:#e3ded5;--soft:#f0ece5;
+  --accent:#b85c38;--ok:#2f8f4e;--warn:#c99a06;--bad:#c4382d;--off:#9a958c;
+  --okbg:#e6f4ea;--warnbg:#fbf3d8;--badbg:#fbe5e2;--offbg:#eeece8;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171614;--card:#22201d;--ink:#eeeae4;--mute:#a59f95;--line:#38342f;--soft:#2b2925;
+  --accent:#e08a63;--ok:#5cc27d;--warn:#e5bf3f;--bad:#f07468;--off:#8d877e;
+  --okbg:#1d3324;--warnbg:#3a3218;--badbg:#3d1f1c;--offbg:#2c2a27;}}
+:root[data-theme="dark"]{
+  --bg:#171614;--card:#22201d;--ink:#eeeae4;--mute:#a59f95;--line:#38342f;--soft:#2b2925;
+  --accent:#e08a63;--ok:#5cc27d;--warn:#e5bf3f;--bad:#f07468;--off:#8d877e;
+  --okbg:#1d3324;--warnbg:#3a3218;--badbg:#3d1f1c;--offbg:#2c2a27;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:8px 0 4px}
+h2{font-size:20px;margin:36px 0 10px;padding-top:8px;border-top:2px solid var(--line)}
+h3{font-size:16px;margin:0 0 6px}
+h4{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:12px 0 4px}
+p{margin:6px 0}
+.mute{color:var(--mute)}.small{font-size:13px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+nav.toc a{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink);text-decoration:none;font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:22px}.kpi span{font-size:12px;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:13px}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600;white-space:nowrap}
+.p-ok{background:var(--okbg);color:var(--ok)}.p-warn{background:var(--warnbg);color:var(--warn)}
+.p-bad{background:var(--badbg);color:var(--bad)}
+.tw{overflow-x:auto;margin:8px 0;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--mute)}
+tr:last-child td{border-bottom:0}
+code{font:12.5px ui-monospace,Consolas,monospace;background:var(--soft);padding:1px 4px;border-radius:4px;word-break:break-word}
+ul{margin:4px 0;padding-left:18px}li{margin:2px 0}
+.navmap{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.tab{background:var(--card);border:2px solid var(--accent);border-radius:12px;padding:8px}
+.tab>b{display:block;font-size:15px;margin-bottom:4px}
+.dest{display:block;font-size:12.5px;background:var(--soft);border-radius:6px;padding:3px 6px;margin:3px 0}
+.dest i{font-style:normal;color:var(--mute)}
+.okbox{border:2px dashed var(--ok);background:var(--okbg);border-radius:12px;padding:10px}
+.bar{height:8px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:4px}
+.bar>div{height:100%}
+.screen h3{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.flow{display:flex;flex-direction:column;gap:3px}
+.flow div{background:var(--soft);border-left:3px solid var(--accent);border-radius:4px;padding:3px 8px;font-size:13px}
+.dbgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.tbl{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12.5px}
+.tbl b{font-size:14px}.tbl .k{color:var(--accent)}
+.grp{font-weight:700;margin:14px 0 4px;font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.big{font-size:17px;font-weight:600}
+.verdict{border-left:4px solid var(--accent);padding:6px 10px;background:var(--card);border-radius:6px;margin:8px 0}
+.avant{color:var(--mute);font-size:13px;font-weight:400}
+del{color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Audit de l'appli — tdah-routines</h1>
+<p class="mute small">Mis à jour le 18 oct. 2026, après les 10 simplifications et les corrections de bugs · base <code>26b01de</code> + modifications non commitées · schéma version 20.</p>
+
+<div class="legend card">
+  <span>🟢 marche</span><span>🟡 douteux / flou</span><span>🔴 cassé, mort ou doublon</span><span>⚪ jamais utilisé</span><span>✅ corrigé / appliqué</span>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><b>6 + 8</b><span>onglets + écrans secondaires <span class="avant">(avant 10)</span></span></div>
+  <div class="kpi"><b>0</b><span>écran orphelin <span class="avant">(2)</span></span></div>
+  <div class="kpi"><b>24</b><span>tables, toutes dans les migrations <span class="avant">(5 hors)</span></span></div>
+  <div class="kpi"><b>20</b><span>migrations <span class="avant">(17)</span></span></div>
+  <div class="kpi"><b>~14 700</b><span>lignes de code <span class="avant">(~17 000)</span></span></div>
+  <div class="kpi"><b>✔ 0</b><span>erreur TypeScript</span></div>
+  <div class="kpi"><b>✔ 68/68</b><span>tests <span class="avant">(57)</span></span></div>
+  <div class="kpi"><b>✔ iOS</b><span>export réussi</span></div>
+</div>
+
+<div class="verdict"><b>En une phrase :</b> une seule question d'énergie, une seule façon d'alléger une routine (les étapes), un seul calendrier, un formulaire en deux, plus de code mort connu. Les 16 bugs relevés sont corrigés. Les données d'analyse (decision_log, event_log, completions, sessions, notes) sont intactes.</div>
+
+<nav class="toc">
+  <a href="#carte">1 · Carte</a><a href="#pages">2 · Pages</a><a href="#backend">3 · Back-end</a>
+  <a href="#concepts">4 · Concepts</a><a href="#points">5 · Points</a><a href="#abime">6 · Abîmé</a><a href="#propositions">7 · Simplifications</a>
+</nav>
+
+<!-- ═════════════════════════ 1 ═════════════════════════ -->
+<h2 id="carte">1 · Carte de l'appli</h2>
+
+<div class="navmap">
+  <div class="tab"><b>☀️ Routines</b>
+    <span class="dest">→ nouvelle-tache <i>« + », glisser › Modifier, « Pas prévues »</i></span>
+    <span class="dest">→ mise-en-place <i>liste vide, « Pas encore de routine »</i></span>
+    <span class="dest">→ Récompenses <i>tap « 🎁 pts »</i></span>
+    <span class="dest">→ nouvelle-tache / mise-en-place <i>via la suggestion</i></span>
+  </div>
+  <div class="tab"><b>✅ Tâches</b>
+    <span class="dest">→ nouvelle-tache <i>« Plus d'options », « Découper », glisser › Modifier</i></span>
+    <span class="dest">→ historique?id <i>appui long, glisser › Historique</i></span>
+    <span class="dest">→ historique?liste <i>« 📓 Carnet »</i></span>
+    <span class="dest">→ je-commence <i>« ▶ Je commence »</i></span>
+  </div>
+  <div class="tab"><b>🎁 Récompenses</b><span class="dest"><i>aucun lien</i></span></div>
+  <div class="tab"><b>🌙 Suivi</b>
+    <span class="dest">→ sommeil</span><span class="dest">→ seance</span>
+  </div>
+  <div class="tab"><b>📈 Progression</b><span class="dest"><i>calendrier + récap du jour (modale)</i></span></div>
+  <div class="tab"><b>⚙️ Profil</b>
+    <span class="dest">→ mise-en-place</span><span class="dest">→ ancres</span><span class="dest">→ rappels</span><span class="dest">→ tel:3114</span>
+  </div>
+</div>
+<div class="grid2" style="margin-top:10px">
+  <div class="card"><h3>Liens entre écrans secondaires</h3><ul class="small">
+    <li>nouvelle-tache → ancres</li>
+    <li>historique → historique?id · → nouvelle-tache?nom (idée → tâche)</li>
+    <li>mise-en-place → nouvelle-tache?type=routine</li>
+    <li>je-commence → note du carnet, puis retour ✅</li>
+  </ul></div>
+  <div class="okbox"><h3>✅ Plus d'orphelins</h3><ul class="small">
+    <li><del>problemes</del> et <del>scene</del> supprimés (avec <code>assets/pixel</code>).</li>
+    <li>Branche <del>onboarding</del> de MiseEnPlace retirée.</li>
+    <li>Aucun lien cassé.</li>
+  </ul></div>
+</div>
+
+<!-- ═════════════════════════ 2 ═════════════════════════ -->
+<h2 id="pages">2 · Page par page</h2>
+<div class="tw"><table>
+<tr><th>Écran</th><th>Avant</th><th>Après</th><th>Charge</th></tr>
+<tr><td>📈 Progression</td><td>12 blocs</td><td><b>7 blocs</b></td><td><div class="bar"><div style="width:58%;background:var(--warn)"></div></div></td></tr>
+<tr><td>✅ Tâches</td><td>10 blocs</td><td><b>9 blocs</b> (sans calendrier)</td><td><div class="bar"><div style="width:80%;background:var(--bad)"></div></div></td></tr>
+<tr><td>➕ nouvelle-tache</td><td>16 champs</td><td><b>Routine 6 + 4 · Tâche 7 + 3</b> (visibles + « Plus »)</td><td><div class="bar"><div style="width:55%;background:var(--warn)"></div></div></td></tr>
+<tr><td>☀️ Routines</td><td>9 blocs</td><td><b>8 blocs</b> (sans calendrier)</td><td><div class="bar"><div style="width:70%;background:var(--warn)"></div></div></td></tr>
+<tr><td>⚙️ Profil</td><td>6</td><td>6</td><td><div class="bar"><div style="width:50%;background:var(--warn)"></div></div></td></tr>
+<tr><td>🎁 Récompenses</td><td>5</td><td>5</td><td><div class="bar"><div style="width:42%;background:var(--ok)"></div></div></td></tr>
+<tr><td>🌙 Suivi</td><td>4</td><td>4</td><td><div class="bar"><div style="width:35%;background:var(--ok)"></div></div></td></tr>
+</table></div>
+
+<div class="card screen"><h3>☀️ Routines <span class="pill p-warn">8 blocs</span></h3>
+<div class="grid2">
+<div><h4>De haut en bas</h4><div class="flow">
+<div>Bandeau : 🔥 série · Niveau · 🎁 solde</div>
+<div>Carte Suggestion (pas un jour difficile)</div>
+<div>« Comment est ta journée ? » 🪫 / 🔋 / ⚡ — rien de choisi par défaut</div>
+<div>Mes routines · x/y · « + »</div>
+<div>Groupes par domaine (routines + étapes)</div>
+<div>« Si l'énergie revient » (🪫)</div>
+<div>« + Pas prévues aujourd'hui »</div>
+<div>« Pas encore de routine »</div>
+</div></div>
+<div><h4>Fonctionnalités</h4><div class="tw"><table>
+<tr><td>🟢</td><td>Cocher, étapes essentielles/bonus</td></tr>
+<tr><td>🟢 ✅</td><td>Énergie : une seule clé ; 🪫 = Jour difficile ; ⚡ enregistré seulement</td></tr>
+<tr><td>✅</td><td><del>Versions courte/longue</del> → étapes</td></tr>
+<tr><td>✅</td><td><del>Calendrier</del> → Progression</td></tr>
+<tr><td>🟢 ✅</td><td>Se recharge au passage de minuit</td></tr>
+</table></div></div></div>
+<p class="small"><b>Tables :</b> items, ancres, completions, etapes, etapes_cochees, meta, stats, achats, suggestions. <span class="mute">(plus de lecture de <code>preferences</code>)</span></p>
+</div>
+
+<div class="card screen"><h3>✅ Tâches <span class="pill p-bad">9 blocs · le plus dense</span></h3>
+<div class="grid2">
+<div><h4>De haut en bas</h4><div class="flow">
+<div>Filtres listes · ✎ Listes</div>
+<div>Noter + Plus d'options</div>
+<div>(liste) Barres d'objectif · 🎯 · 📓 Carnet</div>
+<div>Zone note</div>
+<div>À faire maintenant (3) / Une seule chose</div>
+<div>Plus tard</div>
+<div>Modale listes · Bandeau Annuler</div>
+</div></div>
+<div><h4>Fonctionnalités</h4><div class="tw"><table>
+<tr><td>🟢</td><td>Moteur, jour difficile, objectifs, carnet</td></tr>
+<tr><td>🟢 ✅</td><td>Bandeau : « +25 » pour la dernière étape</td></tr>
+<tr><td>🟢 ✅</td><td>Tâche « x fois » à étapes : remises à zéro après chaque fois</td></tr>
+<tr><td>🟡</td><td>Tap dans « Plus tard » termine sans confirmation (inchangé)</td></tr>
+</table></div></div></div>
+</div>
+
+<div class="card screen"><h3>📈 Progression <span class="pill p-warn">7 blocs</span></h3>
+<div class="grid2">
+<div><h4>De haut en bas</h4><div class="flow">
+<div>Jour / Semaine / Mois</div>
+<div>% de routines tenues</div>
+<div>Anneaux par domaine</div>
+<div>Tâches faites (remettre à faire)</div>
+<div>Ce que l'appli apprend</div>
+<div>Calendrier du mois + récap du jour (routines et tâches)</div>
+<div>Liens sommeil / sport</div>
+</div></div>
+<div><h4>Retiré</h4><ul class="small">
+<li><del>Bilan de la journée</del></li>
+<li><del>Comment tu vas selon le moment</del></li>
+<li><del>Objectifs des listes</del> (restent dans Tâches)</li>
+<li><del>Vue de l'année</del></li>
+<li><del>Calendrier maison</del> → <code>components/CalendrierMois</code></li>
+</ul>
+<p class="small">🟢 ✅ « Remettre à faire » reprend aussi les étapes et le bonus.</p></div></div>
+</div>
+
+<div class="tw"><table>
+<tr><th>Autres écrans</th><th>État</th></tr>
+<tr><td>🎁 Récompenses</td><td>🟢 · règles des points à jour, retraits listés ✅</td></tr>
+<tr><td>🌙 Suivi</td><td>🟢</td></tr>
+<tr><td>⚙️ Profil</td><td>🟢</td></tr>
+<tr><td>nouvelle-tache</td><td>🟢 ✅ Routine / Tâche séparées · « Priorité haute / normale / basse » · plus de champs version</td></tr>
+<tr><td>historique</td><td>🟢</td></tr>
+<tr><td>je-commence</td><td>🟢 ✅ « C'est fait » propose la note</td></tr>
+<tr><td>mise-en-place</td><td>🟢</td></tr>
+<tr><td>ancres</td><td>🟢 ✅ mode sombre, ajout d'un moment repère</td></tr>
+<tr><td>rappels</td><td>🟢 ✅ mode sombre, texte générique</td></tr>
+<tr><td>sommeil</td><td>🟢 ✅ points pour les 7 derniers jours</td></tr>
+<tr><td>seance</td><td>🟢 ✅ fermée proprement en quittant</td></tr>
+</table></div>
+
+<!-- ═════════════════════════ 3 ═════════════════════════ -->
+<h2 id="backend">3 · Back-end</h2>
+
+<div class="grp">Cœur</div>
+<div class="dbgrid">
+<div class="tbl"><b>items</b> 🟢<br>nom, type (routine | tache), statut, recurrence, categorie, moment, effort, importance, echeance, duree_min, premiere_action, template_id, variante_rang<br><span class="k">liste_id → listes · ancre_id → ancres</span><br>✅ plus lues ni écrites : <code>effort_total_min</code>, <code>taille_seance_min</code>, <code>fenetre_*</code>, <code>date/heure_evenement</code>, <code>version_courte/longue</code> (gardées en base)<br>Toujours écrites pour l'analyse : <code>nb_completions</code>, <code>duree_reelle_moy_min</code>, <code>temps_passe_min</code></div>
+<div class="tbl"><b>completions</b> 🟢<br>version = <code>normale</code>, ou palier <code>essentielles</code> / <code>toutes</code><br>✅ gardées quand l'item est supprimé</div>
+<div class="tbl"><b>etapes</b> 🟢<br><code>faite</code> = tâches uniques</div>
+<div class="tbl"><b>etapes_cochees</b> 🟢<br>routines (chaque jour) + tâches « x fois » ✅</div>
+<div class="tbl"><b>notes</b> 🟢</div>
+</div>
+<div class="grp">Organisation · analyse · points · suivi</div>
+<div class="dbgrid">
+<div class="tbl"><b>listes</b> 🟢 · <b>ancres</b> 🟢 · <b>difficultes</b> 🟢</div>
+<div class="tbl"><b>decision_log</b> 🟢 · <b>event_log</b> 🟢 · <b>suggestions</b> 🟢</div>
+<div class="tbl"><b>sessions</b> 🟢 (type <code>creneau</code>, doc CSV corrigée ✅)</div>
+<div class="tbl"><b>stats</b> 🟢 (total sans plancher ✅) · <b>recompenses</b> 🟢 · <b>achats</b> 🟢</div>
+<div class="tbl"><b>sommeil</b>, <b>sport_*</b>, <b>seances</b>, <b>series</b>, <b>paliers_historique</b> 🟢</div>
+<div class="tbl"><b>meta</b> 🟢 · seule clé d'énergie : <code>energie_routines:JOUR</code> ; <code>jour_difficile:</code> = historique</div>
+<div class="tbl"><b>etat</b> ⚪ historique, plus écrite · <b>preferences</b> ⚪ gardée pour les sauvegardes</div>
+</div>
+
+<h3 style="margin-top:20px">Migrations ajoutées</h3>
+<div class="tw"><table>
+<tr><th>#</th><th>Ce qu'elle fait</th></tr>
+<tr><td>1–17</td><td class="small">Inchangées (voir l'historique git).</td></tr>
+<tr><td>18</td><td>Rangement : <code>ancres</code>, <code>stats</code> (+ colonnes rappel manquantes), <code>preferences</code>, <code>event_log</code>, <code>meta</code> créées une fois (IF NOT EXISTS)</td></tr>
+<tr><td>19</td><td>Moments : <code>apres-midi</code> → <code>apres_midi</code>, <code>indifferent</code> → vide</td></tr>
+<tr><td>20</td><td>Versions écrites à la main → étapes : courte = essentielle, nom = bonus (ou essentielle sans courte), longue = bonus</td></tr>
+</table></div>
+<p class="small">Les migrations 19 et 20 sont <b>rejouées après la restauration</b> d'une sauvegarde plus ancienne (<code>transformationsApres</code>). SQL dans <code>lib/schema.ts</code>, testé sur une vraie base SQLite.</p>
+
+<h3 style="margin-top:20px">Modules</h3>
+<div class="grid2">
+<div class="card"><h4>Ajoutés</h4><ul class="small">
+<li><code>lib/schema.ts</code> — SQL des migrations 18–20 et lignes de départ</li>
+<li><code>lib/moments.ts</code> — la seule table des moments</li>
+<li><code>hooks/useJourCourant.ts</code> — passage de minuit</li>
+</ul></div>
+<div class="card"><h4>Supprimés</h4><ul class="small">
+<li><del>lib/db/preferences</del>, <del>lib/db/routines</del>, <del>lib/db/etat</del>, <del>lib/versions</del>, <del>lib/routines-maintenant</del></li>
+<li><del>components/BilanJournee</del>, <del>components/ObjectifsListes</del></li>
+<li>≈ 30 fonctions mortes (items, completions, decisions, sessions, catalogue…)</li>
+</ul></div>
+<div class="card"><h4>Imports</h4><p class="small">✔ Aucun cycle statique. Imports dynamiques : <b>2</b> <span class="avant">(20)</span>, tous deux nécessaires (<code>completions → stats</code>).</p></div>
+<div class="card"><h4>Recouvrements restants</h4><ul class="small">
+<li>🟡 <code>MOIS_COURTS</code> encore recopié dans 3 écrans.</li>
+<li>🟡 Domaines (bien-être) et listes (tâches) : deux rangements.</li>
+</ul></div>
+</div>
+
+<!-- ═════════════════════════ 4 ═════════════════════════ -->
+<h2 id="concepts">4 · Concepts</h2>
+<div class="tw"><table>
+<tr><th>Avant</th><th>Après</th><th>Notion</th><th>Où on la voit / règle · rôle</th></tr>
+<tr><td>🟡</td><td>🟡</td><td>Domaines</td><td class="small">Routines, Progression · formulaire (Plus) · équilibre 20 %</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Listes</td><td class="small">Tâches · objectif → urgence</td></tr>
+<tr><td>🟡</td><td>🟢</td><td>Moments</td><td class="small">Un module, une orthographe ✅</td></tr>
+<tr><td>🟡</td><td>🟢</td><td>Moments repères</td><td class="small">On peut en ajouter ✅</td></tr>
+<tr><td>🔴</td><td>🟢</td><td>Énergie du jour</td><td class="small">Seule question · 🪫 agit, ⚡ enregistré pour l'analyse</td></tr>
+<tr><td>🔴</td><td>🟢</td><td>Jour difficile</td><td class="small">Déduit de 🪫 ✅</td></tr>
+<tr><td>🔴</td><td>—</td><td>Bilan de la journée</td><td class="small">Retiré ✅ (historique dans <code>etat</code>)</td></tr>
+<tr><td>🟡</td><td>—</td><td>Versions courte/longue</td><td class="small">Retirées → étapes ✅</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Étapes de tâche</td><td class="small">+5, dernière +25 · remises à zéro pour « x fois » ✅</td></tr>
+<tr><td>🟡</td><td>🟢</td><td>Étapes de routine</td><td class="small">Seul moyen d'alléger une routine</td></tr>
+<tr><td>🟡</td><td>🟡</td><td>Difficulté</td><td class="small">Routine, dans « Plus » · sert à « Si l'énergie revient »</td></tr>
+<tr><td>🔴</td><td>🟢</td><td>Priorité <span class="avant">(importance)</span></td><td class="small">Haute / normale / basse ✅ · 25 % du score</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Échéance</td><td class="small">Tâche unique · urgence 12 %</td></tr>
+<tr><td>🟡</td><td>🟢</td><td>Récurrence</td><td class="small">Routine = jours · Tâche = une fois / x par semaine / x par mois ✅</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Objectifs de liste</td><td class="small">Une seule vue (Tâches) ✅</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Suggestions</td><td class="small">Gardent ton nom ✅</td></tr>
+<tr><td>🟡</td><td>🟢</td><td>Difficultés (mise en place)</td><td class="small">Doublon <code>problemes</code> supprimé ✅</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Points / niveau / solde</td><td class="small">Un seul calcul du niveau ✅</td></tr>
+<tr><td>🟢</td><td>🟢</td><td>Série</td><td class="small">Compte aussi les items supprimés (choix validé)</td></tr>
+</table></div>
+
+<!-- ═════════════════════════ 5 ═════════════════════════ -->
+<h2 id="points">5 · Points et règles</h2>
+<div class="tw"><table>
+<tr><th>Action</th><th>Points</th><th>Fichier</th><th>REGLES_POINTS</th></tr>
+<tr><td>Routine faite</td><td>+10</td><td><code>completions.ts</code></td><td>🟢</td></tr>
+<tr><td>Routine à étapes : essentielles / tout</td><td>10 / 15</td><td><code>regles-taches.ts</code></td><td>🟢</td></tr>
+<tr><td>Jour difficile : essentielles</td><td>15</td><td><code>regles-taches.ts</code></td><td>🟢</td></tr>
+<tr><td>Tâche faite (chaque fois)</td><td>+10</td><td><code>completions.ts</code></td><td>🟢</td></tr>
+<tr><td>Étape de tâche</td><td>+5</td><td><code>regles-taches.ts</code></td><td>🟢</td></tr>
+<tr><td>Dernière étape</td><td><b>+25</b></td><td><code>regles-taches.ts</code> <code>POINTS_DERNIERE_ETAPE</code></td><td>🟢 ✅ (bandeau aussi)</td></tr>
+<tr><td>Nuit notée (7 derniers jours)</td><td>+5</td><td><code>sommeil.ts</code></td><td>🟢 ✅</td></tr>
+<tr><td>Séance</td><td>+10</td><td><code>sport.ts</code></td><td>🟢</td></tr>
+<tr><td>Décocher / annuler / remettre à faire</td><td>reprend tout ce qui avait été donné</td><td><code>etapes.ts</code>, <code>completions.ts</code></td><td>🟢 ✅ listé</td></tr>
+<tr><td>Changer l'énergie</td><td>recalcule les routines à étapes</td><td><code>etapes.ts</code></td><td>🟢 ✅ listé</td></tr>
+<tr><td>Total sous zéro</td><td>gardé en base, affiché 0</td><td><code>regles-taches.ts</code> <code>SQL_AJOUTER_POINTS</code></td><td>✅</td></tr>
+</table></div>
+<p class="small">✅ Plus d'écart entre le code, le bandeau et la liste des règles.</p>
+
+<!-- ═════════════════════════ 6 ═════════════════════════ -->
+<h2 id="abime">6 · Ce qui est abîmé</h2>
+<div class="grid2">
+<div class="card"><h3>✔ <code>npx tsc --noEmit</code></h3><p class="small">0 erreur (aussi avec <code>--noUnusedLocals</code>).</p></div>
+<div class="card"><h3>✔ <code>npm test</code></h3><p class="small">68/68. Nouveaux : schéma (migrations 18–20, restauration), moments, étapes récurrentes, remettre à faire, points sous zéro, nuits, suppression d'item, nom des suggestions.</p></div>
+<div class="card"><h3>✔ <code>npx expo export --platform ios</code></h3><p class="small">Bundle de 1 861 modules, sans erreur.</p></div>
+<div class="card"><h3>🟡 <code>npx eslint</code></h3><p class="small">Erreurs déjà présentes avant (apostrophes, règles React 19) : hors périmètre.</p></div>
+</div>
+
+<div class="tw"><table>
+<tr><th>Bug</th><th>État</th></tr>
+<tr><td>Rappel quotidien figé</td><td>✅ texte générique, reprogrammé au démarrage</td></tr>
+<tr><td>Tâche « x fois » à étapes jamais remise à zéro</td><td>✅ <code>etapes_cochees</code> + <code>debutEtapesEnCours</code></td></tr>
+<tr><td>Double comptage via « remettre à faire »</td><td>✅ étapes décochées, points et bonus repris</td></tr>
+<tr><td>Écran vide si la base ne s'ouvre pas</td><td>✅ message lisible</td></tr>
+<tr><td>Minuit appli ouverte</td><td>✅ <code>useJourCourant</code></td></tr>
+<tr><td>Bandeau « +15 »</td><td>✅ +25</td></tr>
+<tr><td>Suggestion qui écrase le nom</td><td>✅ <code>nomApresVariante</code></td></tr>
+<tr><td>ancres / rappels sans mode sombre</td><td>✅</td></tr>
+<tr><td>Points bloqués à 0</td><td>✅</td></tr>
+<tr><td>Séance quittée par Retour</td><td>✅</td></tr>
+<tr><td>Nuits passées sans limite</td><td>✅ 7 jours</td></tr>
+<tr><td>Suppression : lignes orphelines</td><td>✅ étapes, coches, notes, suggestions, sessions supprimées ; completions, decision_log, event_log gardés</td></tr>
+<tr><td>Faux « Normal » sélectionné</td><td>✅</td></tr>
+<tr><td>Je commence sans note</td><td>✅</td></tr>
+<tr><td>Lisez-moi CSV · commentaire CarteSuggestion</td><td>✅</td></tr>
+<tr><td>Impossible d'ajouter une ancre</td><td>✅</td></tr>
+</table></div>
+
+<div class="card"><h3>🟡 Reste à surveiller</h3><ul class="small">
+<li>Écrans vérifiés par tsc et l'export, <b>pas encore sur le téléphone</b> : à tester en vrai, surtout le formulaire, Progression et ancres.</li>
+<li>Routines converties par la migration 20 : elles se cochent maintenant par étapes (10 pour les essentielles, 15 pour tout).</li>
+<li>Tap dans « Plus tard » : termine sans confirmation.</li>
+<li>Un commentaire de <code>moteur.ts</code> dit « aucune énergie lue » alors que le jour difficile l'est (comportement inchangé).</li>
+</ul></div>
+
+<!-- ═════════════════════════ 7 ═════════════════════════ -->
+<h2 id="propositions">7 · Simplifications</h2>
+<div class="tw"><table>
+<tr><th>#</th><th>Proposition</th><th>État</th></tr>
+<tr><td class="big">1</td><td>Une seule question d'énergie</td><td>✅</td></tr>
+<tr><td class="big">2</td><td>Rappel générique</td><td>✅</td></tr>
+<tr><td class="big">3</td><td>Code mort supprimé</td><td>✅</td></tr>
+<tr><td class="big">4</td><td>Progression allégée</td><td>✅ 12 → 7 blocs</td></tr>
+<tr><td class="big">5</td><td>Un seul calendrier</td><td>✅ 4 → 1</td></tr>
+<tr><td class="big">6</td><td>Versions → étapes</td><td>✅ migration 20</td></tr>
+<tr><td class="big">7</td><td>Priorité + étapes des tâches récurrentes</td><td>✅</td></tr>
+<tr><td class="big">8</td><td>Formulaire en deux</td><td>✅</td></tr>
+<tr><td class="big">9</td><td>Un seul module de moments</td><td>✅ migration 19</td></tr>
+<tr><td class="big">10</td><td>Rangement du schéma</td><td>✅ migration 18</td></tr>
+</table></div>
+
+<div class="card" style="border-left:4px solid var(--ok)"><h3>🟢 Toujours intouché</h3><ul class="small">
+<li>Points par complétion (<code>completions.points</code>, UNIQUE item/jour), moteur de tri, <code>decision_log</code> 1×/jour.</li>
+<li>Règles pures testées, migrations 1–17, sauvegarde colonne par colonne.</li>
+<li>Je commence (minuteur), Suivi, Récompenses, carnet, jour difficile → une seule tâche.</li>
+<li><i>Retouches validées :</i> <code>moteur.ts</code> (lecture des <code>fenetre_*</code> retirée), <code>sauvegarde.ts</code> (démarrage commun), sommeil, séance, Je commence.</li>
+</ul></div>
+
+<p class="small mute" style="margin:30px 0 10px">Rien n'est commité : en attente de validation.</p>
+</main>
+</body>
+</html>

@@ -8,7 +8,7 @@ import { FAMILLES_ORGANISATION } from "./familles/organisation";
 import { FAMILLES_QUOTIDIEN } from "./familles/quotidien";
 import { FAMILLES_SOMMEIL } from "./familles/sommeil";
 import { FAMILLES_TEMPS } from "./familles/temps";
-import type { Categorie, FamilleTemplate, VarianteTemplate } from "./types";
+import type { FamilleTemplate } from "./types";
 
 export * from "./types";
 
@@ -17,7 +17,7 @@ export * from "./types";
  * typé, et pas de migration quand une famille s'ajoute.
  * Seuls `template_id` et `variante_rang` sont stockés sur l'item.
  */
-export const CATALOGUE: FamilleTemplate[] = [
+const CATALOGUE: FamilleTemplate[] = [
   ...FAMILLES_SOMMEIL,
   ...FAMILLES_MOUVEMENT,
   ...FAMILLES_CORPS,
@@ -34,62 +34,6 @@ export function getFamille(id: string): FamilleTemplate | undefined {
   return CATALOGUE.find((f) => f.id === id);
 }
 
-export function getVariante(
-  templateId: string,
-  rang: number,
-): VarianteTemplate | undefined {
-  return getFamille(templateId)?.variantes.find((v) => v.rang === rang);
-}
-
-export function famillesParCategorie(categorie: Categorie): FamilleTemplate[] {
-  return CATALOGUE.filter((f) => f.categorie === categorie);
-}
-
-/** Liste dédupliquée des formulations de problèmes, pour l'écran d'entrée. */
-export function tousLesProblemes(): string[] {
-  return [...new Set(CATALOGUE.flatMap((f) => f.problemes))];
-}
-
-export const LIBELLES_CATEGORIES: Record<Categorie, string> = {
-  sommeil: "Sommeil et réveil",
-  mouvement: "Corps et santé",
-  organisation: "Organisation du quotidien",
-  focus: "Concentration et démarrage",
-  // Pas encore de familles au catalogue : sert aux tâches et routines libres.
-  competences: "Compétences et pratiques",
-  emotions: "Émotions et charge mentale",
-};
-
-/**
- * Regroupe les problèmes par catégorie. Un problème est rattaché à la
- * catégorie de la première famille qui le mentionne.
- */
-export function problemesParCategorie(): {
-  categorie: Categorie;
-  problemes: string[];
-}[] {
-  const vus = new Set<string>();
-  const groupes = new Map<Categorie, string[]>();
-
-  for (const f of CATALOGUE) {
-    for (const p of f.problemes) {
-      if (vus.has(p)) continue;
-      vus.add(p);
-      const liste = groupes.get(f.categorie) ?? [];
-      liste.push(p);
-      groupes.set(f.categorie, liste);
-    }
-  }
-
-  return (Object.keys(LIBELLES_CATEGORIES) as Categorie[])
-    .filter((c) => groupes.has(c))
-    .map((c) => ({ categorie: c, problemes: groupes.get(c)! }));
-}
-
-export function famillesPourProbleme(probleme: string): FamilleTemplate[] {
-  return CATALOGUE.filter((f) => f.problemes.includes(probleme));
-}
-
 const normaliser = (s: string) =>
   s
     .toLowerCase()
@@ -101,7 +45,7 @@ const normaliser = (s: string) =>
  * Accessible dès le premier jour : le catalogue n'est jamais verrouillé,
  * seulement non proposé spontanément.
  */
-export function rechercher(requete: string): FamilleTemplate[] {
+function rechercher(requete: string): FamilleTemplate[] {
   const q = normaliser(requete).trim();
   if (q.length < 2) return [];
 
@@ -134,17 +78,3 @@ export function deviner(nomLibre: string): FamilleTemplate | null {
   return resultats[0] ?? null;
 }
 
-/**
- * Familles proposables à l'onboarding : palier 0, prérequis satisfaits.
- * On en montre trois, jamais le catalogue complet.
- */
-export function famillesOnboarding(
-  categoriesPrioritaires: Categorie[],
-): FamilleTemplate[] {
-  return CATALOGUE.filter(
-    (f) =>
-      f.palier_devoilement === 0 &&
-      f.prerequis.length === 0 &&
-      categoriesPrioritaires.includes(f.categorie),
-  );
-}

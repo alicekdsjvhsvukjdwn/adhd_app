@@ -14,9 +14,9 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { BarresObjectif } from "../../components/BarresObjectif";
-import { CalendrierMois } from "../../components/CalendrierMois";
 import { PlusMoins } from "../../components/PlusMoins";
 import { ZoneNote } from "../../components/ZoneNote";
+import { useJourCourant } from "../../hooks/useJourCourant";
 import { deviner } from "../../lib/catalogue";
 import {
   addItem,
@@ -26,8 +26,6 @@ import {
   deleteItem,
 } from "../../lib/db";
 import {
-  BONUS_FIN,
-  POINTS_ETAPE,
   cocherEtape,
   decocherEtape,
   getEtapesPour,
@@ -47,7 +45,12 @@ import {
   type SuiviObjectif,
 } from "../../lib/db/listes";
 import { getAujourdhui } from "../../lib/db/completions";
-import { libelleCompte, type Periode } from "../../lib/regles-taches";
+import {
+  libelleCompte,
+  POINTS_DERNIERE_ETAPE,
+  POINTS_ETAPE,
+  type Periode,
+} from "../../lib/regles-taches";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
@@ -60,6 +63,8 @@ type Annulable =
 export default function Taches() {
   const router = useRouter();
   const t = useTheme();
+  // Passage de minuit appli ouverte : le classement se refait pour le nouveau jour.
+  const jour = useJourCourant();
 
   const [classement, setClassement] = useState<Proposition[]>([]);
   const [etapes, setEtapes] = useState<Record<number, Etape[]>>({});
@@ -120,7 +125,7 @@ export default function Taches() {
   useFocusEffect(
     useCallback(() => {
       charger();
-    }, [charger]),
+    }, [charger, jour]),
   );
 
   const proposerAnnulation = (a: Annulable) => {
@@ -165,7 +170,7 @@ export default function Taches() {
         type: "etape",
         etapeId: e.id,
         texte: derniere
-          ? `✓ « ${p.nom} » terminée · +${POINTS_ETAPE + BONUS_FIN} pts`
+          ? `✓ « ${p.nom} » terminée · +${POINTS_DERNIERE_ETAPE} pts`
           : `✓ ${e.nom} · +${POINTS_ETAPE} pts`,
       });
     }
@@ -448,7 +453,8 @@ export default function Taches() {
                       );
                     })}
                     <Text style={[styles.bonus, { color: t.textMuted }]}>
-                      +{POINTS_ETAPE} pts par étape, +{BONUS_FIN} en bonus quand tout est fait
+                      +{POINTS_ETAPE} pts par étape, +{POINTS_DERNIERE_ETAPE} pour la dernière
+                      {p.compte ? " · remises à zéro après chaque fois" : ""}
                     </Text>
                   </>
                 )}
@@ -770,9 +776,6 @@ export default function Taches() {
           </>
         )}
 
-        <View style={{ marginTop: spacing.xl }}>
-          <CalendrierMois type="tache" titre="Tâches" />
-        </View>
       </ScrollView>
 
       <Modal

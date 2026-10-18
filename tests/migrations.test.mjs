@@ -28,7 +28,9 @@ test("migrations déjà appliquées sur le téléphone : jamais renommées", () 
 
 test("migrations 12 et suivantes : toute colonne NOT NULL a un DEFAULT", () => {
   const debut = source.indexOf("version: 12,");
-  const lignes = source.slice(debut).split("\n");
+  // Le SQL des migrations 18 et suivantes vit dans lib/schema.ts.
+  const schema = readFileSync(new URL("../lib/schema.ts", import.meta.url), "utf8");
+  const lignes = [...source.slice(debut).split("\n"), ...schema.split("\n")];
   const fautives = lignes.filter(
     // Définitions de colonnes seulement (« nom TYPE … NOT NULL »), pas « IS NOT NULL » d'une requête.
     (l) =>

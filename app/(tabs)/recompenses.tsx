@@ -1,4 +1,5 @@
 import { useFocusEffect } from "expo-router";
+import { useJourCourant } from "../../hooks/useJourCourant";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert,
@@ -14,7 +15,6 @@ import {
     View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { getAujourdhui } from "../../lib/db/completions";
 import {
     IDEES_RECOMPENSES,
     REGLES_POINTS,
@@ -30,6 +30,7 @@ import {
     type Achat,
     type Recompense,
 } from "../../lib/db/recompenses";
+import { niveauDePoints, totalAffiche } from "../../lib/regles-taches";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 const ICONES = [
@@ -73,7 +74,7 @@ type Formulaire = { id?: number; nom: string; icone: string; prix: string };
 
 export default function Recompenses() {
   const t = useTheme();
-  const aujourdhui = getAujourdhui();
+  const aujourdhui = useJourCourant();
 
   const [solde, setSolde] = useState(0);
   const [total, setTotal] = useState(0);
@@ -107,10 +108,10 @@ export default function Recompenses() {
   useFocusEffect(
     useCallback(() => {
       charger();
-    }, [charger]),
+    }, [charger, aujourdhui]),
   );
 
-  const niveau = Math.floor(total / 100) + 1;
+  const niveau = niveauDePoints(total);
   const nomsPris = new Set(liste.map((r) => r.nom));
   const idees = IDEES_RECOMPENSES.filter((i) => !nomsPris.has(i.nom));
 
@@ -208,7 +209,7 @@ export default function Recompenses() {
             à dépenser
           </Text>
           <Text style={[styles.soldeDetail, { color: t.textSecondary }]}>
-            Niveau {niveau} · {total} points gagnés au total
+            Niveau {niveau} · {totalAffiche(total)} points gagnés au total
           </Text>
         </View>
 
@@ -384,8 +385,8 @@ export default function Recompenses() {
               <Text style={[styles.reglesNote, { color: t.textMuted }]}>
                 Avec 3 routines et 3 tâches, on gagne environ 60
                 points par jour : un café vaut une journée, un ciné une semaine.
-                Ton niveau dépend du total gagné, il ne baisse jamais quand tu
-                dépenses.
+                Ton niveau dépend du total gagné : dépenser ne le fait pas
+                baisser, décocher reprend les points.
               </Text>
             </>
           )}

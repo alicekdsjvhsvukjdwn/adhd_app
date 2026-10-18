@@ -28,10 +28,13 @@ import { PlusMoins } from "../components/PlusMoins";
 import {
   ecrireFrequence,
   lireFrequence,
+  POINTS_DERNIERE_ETAPE,
   POINTS_ESSENTIELLES,
+  POINTS_ETAPE,
   POINTS_TOUTES,
   type Periode,
 } from "../lib/regles-taches";
+import { momentStocke, type Moment } from "../lib/moments";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -39,22 +42,30 @@ import {
   ORDRE_CATEGORIES,
   useCouleurCategorie,
 } from "../lib/theme-categories";
-import { versionsDe } from "../lib/versions";
 
 /**
- * Écran d'ajout unique : une tâche (une fois) ou une routine (régulièrement).
+ * Écran d'ajout unique, en deux : une routine (revient certains jours) ou
+ * une tâche (une fois, ou x fois par semaine / par mois).
  * Seul le nom est obligatoire : noter doit prendre quelques secondes.
- * - ?type=routine : démarre sur « Régulièrement »
+ * - ?type=routine : démarre sur « Routine »
  * - ?id=12 : modifie l'item 12 au lieu d'en créer un
  */
 
 type Mode = "tache" | "routine";
-type Importance = 1 | 2 | 3;
+type Rythme = "une_fois" | Periode;
+type Priorite = 1 | 2 | 3;
 
-const IMPORTANCES: { valeur: Importance; libelle: string }[] = [
-  { valeur: 3, libelle: "Essentiel" },
-  { valeur: 2, libelle: "Utile" },
-  { valeur: 1, libelle: "Bonus" },
+/** Colonne items.importance : seuls les libellés ont changé. */
+const PRIORITES: { valeur: Priorite; libelle: string }[] = [
+  { valeur: 3, libelle: "Haute" },
+  { valeur: 2, libelle: "Normale" },
+  { valeur: 1, libelle: "Basse" },
+];
+
+const RYTHMES: { valeur: Rythme; libelle: string }[] = [
+  { valeur: "une_fois", libelle: "Une fois" },
+  { valeur: "semaine", libelle: "x fois par semaine" },
+  { valeur: "mois", libelle: "x fois par mois" },
 ];
 
 const ECHEANCES: { jours: number | null; libelle: string }[] = [
@@ -66,20 +77,19 @@ const ECHEANCES: { jours: number | null; libelle: string }[] = [
   { jours: 14, libelle: "Dans 2 semaines" },
 ];
 
-/** Valeurs alignées sur le type Moment du catalogue. */
-const MOMENTS: { valeur: string | null; libelle: string }[] = [
+/** Valeurs de lib/moments.ts. */
+const MOMENTS: { valeur: Moment | null; libelle: string }[] = [
   { valeur: "matin", libelle: "☀️ Matin" },
-  { valeur: "apres-midi", libelle: "🌤️ Après-midi" },
+  { valeur: "apres_midi", libelle: "🌤️ Après-midi" },
   { valeur: "soir", libelle: "🌙 Soir" },
   { valeur: null, libelle: "À tout moment" },
 ];
 
 /** Moments du catalogue qui n'ont pas de bouton : affichés seulement s'ils sont déjà choisis. */
-const AUTRES_MOMENTS: Record<string, string> = {
+const AUTRES_MOMENTS: Partial<Record<Moment, string>> = {
   reveil: "⏰ Réveil",
   midi: "🍽️ Midi",
   coucher: "🛏️ Coucher",
-  apres_midi: "🌤️ Après-midi",
 };
 
 const CATEGORIES_VALIDES = ORDRE_CATEGORIES as string[];
@@ -203,7 +213,7 @@ export default function Ajouter() {
     liste?: string;
   }>();
   const idModifie = params.id ? Number(params.id) : null;
-  // Type en base au chargement : une tâche « x fois par semaine » s'édite sous « Régulièrement ».
+  // Type en base au chargement (passer de l'un à l'autre réactive l'item).
   const [typeInitial, setTypeInitial] = useState<"routine" | "tache" | null>(null);
 
   const [mode, setMode] = useState<Mode>(
@@ -215,27 +225,20 @@ export default function Ajouter() {
   const [premiereAction, setPremiereAction] = useState("");
 
   // Tâche
-  const [importance, setImportance] = useState<Importance>(2);
+  const [importance, setImportance] = useState<Priorite>(2);
   const [echeance, setEcheance] = useState<string | null>(null);
+  const [rythme, setRythme] = useState<Rythme>("une_fois");
+  const [cible, setCible] = useState(3);
 
   // Routine
-  const [moment, setMoment] = useState<string | null>("matin");
+  const [moment, setMoment] = useState<Moment | null>("matin");
   const [jours, setJours] = useState<number[]>(TOUS_LES_JOURS);
-  // Régulièrement : certains jours (routine) ou x fois par semaine / par mois (tâche).
-  const [frequence, setFrequence] = useState<"jours" | Periode>("jours");
-  const [cible, setCible] = useState(3);
 
   // Tâche : liste (Quotidien, Travail…) ; sans précision, la première.
   const [listes, setListes] = useState<Liste[]>([]);
   const [listeId, setListeId] = useState<number | null>(
     params.liste ? Number(params.liste) : null,
   );
-
-  // Routine : version courte (jour difficile) et longue (en forme).
-  const [versionCourte, setVersionCourte] = useState("");
-  const [versionLongue, setVersionLongue] = useState("");
-  const [suggestionCourte, setSuggestionCourte] = useState<string | null>(null);
-  const [suggestionLongue, setSuggestionLongue] = useState<string | null>(null);
 
   // Routine : moment repère (« Après le café »)
   const [ancres, setAncres] = useState<Ancre[]>([]);
@@ -244,7 +247,7 @@ export default function Ajouter() {
     "apres",
   );
 
-  // Tâche : étapes
+  // Étapes : d'une tâche, ou d'une routine (essentielles / bonus)
   const [etapes, setEtapes] = useState<
     { id?: number; nom: string; faite?: number; essentielle?: number }[]
   >([]);
@@ -264,10 +267,10 @@ export default function Ajouter() {
       const item = await getItem(idModifie);
       if (item) {
         const freq = item.type === "tache" ? lireFrequence(item.recurrence) : null;
-        setMode(item.type === "routine" || freq ? "routine" : "tache");
+        setMode(item.type === "routine" ? "routine" : "tache");
         setTypeInitial(item.type === "routine" ? "routine" : "tache");
         if (freq) {
-          setFrequence(freq.periode);
+          setRythme(freq.periode);
           setCible(freq.cible);
         }
         setNom(item.nom);
@@ -278,28 +281,14 @@ export default function Ajouter() {
         );
         setDuree(item.duree_min);
         setPremiereAction(item.premiere_action ?? "");
-        setImportance(Math.max(1, Math.min(3, item.importance)) as Importance);
+        setImportance(Math.max(1, Math.min(3, item.importance)) as Priorite);
         setEcheance(item.echeance);
-        setMoment(item.moment === "indifferent" ? null : item.moment);
+        setMoment(momentStocke(item.moment));
         setJours(joursDe(item.recurrence, item.cree_le));
         setEffort(item.effort === 1 || item.effort === 3 ? item.effort : 2);
-        setVersionCourte(item.version_courte ?? "");
-        setVersionLongue(item.version_longue ?? "");
         if (item.liste_id !== null) setListeId(item.liste_id);
         setAncreId(item.ancre_id);
         setAncrePosition(item.ancre_position === "avant" ? "avant" : "apres");
-        // Ce que proposerait le catalogue, affiché en exemple dans le champ vide
-        const duCatalogue = versionsDe({
-          ...item,
-          version_courte: null,
-          version_longue: null,
-        });
-        setSuggestionCourte(
-          duCatalogue.distincte.courte ? duCatalogue.courte.nom : null,
-        );
-        setSuggestionLongue(
-          duCatalogue.distincte.longue ? duCatalogue.longue.nom : null,
-        );
         setEtapes(
           (await getEtapes(item.id)).map((e) => ({
             id: e.id,
@@ -326,9 +315,8 @@ export default function Ajouter() {
     (a) => a.active === 1 || a.id === ancreId,
   );
 
-  const periodique = mode === "routine" && frequence !== "jours";
-  const typeEffectif: "routine" | "tache" =
-    mode === "routine" && !periodique ? "routine" : "tache";
+  const periodique = mode === "tache" && rythme !== "une_fois";
+  const typeEffectif: Mode = mode;
 
   const valide =
     nom.trim().length > 0 && (typeEffectif === "tache" || jours.length > 0);
@@ -374,15 +362,13 @@ export default function Ajouter() {
                 importance,
                 echeance: periodique ? null : echeance,
                 recurrence: periodique
-                  ? ecrireFrequence({ periode: frequence as Periode, cible })
+                  ? ecrireFrequence({ periode: rythme as Periode, cible })
                   : null,
                 liste_id: listeId,
               }
             : {
                 recurrence: recurrenceDe(jours),
                 moment,
-                version_courte: versionCourte.trim() || null,
-                version_longue: versionLongue.trim() || null,
                 ancre_id: ancreId,
                 ancre_position: ancreId !== null ? ancrePosition : null,
               }),
@@ -395,7 +381,7 @@ export default function Ajouter() {
           importance,
           echeance: periodique ? null : echeance,
           recurrence: periodique
-            ? ecrireFrequence({ periode: frequence as Periode, cible })
+            ? ecrireFrequence({ periode: rythme as Periode, cible })
             : null,
           liste_id: listeId,
         });
@@ -406,8 +392,6 @@ export default function Ajouter() {
           type: "routine",
           recurrence: recurrenceDe(jours),
           moment,
-          version_courte: versionCourte.trim() || null,
-          version_longue: versionLongue.trim() || null,
           ancre_id: ancreId,
           ancre_position: ancreId !== null ? ancrePosition : null,
         });
@@ -470,8 +454,8 @@ export default function Ajouter() {
           ]}
         >
           {pourRoutine
-            ? `Des petits pas, recochés chaque jour. Les essentielles faites : +${POINTS_ESSENTIELLES} ; tout fait : ${POINTS_TOUTES} en tout. Un jour difficile, les essentielles suffisent pour ${POINTS_TOUTES}.`
-            : "Pour une grosse tâche : des petits morceaux à cocher un par un. Chaque étape rapporte des points, et finir le tout donne un bonus."}
+            ? `Des petits pas, recochés chaque jour. Essentielles faites : ${POINTS_ESSENTIELLES} pts ; tout fait : ${POINTS_TOUTES}. Un jour difficile, les essentielles suffisent pour ${POINTS_TOUTES}.`
+            : `${periodique ? "Remises à zéro après chaque fois faite. " : "Pour une grosse tâche, des petits morceaux. "}+${POINTS_ETAPE} par étape ; la dernière termine la tâche : +${POINTS_DERNIERE_ETAPE} en tout.`}
         </Text>
         {etapes.map((e, i) => (
           <View
@@ -571,12 +555,12 @@ export default function Ajouter() {
           {idModifie !== null ? "Modifier" : "Ajouter"}
         </Text>
 
-        {/* Une fois / Régulièrement */}
+        {/* Routine / Tâche */}
         <View style={[styles.selecteur, { backgroundColor: t.bgCard }]}>
           {(
             [
-              { valeur: "tache", libelle: "Une fois" },
-              { valeur: "routine", libelle: "Régulièrement" },
+              { valeur: "routine", libelle: "Routine" },
+              { valeur: "tache", libelle: "Tâche" },
             ] as { valeur: Mode; libelle: string }[]
           ).map((m) => {
             const actif = m.valeur === mode;
@@ -607,11 +591,11 @@ export default function Ajouter() {
             { color: t.textMuted, marginBottom: spacing.lg },
           ]}
         >
-          {mode === "tache"
-            ? "Une tâche disparaît une fois faite."
+          {mode === "routine"
+            ? "Revient les jours choisis, à son moment."
             : periodique
               ? "Proposée tant que l'objectif de la période n'est pas atteint."
-              : "Une routine revient les jours choisis."}
+              : "Disparaît une fois faite. L'appli choisit quand te la proposer."}
         </Text>
 
         <TextInput
@@ -628,7 +612,7 @@ export default function Ajouter() {
           returnKeyType="done"
         />
 
-        {/* Tâche : le titre et la liste à l'écran, le reste dans « Plus d'options » */}
+        {/* Tâche : liste, priorité, rythme, échéance, étapes */}
         {typeEffectif === "tache" && listes.length > 0 && (
           <>
             <Text style={[styles.label, { color: t.textSecondary }]}>
@@ -647,40 +631,88 @@ export default function Ajouter() {
           </>
         )}
 
-        {mode === "routine" && (
+
+        {typeEffectif === "tache" && (
           <>
             <Text style={[styles.label, { color: t.textSecondary }]}>
-              À quel rythme ?
+              Priorité
             </Text>
             <View style={styles.ligneChoix}>
-              <Choix
-                actif={frequence === "jours"}
-                libelle="Certains jours"
-                onPress={() => setFrequence("jours")}
-              />
-              <Choix
-                actif={frequence === "semaine"}
-                libelle="x fois par semaine"
-                onPress={() => setFrequence("semaine")}
-              />
-              <Choix
-                actif={frequence === "mois"}
-                libelle="x fois par mois"
-                onPress={() => setFrequence("mois")}
-              />
+              {PRIORITES.map((i) => (
+                <Choix
+                  key={i.valeur}
+                  actif={importance === i.valeur}
+                  libelle={i.libelle}
+                  onPress={() => setImportance(i.valeur)}
+                />
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: t.textSecondary }]}>
+              Combien de fois ?
+            </Text>
+            <View style={styles.ligneChoix}>
+              {RYTHMES.map((r) => (
+                <Choix
+                  key={r.valeur}
+                  actif={rythme === r.valeur}
+                  libelle={r.libelle}
+                  onPress={() => setRythme(r.valeur)}
+                />
+              ))}
             </View>
             {periodique && (
               <View style={[styles.ligneChoix, { alignItems: "center", marginTop: spacing.md }]}>
                 <PlusMoins
                   valeur={String(cible)}
-                  libelle={`Nombre de fois par ${frequence}`}
+                  libelle={`Nombre de fois par ${rythme}`}
                   onPas={(sens) => setCible((c) => Math.max(1, Math.min(31, c + sens)))}
                 />
                 <Text style={[styles.aide, { color: t.textSecondary, marginTop: 0 }]}>
-                  fois par {frequence}
+                  fois par {rythme}
                 </Text>
               </View>
             )}
+
+            {!periodique && (
+              <>
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Pour quand ?
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {ECHEANCES.map((e) => (
+                    <Choix
+                      key={e.libelle}
+                      actif={
+                        e.jours === null
+                          ? echeance === null
+                          : echeance === dateDansJours(e.jours)
+                      }
+                      libelle={e.libelle}
+                      onPress={() =>
+                        setEcheance(
+                          e.jours === null ? null : dateDansJours(e.jours),
+                        )
+                      }
+                    />
+                  ))}
+                  {echeance !== null &&
+                    !ECHEANCES.some(
+                      (e) =>
+                        e.jours !== null &&
+                        dateDansJours(e.jours) === echeance,
+                    ) && (
+                      <Choix
+                        actif
+                        libelle={dateCourte(echeance)}
+                        onPress={() => {}}
+                      />
+                    )}
+                </View>
+              </>
+            )}
+
+            {editeurEtapes()}
           </>
         )}
 
@@ -745,140 +777,6 @@ export default function Ajouter() {
             >
               {resumeJours(jours)}
             </Text>
-          </>
-        )}
-
-        {!plusOptions ? (
-          <TouchableOpacity
-            style={[styles.plusOptions, { borderColor: t.border }]}
-            onPress={() => setPlusOptions(true)}
-          >
-            <Text style={[styles.plusOptionsTexte, { color: t.textPrimary }]}>
-              Plus d&apos;options
-            </Text>
-            <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
-              {typeEffectif === "routine"
-                ? "Étapes, difficulté, versions selon l'énergie, domaine, durée, première action"
-                : "Importance, échéance, étapes, domaine, durée, première action"}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <>
-            {typeEffectif === "tache" ? (
-              <>
-                <Text style={[styles.label, { color: t.textSecondary }]}>
-                  Importance
-                </Text>
-                <View style={styles.ligneChoix}>
-                  {IMPORTANCES.map((i) => (
-                    <Choix
-                      key={i.valeur}
-                      actif={importance === i.valeur}
-                      libelle={i.libelle}
-                      onPress={() => setImportance(i.valeur)}
-                    />
-                  ))}
-                </View>
-
-                {!periodique && (
-                <>
-                <Text style={[styles.label, { color: t.textSecondary }]}>
-                  Pour quand ?
-                </Text>
-                <View style={styles.ligneChoix}>
-                  {ECHEANCES.map((e) => (
-                    <Choix
-                      key={e.libelle}
-                      actif={
-                        e.jours === null
-                          ? echeance === null
-                          : echeance === dateDansJours(e.jours)
-                      }
-                      libelle={e.libelle}
-                      onPress={() =>
-                        setEcheance(
-                          e.jours === null ? null : dateDansJours(e.jours),
-                        )
-                      }
-                    />
-                  ))}
-                  {echeance !== null &&
-                    !ECHEANCES.some(
-                      (e) =>
-                        e.jours !== null &&
-                        dateDansJours(e.jours) === echeance,
-                    ) && (
-                      <Choix
-                        actif
-                        libelle={dateCourte(echeance)}
-                        onPress={() => {}}
-                      />
-                    )}
-                </View>
-
-                </>
-                )}
-
-                {editeurEtapes()}
-              </>
-            ) : (
-              <>
-                {editeurEtapes()}
-
-                <Text style={[styles.label, { color: t.textSecondary }]}>
-                  Difficulté
-                </Text>
-                <View style={styles.ligneChoix}>
-                  {DIFFICULTES.map((d) => (
-                    <Choix
-                      key={d.valeur}
-                      actif={effort === d.valeur}
-                      libelle={d.libelle}
-                      onPress={() => setEffort(d.valeur)}
-                    />
-                  ))}
-                </View>
-                <Text style={[styles.aide, { color: t.textMuted }]}>
-                  Les jours difficiles, les routines exigeantes passent à part,
-                  sans pression.
-                </Text>
-
-                {/* Une routine à étapes n'a pas de version courte ni longue
-                    (les valeurs déjà saisies sont gardées, juste masquées). */}
-                {etapes.length === 0 && (
-                <>
-                <Text style={[styles.label, { color: t.textSecondary }]}>
-                  Version courte (facultatif)
-                </Text>
-                <TextInput
-                  style={styleInput}
-                  placeholder={suggestionCourte ?? "Ex : deux minutes seulement"}
-                  placeholderTextColor={t.textMuted}
-                  value={versionCourte}
-                  onChangeText={setVersionCourte}
-                  returnKeyType="done"
-                />
-                <Text style={[styles.aide, { color: t.textMuted }]}>
-                  Affichée les jours difficiles. Elle rapporte les mêmes
-                  points.
-                </Text>
-
-                <Text style={[styles.label, { color: t.textSecondary }]}>
-                  Version longue (facultatif)
-                </Text>
-                <TextInput
-                  style={styleInput}
-                  placeholder={suggestionLongue ?? "Ex : vingt minutes"}
-                  placeholderTextColor={t.textMuted}
-                  value={versionLongue}
-                  onChangeText={setVersionLongue}
-                  returnKeyType="done"
-                />
-                <Text style={[styles.aide, { color: t.textMuted }]}>
-                  Affichée les jours où tu es en forme. Mêmes points.
-                </Text>
-                </>
-                )}
 
                 <Text style={[styles.label, { color: t.textSecondary }]}>
                   Moment repère (facultatif)
@@ -929,6 +827,47 @@ export default function Ajouter() {
                     </Text>
                   </>
                 )}
+
+            {editeurEtapes()}
+          </>
+        )}
+
+        {!plusOptions ? (
+          <TouchableOpacity
+            style={[styles.plusOptions, { borderColor: t.border }]}
+            onPress={() => setPlusOptions(true)}
+          >
+            <Text style={[styles.plusOptionsTexte, { color: t.textPrimary }]}>
+              Plus d&apos;options
+            </Text>
+            <Text style={[styles.plusOptionsDetail, { color: t.textMuted }]}>
+              {typeEffectif === "routine"
+                ? "Difficulté, domaine, durée, première action"
+                : "Domaine, durée, première action"}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            {typeEffectif === "routine" && (
+              <>
+                <Text style={[styles.label, { color: t.textSecondary }]}>
+                  Difficulté
+                </Text>
+                <View style={styles.ligneChoix}>
+                  {DIFFICULTES.map((d) => (
+                    <Choix
+                      key={d.valeur}
+                      actif={effort === d.valeur}
+                      libelle={d.libelle}
+                      onPress={() => setEffort(d.valeur)}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.aide, { color: t.textMuted }]}>
+                  Les jours difficiles, les routines exigeantes passent à part,
+                  sans pression.
+                </Text>
+
               </>
             )}
 

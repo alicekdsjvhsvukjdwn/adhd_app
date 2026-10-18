@@ -1,7 +1,8 @@
 import type { Categorie } from "../catalogue";
-import { dateLocale, ilYA, jourDeCreation } from "../dates";
+import { dateLocale, jourDeCreation } from "../dates";
 import { categorieEffective } from "./categories";
 import { getDatabase } from "./client";
+import { logEvent } from "./events";
 import {
   rafraichirObservations,
   reinitialiserPropositionSansAction,
@@ -27,10 +28,6 @@ export type RoutineAvecStatut = {
   moment: string | null;
   template_id: string | null;
   variante_rang: number | null;
-  version_courte: string | null;
-  version_longue: string | null;
-  /** Version faite aujourd'hui, si la routine est cochée. */
-  versionDuJour: string | null;
   ancre_id: number | null;
   ancre_nom: string | null;
   ancre_moment: string | null;
@@ -73,7 +70,6 @@ const ORDRE_MOMENT = `
     WHEN 'matin' THEN 2
     WHEN 'midi' THEN 3
     WHEN 'apres_midi' THEN 4
-    WHEN 'apres-midi' THEN 4
     WHEN 'soir' THEN 5
     WHEN 'coucher' THEN 6
     ELSE 7
@@ -98,9 +94,6 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     recurrence: string | null;
     cree_le: string;
     variante_rang: number | null;
-    version_courte: string | null;
-    version_longue: string | null;
-    version_jour: string | null;
     ancre_id: number | null;
     ancre_nom: string | null;
     ancre_moment: string | null;
@@ -109,8 +102,7 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     `SELECT i.id, i.nom, i.premiere_action, i.duree_min, i.effort,
             i.categorie, i.template_id, i.moment,
             i.recurrence, i.cree_le,
-            i.variante_rang, i.version_courte, i.version_longue,
-            c.version AS version_jour,
+            i.variante_rang,
             i.ancre_id, i.ancre_position,
             a.nom AS ancre_nom, a.moment AS ancre_moment,
             c.statut AS statut_jour
@@ -140,9 +132,6 @@ export async function getRoutinesAvecStatutDuJour(): Promise<
     moment: r.moment,
     template_id: r.template_id,
     variante_rang: r.variante_rang,
-    version_courte: r.version_courte,
-    version_longue: r.version_longue,
-    versionDuJour: r.version_jour,
     ancre_id: r.ancre_id,
     ancre_nom: r.ancre_nom,
     ancre_moment: r.ancre_moment,
@@ -164,7 +153,7 @@ export async function completer(
   itemId: number,
   statut: StatutCompletion = "complet",
   dureeReelleMin?: number,
-  /** Version faite : 'courte' | 'normale' | 'longue'. Même nombre de points. */
+  /** completions.version : 'normale', ou le palier d'une routine à étapes ('essentielles' | 'toutes'). */
   version?: string,
   /** Points de cette complétion, si ce n'est pas le barème du statut (routines à étapes). */
   points?: number,
@@ -217,8 +206,6 @@ export async function completer(
   const { addPoints } = await import("./stats");
   const delta = vaut - (existante ? pointsDe(existante) : 0);
   if (delta !== 0) await addPoints(delta);
-
-  const { logEvent } = await import("./events");
   await logEvent("item_complete", itemId, {
     statut,
     heure,
@@ -265,61 +252,8 @@ export async function annulerCompletion(
 
   const { addPoints } = await import("./stats");
   await addPoints(-pointsDe(existante));
-
-  const { logEvent } = await import("./events");
   await logEvent("item_decoche", itemId, { heure: new Date().getHours() });
 
   await rafraichirObservations(itemId);
 }
 
-/** Conservé pour compatibilité avec l'UI existante. */
-export async function toggleCompletionAujourdhui(
-  itemId: number,
-  estActuellementFaite: boolean,
-) {
-  if (estActuellementFaite) {
-    await annulerCompletion(itemId);
-  } else {
-    await completer(itemId, "complet");
-  }
-}
-
-/**
- * Taux de complétion sur une fenêtre glissante, utilisé pour le plafond
- * de routines actives (> 70 % : proposer un ajout ; < 50 % : ne rien proposer).
- */
-export async function tauxCompletion(jours = 14): Promise<number> {
-  const db = await getDatabase();
-  const debut = ilYA(jours);
-
-  const actives = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM items WHERE type = 'routine' AND statut = 'actif'",
-  );
-  if (!actives || actives.n === 0) return 0;
-
-  const faites = await db.getFirstAsync<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM completions
-     WHERE date >= ? AND statut IN ('complet', 'partiel')`,
-    debut,
-  );
-
-  const attendu = actives.n * jours;
-  return attendu === 0 ? 0 : Math.min(1, (faites?.n ?? 0) / attendu);
-}
-
-/** Historique d'un item, pour l'écran Progression. N'affiche que ce qui a été fait. */
-export async function historiqueItem(itemId: number, jours = 30) {
-  const db = await getDatabase();
-  const debut = ilYA(jours);
-  return db.getAllAsync<{
-    date: string;
-    statut: StatutCompletion;
-    heure: number | null;
-  }>(
-    `SELECT date, statut, heure FROM completions
-     WHERE item_id = ? AND date >= ?
-     ORDER BY date DESC`,
-    itemId,
-    debut,
-  );
-}

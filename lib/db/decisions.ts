@@ -1,4 +1,3 @@
-import { ilYA } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -59,44 +58,3 @@ export async function logDecisions(
   }
 }
 
-/**
- * Métrique principale : parmi ce qui a été proposé dans le top 3,
- * quelle proportion a effectivement été faite le jour même.
- */
-export async function tauxReussiteDesPropositions(jours = 14): Promise<number> {
-  const db = await getDatabase();
-  const debut = ilYA(jours);
-
-  const row = await db.getFirstAsync<{ proposes: number; faits: number }>(
-    `SELECT
-       COUNT(DISTINCT d.date || '-' || d.item_id) AS proposes,
-       COUNT(DISTINCT CASE WHEN c.id IS NOT NULL
-             THEN d.date || '-' || d.item_id END) AS faits
-     FROM decision_log d
-     LEFT JOIN completions c ON c.item_id = d.item_id AND c.date = d.date
-     WHERE d.propose = 1 AND d.date >= ?`,
-    debut,
-  );
-
-  if (!row || row.proposes === 0) return 0;
-  return row.faits / row.proposes;
-}
-
-/** Ce que le moteur a proposé aujourd'hui, pour l'explication "pourquoi celui-là". */
-export async function decisionsDuJour() {
-  const db = await getDatabase();
-  return db.getAllAsync<{
-    item_id: number;
-    score: number;
-    composantes: string;
-    rang: number;
-    raison: string;
-    exploration: number;
-  }>(
-    `SELECT item_id, score, composantes, rang, raison, exploration
-     FROM decision_log
-     WHERE date = ? AND propose = 1
-     ORDER BY horodatage DESC, rang`,
-    getAujourdhui(),
-  );
-}

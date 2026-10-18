@@ -50,11 +50,30 @@ export default function Seance() {
       .catch((e) => Alert.alert("Série non enregistrée", String(e)));
   };
 
-  const terminer = async () => {
+  /**
+   * Clôt la séance une seule fois : séries à 0 retirées, et sans aucune
+   * série faite, ni séance ni points (terminerSeance).
+   */
+  const fermer = async () => {
     await file.current;
-    if (seanceId.current) await terminerSeance(await seanceId.current);
+    const id = seanceId.current;
+    seanceId.current = null;
+    if (id) await terminerSeance(await id);
+  };
+
+  const terminer = async () => {
+    await fermer();
     router.back();
   };
+
+  // Écran quitté autrement (« Retour », geste) : la séance est close quand même.
+  useEffect(
+    () => () => {
+      fermer().catch(() => {});
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const aCommence = Object.values(realise).some((v) => v > 0);
 

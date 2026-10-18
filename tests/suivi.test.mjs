@@ -11,6 +11,7 @@ import {
   phraseAttente,
   phraseRegularite,
   proposerMontee,
+  nuitRapporte,
 } from "../lib/suivi-regles.ts";
 
 test("durée de sommeil : passage de minuit, même jour, nuit nulle", () => {
@@ -70,4 +71,14 @@ test("seuil des 7 jours dans chaque groupe", () => {
     ok: true, moyA: 1, moyB: 0.5, nA: 7, nB: 8,
   });
   assert.deepEqual(comparer([...sept, ...sept], []), { ok: false, avancement: 0 });
+});
+
+test("nuits : des points pour les 7 derniers jours seulement", () => {
+  assert.equal(nuitRapporte("2026-10-18", "2026-10-18"), true);
+  assert.equal(nuitRapporte("2026-10-12", "2026-10-18"), true);
+  assert.equal(nuitRapporte("2026-10-11", "2026-10-18"), false);
+  assert.equal(nuitRapporte("2026-10-19", "2026-10-18"), false);
+  // Changement d'heure (25 octobre) : toujours 7 jours de calendrier.
+  assert.equal(nuitRapporte("2026-10-20", "2026-10-26"), true);
+  assert.equal(nuitRapporte("2026-10-19", "2026-10-26"), false);
 });

@@ -1,29 +1,29 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-    FlatList,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Keyboard,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Ancre, getAncres, MomentJournee, toggleAncre } from "../lib/db";
+import { addAncre, getAncres, toggleAncre, type Ancre, type MomentJournee } from "../lib/db";
+import { LIBELLES_MOMENT } from "../lib/moments";
+import { radius, spacing, typography, useTheme } from "../lib/theme";
 
-const LIBELLES_MOMENTS: Record<MomentJournee, string> = {
-  matin: "Matin",
-  midi: "Midi",
-  apres_midi: "Après-midi",
-  soir: "Soir",
-};
+const MOMENTS: MomentJournee[] = ["matin", "midi", "apres_midi", "soir"];
 
 export default function AncresScreen() {
-  const [ancres, setAncres] = useState<Ancre[]>([]);
   const router = useRouter();
+  const t = useTheme();
+  const [ancres, setAncres] = useState<Ancre[]>([]);
+  const [nom, setNom] = useState("");
+  const [moment, setMoment] = useState<MomentJournee>("matin");
 
   const charger = useCallback(async () => {
-    const data = await getAncres();
-    setAncres(data);
+    setAncres(await getAncres());
   }, []);
 
   useEffect(() => {
@@ -38,80 +38,147 @@ export default function AncresScreen() {
     );
   };
 
-  // Groupement par moment de la journée
-  const parMoment = ancres.reduce<Record<string, Ancre[]>>((acc, ancre) => {
-    if (!acc[ancre.moment]) acc[ancre.moment] = [];
-    acc[ancre.moment].push(ancre);
-    return acc;
-  }, {});
-
-  const moments: MomentJournee[] = ["matin", "midi", "apres_midi", "soir"];
+  /** Un moment repère ajouté à la main est actif tout de suite. */
+  const onAjouter = async () => {
+    const n = nom.trim();
+    if (!n) return;
+    await addAncre(n, moment);
+    setNom("");
+    Keyboard.dismiss();
+    await charger();
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.retour}>← Retour</Text>
-        </TouchableOpacity>
-        <Text style={styles.titre}>Mes moments repères</Text>
-      </View>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: t.bgApp }}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
+      <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <Text style={[styles.retour, { color: t.accentText }]}>← Retour</Text>
+      </TouchableOpacity>
+      <Text style={[styles.titre, { color: t.textPrimary }]}>Mes moments repères</Text>
 
-      <Text style={styles.intro}>
+      <Text style={[styles.intro, { color: t.textSecondary }]}>
         Coche les moments de ta journée qui sont déjà bien ancrés dans tes
         habitudes. Tu pourras ensuite y accrocher tes routines pour que ton
         cerveau les associe naturellement.
       </Text>
 
-      <FlatList
-        data={moments}
-        keyExtractor={(m) => m}
-        renderItem={({ item: moment }) => (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitre}>{LIBELLES_MOMENTS[moment]}</Text>
-            {(parMoment[moment] || []).map((ancre) => (
+      {MOMENTS.map((m) => {
+        const dans = ancres.filter((a) => a.moment === m);
+        if (dans.length === 0) return null;
+        return (
+          <View key={m} style={styles.section}>
+            <Text style={[styles.sectionTitre, { color: t.accentText }]}>
+              {LIBELLES_MOMENT[m]}
+            </Text>
+            {dans.map((ancre) => (
               <TouchableOpacity
                 key={ancre.id}
-                style={[styles.item, ancre.active ? styles.itemActif : null]}
+                style={[
+                  styles.item,
+                  { backgroundColor: ancre.active ? t.bgCardActive : t.bgCard },
+                ]}
                 onPress={() => onToggle(ancre.id, ancre.active)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: ancre.active === 1 }}
               >
-                <Text style={styles.texteItem}>
+                <Text style={[styles.texteItem, { color: t.textPrimary }]}>
                   {ancre.active ? "✓ " : "○ "}
                   {ancre.nom}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-        )}
+        );
+      })}
+
+      {/* Ajouter un moment repère */}
+      <Text style={[styles.sectionTitre, { color: t.accentText }]}>Ajouter</Text>
+      <TextInput
+        style={[
+          styles.champ,
+          { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
+        ]}
+        placeholder="Ex : la fin du travail"
+        placeholderTextColor={t.textMuted}
+        value={nom}
+        onChangeText={setNom}
+        onSubmitEditing={onAjouter}
+        returnKeyType="done"
       />
-    </SafeAreaView>
+      <View style={styles.puces}>
+        {MOMENTS.map((m) => {
+          const actif = m === moment;
+          return (
+            <TouchableOpacity
+              key={m}
+              onPress={() => setMoment(m)}
+              style={[
+                styles.puce,
+                {
+                  backgroundColor: actif ? t.accent : t.bgCard,
+                  borderColor: actif ? t.accent : t.border,
+                },
+              ]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: actif }}
+            >
+              <Text style={{ color: actif ? t.textOnAccent : t.textSecondary, fontSize: typography.small }}>
+                {LIBELLES_MOMENT[m]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <TouchableOpacity
+        style={[styles.bouton, { backgroundColor: nom.trim() ? t.accent : t.bgCard }]}
+        onPress={onAjouter}
+        disabled={!nom.trim()}
+      >
+        <Text
+          style={[styles.boutonTexte, { color: nom.trim() ? t.textOnAccent : t.textMuted }]}
+        >
+          Ajouter ce moment repère
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
-  header: { marginBottom: 16 },
-  retour: { fontSize: 15, color: "#4a90d9", marginBottom: 8 },
-  titre: { fontSize: 22, fontWeight: "600" },
-  intro: {
-    fontSize: 14,
-    color: "#555",
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  section: { marginBottom: 20 },
+  container: { paddingTop: 60, paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl },
+  retour: { fontSize: typography.body, marginBottom: spacing.sm },
+  titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: spacing.md },
+  intro: { fontSize: typography.bodySmall, lineHeight: 20, marginBottom: spacing.xl },
+  section: { marginBottom: spacing.xl },
   sectionTitre: {
-    fontSize: 13,
+    fontSize: typography.small,
     fontWeight: "700",
-    color: "#8a5a1a",
     textTransform: "uppercase",
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  item: {
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: "#f0f0f0",
-    marginBottom: 8,
+  item: { padding: 14, borderRadius: radius.md, marginBottom: spacing.sm },
+  texteItem: { fontSize: typography.body },
+  champ: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: typography.body,
   },
-  itemActif: { backgroundColor: "#d4e8f4" },
-  texteItem: { fontSize: 15 },
+  puces: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
+  puce: {
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  bouton: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    alignItems: "center",
+  },
+  boutonTexte: { fontSize: typography.body, fontWeight: "600" },
 });

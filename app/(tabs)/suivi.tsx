@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { getAujourdhui } from "../../lib/db/completions";
+import { useJourCourant } from "../../hooks/useJourCourant";
 import { resumeSommeil, type ResumeSommeil } from "../../lib/db/sommeil";
 import {
   changerPalier,
@@ -36,6 +36,7 @@ import { radius, spacing, typography, useTheme } from "../../lib/theme";
 export default function Suivi() {
   const router = useRouter();
   const t = useTheme();
+  const aujourdhui = useJourCourant();
 
   const [sommeil, setSommeil] = useState<ResumeSommeil | null>(null);
   const [reglages, setReglages] = useState<Reglages | null>(null);
@@ -66,7 +67,7 @@ export default function Suivi() {
   useFocusEffect(
     useCallback(() => {
       charger();
-    }, [charger]),
+    }, [charger, aujourdhui]),
   );
 
   const ouvrir = async (f: Famille) => {
@@ -93,7 +94,7 @@ export default function Suivi() {
   );
 
   const derniere = sommeil?.derniere;
-  const nuitDuJourNotee = derniere?.date === getAujourdhui();
+  const nuitDuJourNotee = derniere?.date === aujourdhui;
 
   return (
     <ScrollView

@@ -13,6 +13,7 @@ import {
   raisonDominante,
   scoreTotal,
 } from "../moteur-regles";
+import { HEURE_PAR_MOMENT, momentStocke } from "../moments";
 import { categorieEffective, equilibreParCategorie } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
@@ -43,17 +44,6 @@ export { POIDS } from "../moteur-regles";
 /** Nombre de places affichées sur l'écran Aujourd'hui. */
 const TOP = 3;
 
-/** Heure « idéale » par moment déclaré, quand l'observation manque. */
-const HEURE_PAR_MOMENT: Record<string, number> = {
-  reveil: 7,
-  matin: 9,
-  midi: 12.5,
-  apres_midi: 15.5,
-  "apres-midi": 15.5,
-  soir: 19,
-  coucher: 22,
-};
-
 /** Tolérance autour du bon moment (en heures) avant que le score tombe à 0. */
 const FENETRE_MOMENT_H = 4;
 
@@ -75,8 +65,6 @@ type CandidatRow = {
   echeance: string | null;
   heure_reelle_moy: number | null;
   nb_propositions_sans_action: number;
-  fenetre_debut_h: number | null;
-  fenetre_fin_h: number | null;
   moment_effectif: string | null;
   liste_id: number | null;
   recurrence: string | null;
@@ -117,7 +105,8 @@ function scoreMoment(c: CandidatRow, heureActuelle: number): number {
   // L'observation (heure réelle moyenne) prime sur le moment déclaré.
   let heureIdeale: number | null = c.heure_reelle_moy;
   if (heureIdeale == null && c.moment_effectif) {
-    heureIdeale = HEURE_PAR_MOMENT[c.moment_effectif] ?? null;
+    const m = momentStocke(c.moment_effectif);
+    heureIdeale = m ? HEURE_PAR_MOMENT[m] : null;
   }
   if (heureIdeale == null) return 0.5; // sans repère : ni favorisé ni pénalisé
   const ecart = Math.abs(heureActuelle - heureIdeale);
@@ -142,7 +131,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
             i.importance, i.duree_min,
             i.premiere_action, i.echeance, i.heure_reelle_moy,
             i.nb_propositions_sans_action,
-            i.fenetre_debut_h, i.fenetre_fin_h, i.liste_id, i.recurrence,
+            i.liste_id, i.recurrence,
             COALESCE(a.moment, i.moment) AS moment_effectif
      FROM items i
      LEFT JOIN ancres a ON a.id = i.ancre_id
@@ -153,8 +142,6 @@ export async function genererPropositions(): Promise<Proposition[]> {
     date,
   );
 
-  // Contrainte externe dure : hors de sa fenêtre horaire, un item
-  // (ex : appeler un service ouvert 9 h-17 h) n'est pas proposable maintenant.
   // Tâche « x fois par période » : proposée tant que le compte est sous
   // l'objectif, puis plus rien jusqu'au lundi ou au 1er du mois.
   for (const c of candidats) {
@@ -169,14 +156,9 @@ export async function genererPropositions(): Promise<Proposition[]> {
     c.compte = { fait: r?.n ?? 0, cible: f.cible, periode: f.periode };
   }
 
-  const proposables = candidats.filter((c) => {
-    if (c.compte && c.compte.fait >= c.compte.cible) return false;
-    if (c.fenetre_debut_h != null && heureActuelle < c.fenetre_debut_h)
-      return false;
-    if (c.fenetre_fin_h != null && heureActuelle >= c.fenetre_fin_h)
-      return false;
-    return true;
-  });
+  const proposables = candidats.filter(
+    (c) => !(c.compte && c.compte.fait >= c.compte.cible),
+  );
 
   const retards = await retardsDesListes(date);
   // Un jour difficile, la tâche unique doit rester la plus petite, pas la plus en retard.

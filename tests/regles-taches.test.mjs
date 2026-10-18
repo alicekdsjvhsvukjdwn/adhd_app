@@ -3,16 +3,25 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import {
+  BONUS_FIN,
   compterDans,
+  debutEtapesEnCours,
   debutPeriode,
   deltaPoints,
   finPeriode,
   idees,
   lireFrequence,
   libelleCompte,
+  niveauDePoints,
+  SQL_AJOUTER_POINTS,
+  totalAffiche,
   palierEtapes,
   periodesRecentes,
+  pointsEtapesARetirer,
   pointsPalier,
+  POINTS_COMPLETION,
+  POINTS_DERNIERE_ETAPE,
+  POINTS_ETAPE,
   PLAFOND_RETARD,
   retardObjectif,
   urgenceAvecRetard,
@@ -209,4 +218,51 @@ test("moteur : le retard enregistré ne compte qu'à travers l'urgence, poids in
   // À travers l'urgence plafonnée : effet borné à 0,6 × poids de l'urgence.
   const avec = scoreTotal({ ...base, urgence: urgenceAvecRetard(0, 1) });
   assert.ok(Math.abs(avec - scoreTotal(base) - PLAFOND_RETARD * POIDS.urgence) < 1e-9);
+});
+
+test("grosse tâche : la dernière étape rapporte bien +25 (étape, tâche faite, bonus)", () => {
+  assert.equal(POINTS_DERNIERE_ETAPE, 25);
+  assert.equal(POINTS_DERNIERE_ETAPE, POINTS_ETAPE + POINTS_COMPLETION + BONUS_FIN);
+});
+
+test("remettre à faire une tâche à étapes : tout est repris, la refaire ne donne qu'une fois", () => {
+  // 3 étapes cochées : +5, +5, puis la dernière +25.
+  const gagne = 2 * POINTS_ETAPE + POINTS_DERNIERE_ETAPE;
+  assert.equal(gagne, 35);
+  // Remettre à faire : la complétion (10) et les étapes avec le bonus.
+  const repris = POINTS_COMPLETION + pointsEtapesARetirer(3, 3);
+  assert.equal(gagne - repris, 0);
+  // Refaite : de nouveau 35, et pas plus.
+  assert.equal(gagne - repris + gagne, 35);
+  // Étapes pas toutes cochées (tâche faite autrement) : pas de bonus à reprendre.
+  assert.equal(pointsEtapesARetirer(1, 3), POINTS_ETAPE);
+  assert.equal(pointsEtapesARetirer(0, 0), 0);
+});
+
+test("étapes d'une tâche récurrente : gardées dans la période, à zéro après chaque fois faite", () => {
+  // Semaine du lundi 12 au dimanche 18 octobre 2026.
+  assert.equal(debutEtapesEnCours("2026-10-15", "semaine", null), "2026-10-12");
+  // Faite le mardi : dès le mercredi, on repart de zéro.
+  assert.equal(debutEtapesEnCours("2026-10-15", "semaine", "2026-10-13"), "2026-10-14");
+  // Faite la semaine d'avant : la nouvelle semaine commence de zéro.
+  assert.equal(debutEtapesEnCours("2026-10-15", "semaine", "2026-10-09"), "2026-10-12");
+  // Par mois.
+  assert.equal(debutEtapesEnCours("2026-10-20", "mois", null), "2026-10-01");
+  assert.equal(debutEtapesEnCours("2026-10-20", "mois", "2026-10-05"), "2026-10-06");
+});
+
+test("points : un retrait sous zéro n'est pas perdu, un recochage ne crée rien", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE stats (id INTEGER PRIMARY KEY, points_total INTEGER NOT NULL DEFAULT 0)");
+  db.exec("INSERT INTO stats VALUES (1, 5)");
+  const ajouter = (d) => db.prepare(SQL_AJOUTER_POINTS).run(d);
+  const total = () => db.prepare("SELECT points_total AS p FROM stats").get().p;
+  ajouter(-10); // décocher une routine cochée avant un ancien plancher
+  assert.equal(total(), -5);
+  assert.equal(totalAffiche(total()), 0);
+  assert.equal(niveauDePoints(total()), 1);
+  ajouter(10); // recocher
+  assert.equal(total(), 5);
+  assert.equal(niveauDePoints(199), 2);
+  assert.equal(niveauDePoints(200), 3);
 });

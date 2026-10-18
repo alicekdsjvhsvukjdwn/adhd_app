@@ -1,5 +1,6 @@
 import type { Sortie } from "../minuteur";
 import { getDatabase } from "./client";
+import { logEvent } from "./events";
 import { getAujourdhui } from "./completions";
 
 /**
@@ -38,8 +39,6 @@ export async function demarrerSession(params: {
     new Date().toISOString(),
     getAujourdhui(),
   );
-
-  const { logEvent } = await import("./events");
   await logEvent("session_demarree", params.itemId ?? null, {
     type: params.type,
     estimationMin: params.estimationMin ?? null,
@@ -89,8 +88,6 @@ export async function terminerSession(
       session.item_id,
     );
   }
-
-  const { logEvent } = await import("./events");
   await logEvent("session_terminee", session?.item_id ?? null, {
     type: session?.type ?? null,
     estimationMin: session?.estimation_min ?? null,
@@ -104,52 +101,3 @@ export async function terminerSession(
   });
 }
 
-/**
- * Écart systématique entre estimation et durée réelle.
- * Un ratio de 2 signifie « tu mets deux fois plus de temps que prévu ».
- * Retourne null tant qu'il n'y a pas assez de sessions pour que ce soit parlant.
- */
-export async function ratioEstimation(
-  minSessions = 5,
-): Promise<{ ratio: number; n: number } | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<{ n: number; ratio: number | null }>(
-    `SELECT COUNT(*) AS n, AVG(reelle_min * 1.0 / estimation_min) AS ratio
-     FROM sessions
-     WHERE type = 'focus'
-       AND estimation_min IS NOT NULL AND estimation_min > 0
-       AND reelle_min IS NOT NULL`,
-  );
-
-  if (!row || row.n < minSessions || row.ratio === null) return null;
-  return { ratio: row.ratio, n: row.n };
-}
-
-/** Durée de session réellement tenue : sert à calibrer les propositions. */
-export async function dureeSessionTypique(): Promise<number | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<{ mediane: number | null }>(
-    `SELECT AVG(reelle_min) AS mediane
-     FROM sessions
-     WHERE type = 'focus' AND reelle_min IS NOT NULL AND terminee = 1`,
-  );
-  return row?.mediane ?? null;
-}
-
-export async function sessionsDuJour(): Promise<Session[]> {
-  const db = await getDatabase();
-  return db.getAllAsync<Session>(
-    "SELECT * FROM sessions WHERE date = ? ORDER BY debut DESC",
-    getAujourdhui(),
-  );
-}
-
-export async function tempsFocusDuJour(): Promise<number> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<{ total: number | null }>(
-    `SELECT SUM(reelle_min) AS total FROM sessions
-     WHERE date = ? AND type = 'focus' AND reelle_min IS NOT NULL`,
-    getAujourdhui(),
-  );
-  return Math.round(row?.total ?? 0);
-}

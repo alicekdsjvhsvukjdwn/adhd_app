@@ -9,6 +9,7 @@ import {
   decalerHeure,
   dureeLisible,
   dureeSommeilMin,
+  nuitRapporte,
   POINTS_NUIT,
   QUALITES,
   type Qualite,
@@ -118,7 +119,11 @@ export default function Sommeil() {
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={[styles.titre, { color: t.textPrimary }]}>{jourLisible(date)}</Text>
           <Text style={[styles.aide, { color: t.textMuted }]}>
-            {dejaNotee ? "Déjà notée : tu peux la corriger." : `Nuit à noter · +${POINTS_NUIT} pts`}
+            {dejaNotee
+              ? "Déjà notée : tu peux la corriger."
+              : nuitRapporte(date, aujourdhui)
+                ? `Nuit à noter · +${POINTS_NUIT} pts`
+                : "Nuit à noter (plus de 7 jours : sans points)"}
           </Text>
         </View>
         <TouchableOpacity

@@ -1,17 +1,15 @@
-import { initAncres } from "./ancres";
+import { SQL_LIGNES_DE_BASE } from "../schema";
+import { getDatabase } from "./client";
 import { runMigrations } from "./migrations";
-import { initPreferences } from "./preferences";
-import { initStats } from "./stats";
 
 /**
  * Tout ce qu'il faut pour que la base soit utilisable : les migrations
- * d'abord, puis les tables créées hors migrations (moments repères,
- * statistiques, préférences) avec leurs valeurs de départ.
+ * (toutes les tables), puis les lignes de départ (stats, moments repères).
  *
- * Appelé au démarrage ET après une réinitialisation : c'est le seul
- * endroit à tenir à jour quand une nouvelle table apparaît.
+ * Appelé au démarrage, après une réinitialisation et après une restauration.
  */
 export async function initialiserBase(): Promise<void> {
   await runMigrations();
-  await Promise.all([initAncres(), initStats(), initPreferences()]);
+  const db = await getDatabase();
+  await db.execAsync(SQL_LIGNES_DE_BASE);
 }

@@ -13,10 +13,10 @@ import {
   type Sauvegarde,
   type Validation,
 } from "../sauvegarde-format";
+import { transformationsApres } from "../schema";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { initialiserBase } from "./demarrage";
-import { initEvents } from "./events";
 
 /**
  * Sauvegarde et restauration de toutes les données, en un fichier JSON.
@@ -41,18 +41,9 @@ async function nomsTables(db: Db): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-/** S'assure que toutes les tables existent, même celles créées à la demande. */
-async function assurerTables(): Promise<void> {
-  await initialiserBase();
-  await initEvents();
-  const db = await getDatabase();
-  await db.execAsync(
-    "CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);",
-  );
-}
 
 export async function lireSauvegarde(): Promise<Sauvegarde> {
-  await assurerTables();
+  await initialiserBase();
   const db = await getDatabase();
   const tables: Record<string, Ligne[]> = {};
   for (const t of await nomsTables(db)) {
@@ -134,7 +125,7 @@ export async function choisirSauvegarde(): Promise<Validation | null> {
  * Tout ou rien : en cas d'erreur, la base reste telle qu'elle était.
  */
 export async function restaurerSauvegarde(s: Sauvegarde): Promise<void> {
-  await assurerTables();
+  await initialiserBase();
   const db = await getDatabase();
   const actuelles = await nomsTables(db);
 
@@ -160,6 +151,10 @@ export async function restaurerSauvegarde(s: Sauvegarde): Promise<void> {
         );
       }
     }
+
+    // Une sauvegarde plus ancienne arrive telle quelle : on rejoue les
+    // transformations de données des migrations qu'elle n'a pas connues.
+    for (const sql of transformationsApres(s.schema)) await txn.execAsync(sql);
   });
 
   // Recrée les lignes uniques (stats, préférences) si la sauvegarde n'en avait pas.

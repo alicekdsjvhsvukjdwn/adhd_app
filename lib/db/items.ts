@@ -1,10 +1,15 @@
+import { getFamille } from "../catalogue";
 import {
+  nomApresVariante,
   requeteModification,
+  SQL_SUPPRESSION_ITEM,
   type ChampModifiable,
 } from "../modification-item";
+import { momentStocke } from "../moments";
 import { getDatabase } from "./client";
+import { logEvent } from "./events";
 
-export type TypeItem = "routine" | "tache" | "evenement";
+export type TypeItem = "routine" | "tache";
 export type StatutItem = "actif" | "pause" | "archive" | "termine";
 export type Position = "avant" | "apres";
 
@@ -25,28 +30,14 @@ export type Item = {
   ancre_id: number | null;
   ancre_position: Position | null;
   echeance: string | null;
-  effort_total_min: number | null;
-  taille_seance_min: number | null;
   temps_passe_min: number;
-  fenetre_jours: string | null;
-  fenetre_debut_h: number | null;
-  fenetre_fin_h: number | null;
-  date_evenement: string | null;
-  heure_evenement: string | null;
   duree_reelle_moy_min: number | null;
   heure_reelle_moy: number | null;
   nb_completions: number;
   nb_propositions_sans_action: number;
   cree_le: string;
   maj_le: string;
-  version_courte: string | null;
-  version_longue: string | null;
   liste_id: number | null;
-};
-
-export type ItemAvecAncre = Item & {
-  ancre_nom: string | null;
-  ancre_moment: string | null;
 };
 
 export type NouvelItem = {
@@ -64,15 +55,6 @@ export type NouvelItem = {
   ancre_id?: number | null;
   ancre_position?: Position | null;
   echeance?: string | null;
-  effort_total_min?: number | null;
-  taille_seance_min?: number | null;
-  fenetre_jours?: string | null;
-  fenetre_debut_h?: number | null;
-  fenetre_fin_h?: number | null;
-  date_evenement?: string | null;
-  heure_evenement?: string | null;
-  version_courte?: string | null;
-  version_longue?: string | null;
   liste_id?: number | null;
 };
 
@@ -91,22 +73,6 @@ export async function getItems(
   );
 }
 
-export async function getItemsAvecAncre(
-  statut: StatutItem | "tous" = "actif",
-): Promise<ItemAvecAncre[]> {
-  const db = await getDatabase();
-  const clause = statut === "tous" ? "" : "WHERE i.statut = ?";
-  const params = statut === "tous" ? [] : [statut];
-  return db.getAllAsync<ItemAvecAncre>(
-    `SELECT i.*, a.nom AS ancre_nom, a.moment AS ancre_moment
-     FROM items i
-     LEFT JOIN ancres a ON a.id = i.ancre_id
-     ${clause}
-     ORDER BY i.id`,
-    ...params,
-  );
-}
-
 export async function getItem(id: number): Promise<Item | null> {
   const db = await getDatabase();
   return db.getFirstAsync<Item>("SELECT * FROM items WHERE id = ?", id);
@@ -121,12 +87,9 @@ export async function addItem(item: NouvelItem): Promise<number> {
       nom, type, statut, recurrence, template_id, variante_rang,
       categorie, moment, effort, duree_min, premiere_action, importance,
       ancre_id, ancre_position,
-      echeance, effort_total_min, taille_seance_min,
-      fenetre_jours, fenetre_debut_h, fenetre_fin_h,
-      date_evenement, heure_evenement,
-      version_courte, version_longue, liste_id,
+      echeance, liste_id,
       cree_le, maj_le
-    ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.nom,
     item.type ?? "routine",
     item.recurrence ??
@@ -134,7 +97,7 @@ export async function addItem(item: NouvelItem): Promise<number> {
     item.template_id ?? null,
     item.variante_rang ?? null,
     item.categorie ?? null,
-    item.moment ?? null,
+    momentStocke(item.moment),
     item.effort ?? null,
     item.duree_min ?? null,
     item.premiere_action ?? null,
@@ -142,21 +105,10 @@ export async function addItem(item: NouvelItem): Promise<number> {
     item.ancre_id ?? null,
     item.ancre_position ?? null,
     item.echeance ?? null,
-    item.effort_total_min ?? null,
-    item.taille_seance_min ?? null,
-    item.fenetre_jours ?? null,
-    item.fenetre_debut_h ?? null,
-    item.fenetre_fin_h ?? null,
-    item.date_evenement ?? null,
-    item.heure_evenement ?? null,
-    item.version_courte ?? null,
-    item.version_longue ?? null,
     item.liste_id ?? null,
     ts,
     ts,
   );
-
-  const { logEvent } = await import("./events");
   await logEvent("item_ajoute", result.lastInsertRowId, {
     nom: item.nom,
     type: item.type ?? "routine",
@@ -179,63 +131,7 @@ export async function modifierItem(id: number, champs: ModificationItem) {
 
   const db = await getDatabase();
   await db.runAsync(requete.sql, ...requete.params);
-
-  const { logEvent } = await import("./events");
   await logEvent("item_modifie", id, { champs: requete.cles });
-}
-
-export async function updateItemAncre(
-  id: number,
-  ancreId: number | null,
-  position: Position,
-) {
-  const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE items SET ancre_id = ?, ancre_position = ?, maj_le = ? WHERE id = ?",
-    ancreId,
-    position,
-    maintenant(),
-    id,
-  );
-  const { logEvent } = await import("./events");
-  await logEvent("item_modifie", id, { ancre_id: ancreId, position });
-}
-
-/**
- * Mise en pause plutôt que suppression : c'est le mécanisme de sortie
- * quand la charge est trop forte. Rien n'est perdu, reprise en un tap.
- */
-export async function pauserItem(id: number, raison?: string) {
-  const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE items SET statut = 'pause', maj_le = ? WHERE id = ?",
-    maintenant(),
-    id,
-  );
-  const { logEvent } = await import("./events");
-  await logEvent("item_pause", id, { raison: raison ?? null });
-}
-
-export async function reprendreItem(id: number) {
-  const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE items SET statut = 'actif', nb_propositions_sans_action = 0, maj_le = ? WHERE id = ?",
-    maintenant(),
-    id,
-  );
-  const { logEvent } = await import("./events");
-  await logEvent("item_repris", id);
-}
-
-export async function archiverItem(id: number) {
-  const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE items SET statut = 'archive', maj_le = ? WHERE id = ?",
-    maintenant(),
-    id,
-  );
-  const { logEvent } = await import("./events");
-  await logEvent("item_archive", id);
 }
 
 /**
@@ -249,37 +145,37 @@ export function confirmationSuppression(
   return {
     titre:
       type === "routine" ? "Supprimer cette routine ?" : "Supprimer cette tâche ?",
-    message: `« ${nom.trim()} » et son historique seront effacés. Elle disparaîtra aussi des jours passés dans Progression, et ta série peut changer. Tes points restent.`,
+    message: `« ${nom.trim()} » disparaîtra, avec ses étapes et ses notes. Ce que tu as fait reste compté (série, points).`,
   };
 }
 
-/** Suppression dure. Préférer pauserItem ou archiverItem : rien ne se perd. */
+/**
+ * Suppression : l'item et ce qui ne sert qu'à lui (étapes, notes,
+ * suggestions, sessions). Les complétions, decision_log et event_log
+ * restent pour l'analyse : ce qui a été fait reste compté (série).
+ */
 export async function deleteItem(id: number) {
   const db = await getDatabase();
-  await db.runAsync("DELETE FROM items WHERE id = ?", id);
-  await db.runAsync("DELETE FROM completions WHERE item_id = ?", id);
-  await db.runAsync("DELETE FROM etapes WHERE item_id = ?", id);
-  const { logEvent } = await import("./events");
+  await db.withTransactionAsync(async () => {
+    for (const sql of SQL_SUPPRESSION_ITEM) await db.runAsync(sql, id);
+  });
   await logEvent("item_supprime", id);
 }
 
 /**
- * Descend d'un cran l'intensité d'une routine issue du catalogue,
- * au lieu de la laisser mourir après plusieurs échecs.
- * Retourne false s'il n'y a pas de variante plus accessible.
+ * Change d'un cran l'intensité d'une routine issue du catalogue (suggestions
+ * « simplifier » et « monter »). Le nom n'est remplacé que s'il est encore
+ * celui de la variante du catalogue : un nom choisi à la main reste.
+ * Retourne false s'il n'y a pas de variante dans ce sens.
  */
-export async function descendreVariante(id: number): Promise<boolean> {
+async function changerVariante(id: number, sens: -1 | 1): Promise<boolean> {
   const item = await getItem(id);
   if (!item?.template_id || item.variante_rang === null) return false;
-  if (item.variante_rang <= 1) return false;
-
-  const { getFamille } = await import("../catalogue");
   const famille = getFamille(item.template_id);
   if (!famille) return false;
 
-  const cible = famille.variantes.find(
-    (v) => v.rang === item.variante_rang! - 1,
-  );
+  const actuelle = famille.variantes.find((v) => v.rang === item.variante_rang);
+  const cible = famille.variantes.find((v) => v.rang === item.variante_rang! + sens);
   if (!cible) return false;
 
   const db = await getDatabase();
@@ -289,58 +185,25 @@ export async function descendreVariante(id: number): Promise<boolean> {
          premiere_action = ?, maj_le = ?
      WHERE id = ?`,
     cible.rang,
-    cible.libelle,
+    nomApresVariante(item.nom, actuelle?.libelle ?? null, cible.libelle),
     cible.duree_min,
     cible.effort,
     cible.premiere_action,
     maintenant(),
     id,
   );
-
-  const { logEvent } = await import("./events");
-  await logEvent("variante_descendue", id, {
+  await logEvent(sens < 0 ? "variante_descendue" : "variante_montee", id, {
     de: item.variante_rang,
     vers: cible.rang,
   });
   return true;
 }
 
-/** Idem vers le haut, quand une routine est complétée sans effort depuis longtemps. */
-export async function monterVariante(id: number): Promise<boolean> {
-  const item = await getItem(id);
-  if (!item?.template_id || item.variante_rang === null) return false;
+/** Une variante plus accessible, au lieu de laisser mourir une routine qui ne tient pas. */
+export const descendreVariante = (id: number) => changerVariante(id, -1);
 
-  const { getFamille } = await import("../catalogue");
-  const famille = getFamille(item.template_id);
-  if (!famille) return false;
-
-  const cible = famille.variantes.find(
-    (v) => v.rang === item.variante_rang! + 1,
-  );
-  if (!cible) return false;
-
-  const db = await getDatabase();
-  await db.runAsync(
-    `UPDATE items
-     SET variante_rang = ?, nom = ?, duree_min = ?, effort = ?,
-         premiere_action = ?, maj_le = ?
-     WHERE id = ?`,
-    cible.rang,
-    cible.libelle,
-    cible.duree_min,
-    cible.effort,
-    cible.premiere_action,
-    maintenant(),
-    id,
-  );
-
-  const { logEvent } = await import("./events");
-  await logEvent("variante_montee", id, {
-    de: item.variante_rang,
-    vers: cible.rang,
-  });
-  return true;
-}
+/** La variante suivante, quand une routine est bien installée. */
+export const monterVariante = (id: number) => changerVariante(id, 1);
 
 /**
  * Réinjecte l'observation dans les métadonnées : heure réelle et durée réelle
@@ -374,15 +237,6 @@ export async function rafraichirObservations(id: number) {
   );
 }
 
-/** Compteur de blocage : trois propositions sans action déclenchent le diagnostic. */
-export async function incrementerPropositionSansAction(id: number) {
-  const db = await getDatabase();
-  await db.runAsync(
-    "UPDATE items SET nb_propositions_sans_action = nb_propositions_sans_action + 1 WHERE id = ?",
-    id,
-  );
-}
-
 export async function reinitialiserPropositionSansAction(id: number) {
   const db = await getDatabase();
   await db.runAsync(
@@ -391,11 +245,3 @@ export async function reinitialiserPropositionSansAction(id: number) {
   );
 }
 
-export async function getItemsBloques(seuil = 3): Promise<Item[]> {
-  const db = await getDatabase();
-  return db.getAllAsync<Item>(
-    `SELECT * FROM items
-     WHERE statut = 'actif' AND nb_propositions_sans_action >= ?`,
-    seuil,
-  );
-}

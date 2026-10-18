@@ -95,7 +95,7 @@ export function CarteSauvegarde() {
       <Text style={[styles.titre, { color: t.textPrimary }]}>Mes données</Text>
       <Text style={[styles.texte, { color: t.textSecondary }]}>
         Une copie de tout ce que tu as noté, à garder où tu veux (Fichiers,
-        Drive, mail). Elle contient aussi tes check-ins : garde-la pour toi.
+        Drive, mail). Elle contient aussi ton carnet et ton sommeil : garde-la pour toi.
       </Text>
       <View style={styles.boutons}>
         <TouchableOpacity

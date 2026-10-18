@@ -4,7 +4,7 @@ import { initialiserBase } from "./demarrage";
 
 /**
  * Remet l'appli dans l'état d'une première installation :
- * routines, tâches, historique, check-ins, points, réglages, rappels.
+ * routines, tâches, historique, notes, suivi, points, réglages, rappels.
  */
 export async function toutReinitialiser(): Promise<void> {
   // Les rappels programmés vivent hors de la base : on les annule à part.

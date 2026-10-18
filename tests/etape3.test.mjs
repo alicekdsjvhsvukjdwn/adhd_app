@@ -2,20 +2,19 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { requeteModification } from "../lib/modification-item.ts";
+import {
+  nomApresVariante,
+  requeteModification,
+  SQL_SUPPRESSION_ITEM,
+} from "../lib/modification-item.ts";
 import { ordreJourDifficile } from "../lib/moteur-regles.ts";
-import { organiserRoutines, trancheDeHeure } from "../lib/routines-maintenant.ts";
-
-const r = (nom, o = {}) => ({
-  nom,
-  faitAujourdhui: false,
-  effort: null,
-  moment: null,
-  ancre_moment: null,
-  ...o,
-});
-const cles = (sections) => sections.map((s) => s.cle);
-const noms = (section) => section.routines.map((x) => x.nom);
+import {
+  miseDeCote,
+  momentStocke,
+  trancheDeHeure,
+  trancheDeRoutine,
+  trancheDuMoment,
+} from "../lib/moments.ts";
 
 test("bornes des moments : 12 h et 18 h", () => {
   assert.equal(trancheDeHeure(11.99), "matin");
@@ -25,61 +24,34 @@ test("bornes des moments : 12 h et 18 h", () => {
 });
 
 test("réveil, midi et coucher rangés dans le bon moment ; sans moment : À tout moment", () => {
-  const s = organiserRoutines(
-    [
-      r("a", { moment: "reveil" }),
-      r("b", { moment: "midi" }),
-      r("c", { moment: "coucher" }),
-      r("d", { moment: "apres-midi" }),
-      r("e"),
-    ],
-    9,
-    false,
-  );
-  assert.deepEqual(cles(s), ["matin", "apres_midi", "soir", "a_tout_moment"]);
-  assert.deepEqual(noms(s[1]), ["b", "d"]);
-  assert.deepEqual(noms(s[3]), ["e"]);
+  const t = (moment) => trancheDeRoutine({ moment, ancre_moment: null });
+  assert.equal(t("reveil"), "matin");
+  assert.equal(t("midi"), "apres_midi");
+  assert.equal(t("apres_midi"), "apres_midi");
+  assert.equal(t("coucher"), "soir");
+  assert.equal(t(null), "a_tout_moment");
+  assert.equal(t("indifferent"), "a_tout_moment");
+});
+
+test("une seule orthographe stockée : l'ancienne est corrigée, l'inconnu devient null", () => {
+  assert.equal(momentStocke("apres-midi"), "apres_midi");
+  assert.equal(momentStocke("apres_midi"), "apres_midi");
+  assert.equal(momentStocke("indifferent"), null);
+  assert.equal(momentStocke(undefined), null);
+  assert.equal(trancheDuMoment("apres-midi"), "apres_midi");
 });
 
 test("le moment repère prime sur le moment déclaré", () => {
-  const s = organiserRoutines([r("a", { moment: "matin", ancre_moment: "coucher" })], 9, false);
-  assert.deepEqual(cles(s), ["soir"]);
+  assert.equal(trancheDeRoutine({ moment: "matin", ancre_moment: "coucher" }), "soir");
 });
 
-test("seuls le moment en cours et « À tout moment » sont dépliés", () => {
-  const routines = [r("m", { moment: "matin" }), r("s", { moment: "soir" }), r("t")];
-  const matin = organiserRoutines(routines, 8, false);
-  assert.deepEqual(matin.map((x) => [x.cle, x.depliee]), [
-    ["matin", true],
-    ["soir", false],
-    ["a_tout_moment", true],
-  ]);
-  const soir = organiserRoutines(routines, 21, false);
-  assert.equal(soir.find((x) => x.cle === "matin").depliee, false);
-  assert.equal(soir.find((x) => x.cle === "soir").depliee, true);
-});
-
-test("ce qui est fait descend, l'ordre d'origine est gardé", () => {
-  const s = organiserRoutines(
-    [r("1", { faitAujourdhui: true }), r("2"), r("3", { faitAujourdhui: true }), r("4")],
-    9,
-    false,
-  );
-  assert.deepEqual(noms(s[0]), ["2", "4", "1", "3"]);
-});
-
-test("jour difficile : les exigeantes non faites passent dans « Si l'énergie revient », repliée", () => {
-  const routines = [
-    r("dure", { effort: 3, moment: "matin" }),
-    r("dure faite", { effort: 3, moment: "matin", faitAujourdhui: true }),
-    r("facile", { effort: 1, moment: "matin" }),
-  ];
-  assert.deepEqual(cles(organiserRoutines(routines, 9, false)), ["matin"]);
-  const s = organiserRoutines(routines, 9, true);
-  assert.deepEqual(cles(s), ["matin", "si_energie"]);
-  assert.deepEqual(noms(s[0]), ["facile", "dure faite"]);
-  assert.deepEqual(noms(s[1]), ["dure"]);
-  assert.equal(s[1].depliee, false);
+test("jour difficile : seules les exigeantes non faites sont mises de côté", () => {
+  const r = (effort, faitAujourdhui = false) => ({ effort, faitAujourdhui });
+  assert.equal(miseDeCote(r(3), true), true);
+  assert.equal(miseDeCote(r(3, true), true), false);
+  assert.equal(miseDeCote(r(2), true), false);
+  assert.equal(miseDeCote(r(null), true), false);
+  assert.equal(miseDeCote(r(3), false), false);
 });
 
 test("tâche unique : la prochaine étape d'une tâche découpée passe d'abord", () => {
@@ -127,8 +99,7 @@ test("changer le moment repère : complétions passées intactes, nouvelle secti
          FROM items i LEFT JOIN ancres a ON a.id = i.ancre_id WHERE i.id = 7`,
       )
       .get();
-  const section = () =>
-    organiserRoutines([{ ...routine(), faitAujourdhui: false, effort: null }], 9, false)[0].cle;
+  const section = () => trancheDeRoutine(routine());
   assert.equal(section(), "matin");
 
   const q = requeteModification(
@@ -159,4 +130,32 @@ test("tâche unique : sinon la première du classement ; liste vide sans tâche"
   const classement = [{ itemId: 7, duree_min: null }, { itemId: 8, duree_min: 30 }];
   assert.deepEqual(ordreJourDifficile(classement, () => false).map((t) => t.itemId), [7, 8]);
   assert.deepEqual(ordreJourDifficile([], () => false), []);
+});
+
+test("suggestion simplifier / monter : un nom choisi à la main reste", () => {
+  assert.equal(nomApresVariante("Marcher 10 min", "Marcher 10 min", "Marcher 5 min"), "Marcher 5 min");
+  assert.equal(nomApresVariante("Ma balade du soir", "Marcher 10 min", "Marcher 5 min"), "Ma balade du soir");
+  assert.equal(nomApresVariante("Marcher 10 min", null, "Marcher 5 min"), "Marcher 10 min");
+});
+
+test("supprimer un item : ses lignes dépendantes partent, l'analyse reste", () => {
+  const db = new DatabaseSync(":memory:");
+  const tables = ["etapes_cochees", "etapes", "notes", "suggestions", "sessions", "completions", "decision_log", "event_log"];
+  db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, nom TEXT)");
+  db.exec("INSERT INTO items VALUES (1, 'gardé'), (2, 'supprimé')");
+  for (const t of tables) {
+    const col = t === "event_log" ? "routine_id" : "item_id";
+    db.exec(`CREATE TABLE ${t} (id INTEGER PRIMARY KEY, ${col} INTEGER)`);
+    db.exec(`INSERT INTO ${t} (${col}) VALUES (1), (2)`);
+  }
+  for (const sql of SQL_SUPPRESSION_ITEM) db.prepare(sql).run(2);
+  const n = (t) => {
+    const col = t === "event_log" ? "routine_id" : "item_id";
+    return db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE ${col} = 2`).get().n;
+  };
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM items").get().n, 1);
+  for (const t of ["etapes_cochees", "etapes", "notes", "suggestions", "sessions"]) assert.equal(n(t), 0, t);
+  for (const t of ["completions", "decision_log", "event_log"]) assert.equal(n(t), 1, t);
+  // L'autre item n'est pas touché.
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM etapes WHERE item_id = 1").get().n, 1);
 });

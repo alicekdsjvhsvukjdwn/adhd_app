@@ -16,7 +16,7 @@ export function BoutonReinitialiser() {
   const confirmer = () => {
     Alert.alert(
       "Tout effacer ?",
-      "Routines, tâches, listes, historique, check-ins, points et récompenses seront supprimés. C'est définitif.",
+      "Routines, tâches, listes, historique, notes, sommeil, sport, points et récompenses seront supprimés. C'est définitif.",
       [
         { text: "Annuler", style: "cancel" },
         {

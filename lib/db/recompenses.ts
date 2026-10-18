@@ -1,8 +1,13 @@
-import { POINTS_ESSENTIELLES, POINTS_TOUTES } from "../regles-taches";
+import {
+  POINTS_COMPLETION,
+  POINTS_DERNIERE_ETAPE,
+  POINTS_ESSENTIELLES,
+  POINTS_ETAPE,
+  POINTS_TOUTES,
+} from "../regles-taches";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
-import { initStats } from "./stats";
 
 /**
  * Récompenses réelles, achetées avec les points gagnés.
@@ -25,9 +30,9 @@ export type Achat = {
   date: string;
 };
 
-/** Ce que rapporte chaque action, tel que le code le calcule. */
+/** Ce que rapporte (ou reprend) chaque action, tel que le code le calcule. */
 export const REGLES_POINTS: { action: string; points: string }[] = [
-  { action: "Une routine faite, quelle que soit sa version", points: "+10" },
+  { action: "Une routine faite", points: `+${POINTS_COMPLETION}` },
   {
     action: "Routine à étapes : toutes les essentielles faites",
     points: `+${POINTS_ESSENTIELLES}`,
@@ -40,12 +45,19 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
     action: "Jour difficile : les essentielles d'une routine à étapes",
     points: `+${POINTS_TOUTES}`,
   },
-  { action: "Une tâche « x fois par semaine / par mois », à chaque fois", points: "+10" },
-  { action: "Une tâche terminée", points: "+10" },
-  { action: "Une étape d'une grosse tâche", points: "+5" },
-  { action: "Toutes les étapes finies", points: "+10 de bonus" },
-  { action: "Une nuit notée (une fois par nuit)", points: `+${POINTS_NUIT}` },
+  { action: "Une tâche faite (une fois, ou chaque fois pour « x fois par semaine / mois »)", points: `+${POINTS_COMPLETION}` },
+  { action: "Une étape d'une tâche", points: `+${POINTS_ETAPE}` },
+  {
+    action: "La dernière étape (étape + tâche faite + bonus)",
+    points: `+${POINTS_DERNIERE_ETAPE}`,
+  },
+  { action: "Une nuit notée (des 7 derniers jours, une fois par nuit)", points: `+${POINTS_NUIT}` },
   { action: "Une séance de sport, même partielle", points: `+${POINTS_SEANCE}` },
+  {
+    action: "Décocher, annuler ou remettre à faire",
+    points: "reprend ce qui avait été donné",
+  },
+  { action: "Changer l'énergie du jour", points: "recalcule les routines à étapes" },
 ];
 
 /** Idées de départ, prix calibrés sur ~60 points gagnés par jour. */
@@ -97,7 +109,6 @@ export async function supprimerRecompense(id: number): Promise<void> {
 }
 
 export async function pointsGagnes(): Promise<number> {
-  await initStats();
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ points_total: number }>(
     "SELECT points_total FROM stats WHERE id = 1",

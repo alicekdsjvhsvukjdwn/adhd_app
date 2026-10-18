@@ -1,10 +1,7 @@
 import { getFamille, type Categorie } from "../catalogue";
 import { getDatabase } from "./client";
 
-import { dateLocale, ilYA } from "../dates";
-
-/** Date du jour, prise dans dates.ts pour ne pas importer completions.ts (cycle). */
-const aujourdhui = () => dateLocale();
+import { ilYA } from "../dates";
 
 /**
  * Équilibre entre catégories.
@@ -40,7 +37,7 @@ export function categorieEffective(
 }
 
 /** Nombre de complétions par catégorie sur les `jours` derniers jours. */
-export async function completionsParCategorie(
+async function completionsParCategorie(
   jours = 7,
 ): Promise<Record<Categorie, number>> {
   const db = await getDatabase();
@@ -57,27 +54,6 @@ export async function completionsParCategorie(
      WHERE c.date >= ? AND c.statut IN ('complet', 'partiel')
      GROUP BY i.categorie, i.template_id`,
     debut,
-  );
-
-  return agreger(rows);
-}
-
-/** Complétions par catégorie pour AUJOURD'HUI seulement (indicateur visuel). */
-export async function completionsParCategorieJour(): Promise<
-  Record<Categorie, number>
-> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<{
-    categorie: string | null;
-    template_id: string | null;
-    n: number;
-  }>(
-    `SELECT i.categorie, i.template_id, COUNT(*) AS n
-     FROM completions c
-     JOIN items i ON i.id = c.item_id
-     WHERE c.date = ? AND c.statut IN ('complet', 'partiel')
-     GROUP BY i.categorie, i.template_id`,
-    aujourdhui(),
   );
 
   return agreger(rows);

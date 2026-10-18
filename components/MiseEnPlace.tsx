@@ -20,7 +20,6 @@ import {
   addItem,
   getAncres,
   getItems,
-  skipOnboarding,
   toggleAncre,
   type Ancre,
 } from "../lib/db";
@@ -28,6 +27,13 @@ import {
   difficultesChoisies,
   enregistrerDifficultes,
 } from "../lib/db/difficultes";
+import {
+  LIBELLES_MOMENT,
+  LIBELLES_TRANCHE,
+  momentStocke,
+  ORDRE_TRANCHES,
+  trancheDuMoment,
+} from "../lib/moments";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
@@ -40,7 +46,6 @@ import { radius, spacing, typography, useTheme } from "../lib/theme";
 const MAX_DIFFICULTES = 2;
 const MAX_ROUTINES = 3;
 
-type Mode = "onboarding" | "ajout";
 type Etape = 1 | 2 | 3 | 4;
 
 type Groupe = {
@@ -56,16 +61,6 @@ const normaliser = (s: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const LIBELLES_MOMENT: Record<string, string> = {
-  reveil: "Au réveil",
-  matin: "Matin",
-  midi: "Midi",
-  "apres-midi": "Après-midi",
-  soir: "Soir",
-  coucher: "Au coucher",
-  indifferent: "À tout moment",
-};
-
 function libelleRecurrence(r?: string): string | null {
   if (!r || r === "quotidien") return null;
   if (r === "hebdo") return "1 fois par semaine";
@@ -75,15 +70,6 @@ function libelleRecurrence(r?: string): string | null {
   return null;
 }
 
-/** Bloc de la journée où la routine apparaîtra sur l'accueil. */
-function blocDe(moment: string): string {
-  if (moment === "reveil" || moment === "matin") return "Matin";
-  if (moment === "midi" || moment === "apres-midi" || moment === "apres_midi")
-    return "Après-midi";
-  if (moment === "soir" || moment === "coucher") return "Soir";
-  return "À tout moment";
-}
-const ORDRE_BLOCS = ["Matin", "Après-midi", "Soir", "À tout moment"];
 
 /** Le catalogue décrit le moment repère en toutes lettres ; on le relie aux ancres existantes. */
 const REPERES: [string[], string][] = [
@@ -111,7 +97,7 @@ function ancreSuggeree(f: FamilleTemplate, ancres: Ancre[]): number | null {
 const premiereVariante = (f: FamilleTemplate) =>
   f.variantes.find((v) => v.rang === 1) ?? f.variantes[0];
 
-export function MiseEnPlace({ mode }: { mode: Mode }) {
+export function MiseEnPlace() {
   const router = useRouter();
   const t = useTheme();
 
@@ -168,14 +154,7 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
     defilement.current?.scrollTo({ y: 0, animated: false });
   };
 
-  const quitter = async () => {
-    if (mode === "onboarding") {
-      await skipOnboarding();
-      router.replace("/");
-    } else {
-      router.back();
-    }
-  };
+  const quitter = () => router.back();
 
   // ── Étape 1 : difficultés ────────────────────────────────────────────
 
@@ -281,7 +260,7 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
           template_id: f.id,
           variante_rang: v.rang,
           categorie: f.categorie,
-          moment: f.moment === "indifferent" ? null : f.moment,
+          moment: f.moment,
           effort: v.effort,
           duree_min: v.duree_min,
           premiere_action: v.premiere_action,
@@ -294,12 +273,7 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
         }
       }
       await enregistrerDifficultes(choisies);
-      if (mode === "onboarding") {
-        await skipOnboarding();
-        router.replace("/");
-      } else {
-        router.back();
-      }
+      router.back();
     } finally {
       setEnregistrement(false);
     }
@@ -405,11 +379,7 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
           hitSlop={12}
         >
           <Text style={[styles.retour, { color: t.accentText }]}>
-            {etape === 1
-              ? mode === "onboarding"
-                ? "Plus tard"
-                : "← Annuler"
-              : "← Retour"}
+            {etape === 1 ? "← Annuler" : "← Retour"}
           </Text>
         </TouchableOpacity>
 
@@ -560,7 +530,10 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
                   const coche = cochees.includes(f.id);
                   const ouvert = pourquoi === f.id;
                   const details = [
-                    LIBELLES_MOMENT[f.moment],
+                    (() => {
+                      const m = momentStocke(f.moment);
+                      return m ? LIBELLES_MOMENT[m] : LIBELLES_TRANCHE.a_tout_moment;
+                    })(),
                     `${v.duree_min} min`,
                     libelleRecurrence(f.recurrence),
                   ]
@@ -704,10 +677,11 @@ export function MiseEnPlace({ mode }: { mode: Mode }) {
 
         {/* ── Étape 4 ── */}
         {etape === 4 &&
-          ORDRE_BLOCS.map((bloc) => {
+          ORDRE_TRANCHES.map((cle) => {
+            const bloc = LIBELLES_TRANCHE[cle];
             const dans = famillesCochees.filter((f) => {
               const a = ancres.find((x) => x.id === ancreDe[f.id]);
-              return blocDe(a ? a.moment : f.moment) === bloc;
+              return (trancheDuMoment(a ? a.moment : f.moment) ?? "a_tout_moment") === cle;
             });
             if (dans.length === 0) return null;
             return (

@@ -9,9 +9,9 @@ import {
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
- * Une suggestion d'ajustement à la fois, dans « Mes routines »
- * (l'écran Routines n'en montre qu'un repère neutre sur le lien).
- * La personne décide : l'appli n'applique jamais un changement visible seule.
+ * Une suggestion d'ajustement à la fois, en haut de l'onglet Routines
+ * (sauf un jour difficile). La personne décide : l'appli n'applique
+ * jamais un changement visible seule.
  */
 export function CarteSuggestion({ onDecision }: { onDecision?: () => void }) {
   const router = useRouter();

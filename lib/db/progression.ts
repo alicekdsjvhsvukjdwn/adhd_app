@@ -3,13 +3,12 @@ import { decalerJours as decaler, jourDeCreation } from "../dates";
 import { CATEGORIES, categorieEffective } from "./categories";
 import { getDatabase } from "./client";
 import { getAujourdhui, routineAttendueLe } from "./completions";
-import { trancheDeHeure, type Tranche } from "./etat";
 import { comparer, type Comparaison } from "../suivi-regles";
 
 /**
  * Données de l'écran Progression.
  *
- * Toutes les dates suivent la convention de getAujourdhui() (ISO, UTC),
+ * Toutes les dates suivent la convention de getAujourdhui() (date locale),
  * pour rester cohérentes avec les complétions enregistrées.
  */
 
@@ -213,8 +212,6 @@ export async function tachesFaites(p: Periode): Promise<TacheFaite[]> {
 export async function intensiteJours(
   debut: string,
   fin: string,
-  /** Restreindre aux routines ou aux tâches (calendriers de chaque onglet). */
-  filtre?: "routine" | "tache",
 ): Promise<Record<string, number | null>> {
   const db = await getDatabase();
   const aujourdhui = getAujourdhui();
@@ -248,107 +245,15 @@ export async function intensiteJours(
     const faites = faitesParJour.get(j) ?? { routines: 0, taches: 0 };
     const partRoutines =
       attendu > 0 ? Math.min(1, faites.routines / attendu) : 0;
-    const score =
-      filtre === "routine"
-        ? partRoutines
-        : filtre === "tache"
-          ? Math.min(1, 0.25 * faites.taches) // 1 tâche = niveau 1 … 4 et plus = niveau 4
-          : Math.min(1, partRoutines + 0.25 * faites.taches);
+    const score = Math.min(1, partRoutines + 0.25 * faites.taches);
     resultat[j] = score === 0 ? 0 : Math.max(1, Math.ceil(score * 4));
   }
   return resultat;
 }
 
-export type EtatTranche = {
-  tranche: Tranche;
-  energie: number;
-  focus: number;
-  humeur: number;
-  n: number;
-};
-
-export type EtatSelonMoment = {
-  /** Seulement les moments de la journée qui ont au moins un check-in. */
-  tranches: EtatTranche[];
-  nbCheckins: number;
-  /** Nombre de jours entre le plus ancien check-in retenu et aujourd'hui, inclus. */
-  joursCouverts: number;
-};
-
-const ORDRE_TRANCHES: Tranche[] = ["matin", "apres_midi", "soir"];
-
-/**
- * Moyennes du check-in par moment de la journée, sur les données réelles :
- * rien n'est affiché pour un moment où la personne n'a jamais répondu.
- */
-export async function etatSelonMoment(jours = 30): Promise<EtatSelonMoment> {
-  const db = await getDatabase();
-  const aujourdhui = getAujourdhui();
-  const debut = decalerJours(aujourdhui, -(jours - 1));
-  const rows = await db.getAllAsync<{
-    date: string;
-    heure: number;
-    energie: number;
-    focus: number;
-    humeur: number;
-  }>(
-    // Check-ins complets seulement : un bilan de la journée ne dit rien
-    // d'un moment précis (et n'a ni concentration ni humeur).
-    "SELECT date, heure, energie, focus, humeur FROM etat WHERE date >= ? AND focus IS NOT NULL",
-    debut,
-  );
-  if (rows.length === 0) {
-    return { tranches: [], nbCheckins: 0, joursCouverts: 0 };
-  }
-
-  const acc = new Map<
-    Tranche,
-    { energie: number; focus: number; humeur: number; n: number }
-  >();
-  let plusAncien = aujourdhui;
-  for (const r of rows) {
-    const t = trancheDeHeure(r.heure);
-    const v = acc.get(t) ?? { energie: 0, focus: 0, humeur: 0, n: 0 };
-    v.energie += r.energie;
-    v.focus += r.focus;
-    v.humeur += r.humeur;
-    v.n += 1;
-    acc.set(t, v);
-    if (r.date < plusAncien) plusAncien = r.date;
-  }
-
-  const tranches = ORDRE_TRANCHES.filter((t) => acc.has(t)).map((t) => {
-    const v = acc.get(t)!;
-    return {
-      tranche: t,
-      energie: v.energie / v.n,
-      focus: v.focus / v.n,
-      humeur: v.humeur / v.n,
-      n: v.n,
-    };
-  });
-
-  const joursCouverts =
-    Math.round(
-      (Date.parse(aujourdhui + "T00:00:00Z") -
-        Date.parse(plusAncien + "T00:00:00Z")) /
-        86400000,
-    ) + 1;
-
-  return { tranches, nbCheckins: rows.length, joursCouverts };
-}
-
-export type CheckinJour = {
-  heure: number;
-  energie: number;
-  focus: number;
-  humeur: number;
-};
-
 export type RecapJour = {
   date: string;
   global: number | null;
-  parCategorie: AvanceeCategorie[];
   /** Ce qui a été fait ce jour-là. Volontairement pas la liste de ce qui manque. */
   faits: {
     id: number;
@@ -357,7 +262,6 @@ export type RecapJour = {
     categorie: Categorie | null;
     partiel: boolean;
   }[];
-  checkins: CheckinJour[];
 };
 
 export async function recapJour(date: string): Promise<RecapJour> {
@@ -380,16 +284,9 @@ export async function recapJour(date: string): Promise<RecapJour> {
     date,
   );
 
-  const checkins = await db.getAllAsync<CheckinJour>(
-    `SELECT heure, energie, focus, humeur
-     FROM etat WHERE date = ? AND focus IS NOT NULL ORDER BY heure`,
-    date,
-  );
-
   return {
     date,
     global: avancee.global,
-    parCategorie: avancee.parCategorie,
     faits: rows.map((r) => ({
       id: r.id,
       nom: r.nom,
@@ -397,7 +294,6 @@ export async function recapJour(date: string): Promise<RecapJour> {
       categorie: categorieEffective(r.categorie, r.template_id),
       partiel: r.statut === "partiel",
     })),
-    checkins,
   };
 }
 
@@ -444,35 +340,6 @@ export async function mesureAdaptation(jours = 14): Promise<MesureAdaptation> {
   };
 }
 
-/** Ce qui a été fait un jour donné, pour un type d'item (récap d'un calendrier). */
-export async function faitsDuJour(
-  date: string,
-  type: "routine" | "tache",
-): Promise<
-  { nom: string; categorie: Categorie | null; version: string | null }[]
-> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<{
-    nom: string;
-    categorie: string | null;
-    template_id: string | null;
-    version: string | null;
-  }>(
-    `SELECT i.nom, i.categorie, i.template_id, c.version
-     FROM completions c
-     JOIN items i ON i.id = c.item_id
-     WHERE c.date = ? AND i.type = ? AND c.statut IN ('complet', 'partiel')
-     ORDER BY c.heure, c.id`,
-    date,
-    type,
-  );
-  return rows.map((r) => ({
-    nom: r.nom,
-    categorie: categorieEffective(r.categorie, r.template_id),
-    version: r.version,
-  }));
-}
-
 export type LiensSommeilSport = {
   /** Part des routines attendues faites : après une bonne nuit (A) / une mauvaise (B). */
   routinesSelonNuit: Comparaison;
@@ -516,10 +383,6 @@ export async function liensSommeilSport(): Promise<LiensSommeilSport> {
       .filter((x): x is number => x !== null);
 
   // Énergie choisie à la main sur Routines (meta energie_routines:AAAA-MM-JJ).
-  // meta est créée à la demande : elle peut manquer sur une base neuve.
-  await db.execAsync(
-    "CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);",
-  );
   const energies = await db.getAllAsync<{ cle: string; valeur: string }>(
     "SELECT cle, valeur FROM meta WHERE cle LIKE 'energie_routines:%'",
   );

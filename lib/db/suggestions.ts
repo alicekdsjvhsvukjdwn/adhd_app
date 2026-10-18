@@ -2,7 +2,7 @@ import { getFamille } from "../catalogue";
 import { decalerJours, jourDeCreation } from "../dates";
 import { getDatabase } from "./client";
 import { getAujourdhui, routineAttendueLe } from "./completions";
-import { trancheDeHeure, type Tranche } from "./etat";
+import { trancheDeHeure, trancheDuMoment, type Tranche } from "../moments";
 import { descendreVariante, modifierItem, monterVariante } from "./items";
 
 /**
@@ -50,33 +50,11 @@ const TAUX_INSTALLEE = 0.8;
 
 const DELAI_AVANT_REPROPOSER_J = 14;
 
-const MOMENT_DE_TRANCHE: Record<Tranche, string> = {
-  matin: "matin",
-  apres_midi: "apres-midi",
-  soir: "soir",
-};
 const NOM_TRANCHE: Record<Tranche, string> = {
   matin: "le matin",
   apres_midi: "l'après-midi",
   soir: "le soir",
 };
-
-function trancheDuMoment(moment: string | null): Tranche | null {
-  switch (moment) {
-    case "reveil":
-    case "matin":
-      return "matin";
-    case "midi":
-    case "apres-midi":
-    case "apres_midi":
-      return "apres_midi";
-    case "soir":
-    case "coucher":
-      return "soir";
-    default:
-      return null;
-  }
-}
 
 const decaler = decalerJours;
 
@@ -207,7 +185,7 @@ export async function suggestionDuJour(): Promise<Suggestion | null> {
               : `Tu fais surtout « ${r.nom} » ${NOM_TRANCHE[dominante]}. L'y ranger ?`,
             explication: `${fois(n, avecHeure.length)} ces trois dernières semaines.`,
             accepter: "Déplacer",
-            valeur: MOMENT_DE_TRANCHE[dominante],
+            valeur: dominante,
           });
         }
       }

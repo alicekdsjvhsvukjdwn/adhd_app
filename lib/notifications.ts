@@ -1,11 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import {
-  ConfigRappel,
-  getRoutinesAvecStatutDuJour,
-  logEvent,
-  RoutineAvecStatut,
-} from "./db";
+import { logEvent } from "./db/events";
+import type { ConfigRappel } from "./db/stats";
 
 // Configuration globale : comment les notifications s'affichent quand l'app est ouverte
 Notifications.setNotificationHandler({
@@ -54,40 +50,13 @@ export async function permissionAccordee(): Promise<boolean> {
 }
 
 /**
- * Formule une routine sous forme "Si X, alors Y" en utilisant son ancre.
+ * Texte du rappel quotidien. Générique : une notification répétée chaque
+ * jour ne peut pas savoir ce qui est déjà fait, une liste serait vite fausse.
  */
-function formulerRoutine(r: RoutineAvecStatut): string {
-  if (!r.ancre_nom) return r.nom;
-  const prefixe = r.ancre_position === "avant" ? "Avant" : "Après";
-  return `${prefixe} ${r.ancre_nom.toLowerCase()} → ${r.nom}`;
-}
-
-/**
- * Génère le contenu du rappel quotidien à partir des routines non faites.
- * Retourne null si toutes les routines sont déjà faites (pas besoin de notif).
- */
-export function construireContenuRappel(routines: RoutineAvecStatut[]): {
-  title: string;
-  body: string;
-} | null {
-  const nonFaites = routines.filter((r) => !r.faitAujourdhui);
-  if (nonFaites.length === 0) return null;
-
-  // On limite à 3 routines dans le body pour ne pas surcharger (principe TDAH-friendly)
-  const aAfficher = nonFaites.slice(0, 3);
-  const lignes = aAfficher.map(formulerRoutine);
-
-  const restantes = nonFaites.length - aAfficher.length;
-  const suffixe = restantes > 0 ? `\n... et ${restantes} de plus` : "";
-
-  return {
-    title:
-      nonFaites.length === 1
-        ? "Une routine t'attend"
-        : `${nonFaites.length} routines à finir`,
-    body: lignes.join("\n") + suffixe,
-  };
-}
+export const CONTENU_RAPPEL = {
+  title: "Un coup d'œil à tes routines ?",
+  body: "Ouvre l'appli pour voir ce qui t'attend aujourd'hui.",
+};
 
 /**
  * Programme un rappel quotidien récurrent à l'heure indiquée.
@@ -96,7 +65,6 @@ export function construireContenuRappel(routines: RoutineAvecStatut[]): {
 export async function programmerRappelQuotidien(
   heure: number, // 0-23
   minute: number = 0,
-  contenu: { title: string; body: string },
 ) {
   // On annule les rappels précédents pour éviter les doublons
   await Notifications.cancelScheduledNotificationAsync(
@@ -105,11 +73,7 @@ export async function programmerRappelQuotidien(
 
   await Notifications.scheduleNotificationAsync({
     identifier: NOTIFICATION_ID_PREFIX,
-    content: {
-      title: contenu.title,
-      body: contenu.body,
-      sound: "default",
-    },
+    content: { ...CONTENU_RAPPEL, sound: "default" },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
       hour: heure,
@@ -130,12 +94,7 @@ export async function reprogrammerRappel(config: ConfigRappel) {
     await annulerRappelQuotidien();
     return;
   }
-  const routines = await getRoutinesAvecStatutDuJour();
-  const contenu = construireContenuRappel(routines) ?? {
-    title: "Rappel de tes routines",
-    body: "C'est le moment de faire le point sur ta journée.",
-  };
-  await programmerRappelQuotidien(config.heure, config.minute, contenu);
+  await programmerRappelQuotidien(config.heure, config.minute);
 }
 
 const ID_FIN_MINUTEUR = "fin-minuteur";
@@ -174,26 +133,12 @@ export async function annulerRappelQuotidien() {
 }
 
 /**
- * Récupère la liste des notifications programmées (utile pour le debug ou l'écran de réglages).
- */
-export async function getRappelsProgrammes() {
-  return Notifications.getAllScheduledNotificationsAsync();
-}
-
-/**
  * Envoie une notification de test immédiatement (pour vérifier que ça marche
  * sans attendre l'heure programmée).
  */
-export async function envoyerNotificationTest(contenu: {
-  title: string;
-  body: string;
-}) {
+export async function envoyerNotificationTest() {
   await Notifications.scheduleNotificationAsync({
-    content: {
-      title: contenu.title,
-      body: contenu.body,
-      sound: "default",
-    },
+    content: { ...CONTENU_RAPPEL, sound: "default" },
     trigger: null, // null = envoyer immédiatement
   });
 }

@@ -55,6 +55,41 @@ export function deltaPoints(dejaDonnes: number, palier: 0 | 1 | 2, jourDifficile
   return pointsPalier(palier, jourDifficile) - dejaDonnes;
 }
 
+// ─── Points : total, niveau ─────────────────────────────────────────────
+
+/**
+ * Ajoute (ou retire) des points au total, sans plancher : un retrait qui
+ * passe sous zéro est gardé, pour qu'un recochage ne crée pas de points.
+ * Paramètre : le delta.
+ */
+export const SQL_AJOUTER_POINTS = "UPDATE stats SET points_total = points_total + ? WHERE id = 1";
+
+/** Total affiché : jamais négatif à l'écran. */
+export const totalAffiche = (total: number) => Math.max(0, total);
+
+/** Niveau : 1 de 0 à 99 points, 2 de 100 à 199… */
+export const niveauDePoints = (total: number) => Math.floor(totalAffiche(total) / 100) + 1;
+
+// ─── Tâches à étapes : points ───────────────────────────────────────────
+
+/** Une tâche (ou une routine sans étapes) cochée. */
+export const POINTS_COMPLETION = 10;
+/** Chaque étape d'une tâche. */
+export const POINTS_ETAPE = 5;
+/** En plus, quand la dernière étape termine la tâche. */
+export const BONUS_FIN = 10;
+/** Ce que rapporte la dernière étape : l'étape, la tâche terminée et le bonus. */
+export const POINTS_DERNIERE_ETAPE = POINTS_ETAPE + POINTS_COMPLETION + BONUS_FIN;
+
+/**
+ * Points d'étapes à reprendre quand une tâche est remise à faire : chaque
+ * étape cochée, et le bonus si elles l'étaient toutes (c'est la dernière
+ * qui l'a donné). Les points de la complétion se reprennent à part.
+ */
+export function pointsEtapesARetirer(cochees: number, total: number): number {
+  return cochees * POINTS_ETAPE + (total > 0 && cochees >= total ? BONUS_FIN : 0);
+}
+
 // ─── Objectifs par semaine ou par mois ──────────────────────────────────
 
 export type Periode = "semaine" | "mois";
@@ -116,6 +151,22 @@ export function serieAtteinte(comptes: number[], cible: number): number {
   let n = 0;
   for (let i = v.length - 1; i >= 0 && v[i] >= cible; i--) n++;
   return n;
+}
+
+/**
+ * Étapes d'une tâche « x fois par semaine / par mois » : une étape cochée
+ * compte à partir de ce jour-là (inclus). La progression est gardée dans la
+ * période, et repart de zéro le lendemain de chaque fois faite.
+ * `derniereAvant` : date de la dernière complétion strictement avant `jour`.
+ */
+export function debutEtapesEnCours(
+  jour: string,
+  periode: Periode,
+  derniereAvant: string | null,
+): string {
+  const debut = debutPeriode(jour, periode);
+  const apres = derniereAvant ? decalerJours(derniereAvant, 1) : debut;
+  return apres > debut ? apres : debut;
 }
 
 /** Nombre de jours de debut à fin, bornes incluses. */

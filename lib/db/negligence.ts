@@ -1,6 +1,5 @@
 import { ilYA } from "../dates";
 import { getDatabase } from "./client";
-import { getAujourdhui } from "./completions";
 
 /**
  * Filet anti-famine.
@@ -23,13 +22,6 @@ function isoHier(): string {
   return ilYA(1);
 }
 
-async function assurerMeta() {
-  const db = await getDatabase();
-  await db.execAsync(
-    `CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);`,
-  );
-}
-
 async function lireMeta(cle: string): Promise<string | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ valeur: string }>(
@@ -49,7 +41,6 @@ async function ecrireMeta(cle: string, valeur: string) {
 }
 
 export async function traiterNegligence(): Promise<void> {
-  await assurerMeta();
   const db = await getDatabase();
   const hier = isoHier();
 
@@ -92,7 +83,3 @@ export async function traiterNegligence(): Promise<void> {
   await ecrireMeta(CLE_DERNIER_JOUR, hier);
 }
 
-/** Exposé au cas où tu veuilles l'appeler ailleurs (ex : au démarrage). */
-export function jourAujourdhui(): string {
-  return getAujourdhui();
-}

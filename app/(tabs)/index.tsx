@@ -10,7 +10,6 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { CalendrierMois } from "../../components/CalendrierMois";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import type { Categorie } from "../../lib/catalogue";
 import {
@@ -31,7 +30,14 @@ import {
   type EtapeRoutine,
 } from "../../lib/db/etapes";
 import { palierEtapes } from "../../lib/regles-taches";
+import { useJourCourant } from "../../hooks/useJourCourant";
 import { useRoutines } from "../../hooks/useRoutines";
+import {
+  LIBELLES_TRANCHE,
+  miseDeCote as estExigeanteDuJour,
+  ORDRE_TRANCHES,
+  trancheDeRoutine,
+} from "../../lib/moments";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -39,28 +45,8 @@ import {
   ORDRE_CATEGORIES,
   useCouleurCategorie,
 } from "../../lib/theme-categories";
-import {
-  versionPourEnergie,
-  versionsDe,
-  type Niveau,
-  type Version,
-} from "../../lib/versions";
 
-const BLOC_PAR_MOMENT: Record<string, string> = {
-  reveil: "matin",
-  matin: "matin",
-  midi: "apres_midi",
-  apres_midi: "apres_midi",
-  "apres-midi": "apres_midi",
-  soir: "soir",
-  coucher: "soir",
-};
-const LIBELLES_BLOCS: Record<string, string> = {
-  matin: "Matin",
-  apres_midi: "Après-midi",
-  soir: "Soir",
-  sans_ancre: "À tout moment",
-};
+type Niveau = 1 | 2 | 3;
 
 const NIVEAUX: { niveau: Niveau; libelle: string }[] = [
   { niveau: 1, libelle: "🪫 Jour difficile" },
@@ -68,29 +54,19 @@ const NIVEAUX: { niveau: Niveau; libelle: string }[] = [
   { niveau: 3, libelle: "⚡ En forme" },
 ];
 
-const EXPLICATION_VERSION: Record<Version, string> = {
-  courte: "Tes routines s'affichent en version courte.",
-  normale: "Tes routines s'affichent en version normale.",
-  longue: "Tes routines s'affichent en version longue.",
+const EXPLICATION_ENERGIE: Record<Niveau, string> = {
+  1: "Les étapes essentielles suffisent, les routines exigeantes attendent, une seule tâche.",
+  2: "Journée normale.",
+  3: "C'est noté.",
 };
-
-const ORDRE_BLOC: Record<string, number> = {
-  matin: 0,
-  apres_midi: 1,
-  soir: 2,
-  sans_ancre: 3,
-};
-
-function blocDeRoutine(r: RoutineAvecStatut): string {
-  const m = r.ancre_moment || r.moment;
-  return (m && BLOC_PAR_MOMENT[m]) || "sans_ancre";
-}
 
 export default function Routines() {
   const { routines, stats, supprimer, recharger } = useRoutines();
   const router = useRouter();
   const t = useTheme();
   const couleurCat = useCouleurCategorie();
+  // Passage de minuit appli ouverte : tout se recharge pour le nouveau jour.
+  const jour = useJourCourant();
 
   const [energie, setEnergie] = useState<{
     niveau: Niveau | null;
@@ -125,14 +101,12 @@ export default function Routines() {
     useCallback(() => {
       recharger();
       chargerAnnexes();
-    }, [recharger, chargerAnnexes]),
+    }, [recharger, chargerAnnexes, jour]),
   );
 
-  const version = versionPourEnergie(energie.niveau);
-
   const onChoisirEnergie = async (n: Niveau) => {
-    // L'écran suit le choix tout de suite : version des routines, groupe
-    // « Si l'énergie revient », étapes affichées et suggestion se calculent
+    // L'écran suit le choix tout de suite : groupe « Si l'énergie revient »,
+    // étapes affichées et suggestion se calculent
     // à partir de cet état. L'enregistrement vient après ; s'il échoue,
     // on revient au choix d'avant et on le dit.
     const avant = energie;
@@ -151,8 +125,7 @@ export default function Routines() {
 
   const onEtapeRoutine = async (e: EtapeRoutine) => {
     Haptics.selectionAsync().catch(() => {});
-    // Une routine à étapes n'a qu'une version : la normale.
-    await basculerEtapeRoutine(e.id, "normale");
+    await basculerEtapeRoutine(e.id);
     await recharger();
     await chargerAnnexes();
   };
@@ -164,7 +137,7 @@ export default function Routines() {
     if (r.faitAujourdhui) {
       await annulerCompletion(r.id);
     } else {
-      await completer(r.id, "complet", undefined, version);
+      await completer(r.id, "complet", undefined, "normale");
     }
     await recharger();
     await chargerAnnexes();
@@ -208,8 +181,7 @@ export default function Routines() {
 
   // Énergie basse : les routines exigeantes non faites passent dans un groupe à part.
   const energieBasse = energie.niveau === 1;
-  const estMiseDeCote = (r: RoutineAvecStatut) =>
-    energieBasse && (r.effort ?? 0) >= 3 && !r.faitAujourdhui;
+  const estMiseDeCote = (r: RoutineAvecStatut) => estExigeanteDuJour(r, energieBasse);
   const miseDeCote = routines.filter(estMiseDeCote);
 
   // Rangement par domaine ; dans chaque domaine, du matin au soir.
@@ -220,7 +192,10 @@ export default function Routines() {
       return acc;
     }, {});
   for (const liste of Object.values(parDomaine)) {
-    liste.sort((a, b) => ORDRE_BLOC[blocDeRoutine(a)] - ORDRE_BLOC[blocDeRoutine(b)]);
+    liste.sort(
+      (a, b) =>
+        ORDRE_TRANCHES.indexOf(trancheDeRoutine(a)) - ORDRE_TRANCHES.indexOf(trancheDeRoutine(b)),
+    );
   }
   const domaines = [...ORDRE_CATEGORIES, "sans"].filter((d) => parDomaine[d]?.length > 0);
   const domainesVides = ORDRE_CATEGORIES.filter((c) => !resume || resume.parCategorie[c].length === 0);
@@ -237,21 +212,11 @@ export default function Routines() {
     : [];
 
   const ligneRoutine = (r: RoutineAvecStatut) => {
-              const versions = versionsDe(r);
               const etapesR = etapesRoutines[r.id] ?? [];
               // Jour difficile : les essentielles seules (et les bonus déjà cochés).
               const etapesVisibles = energieBasse
                 ? etapesR.filter((e) => e.essentielle === 1 || e.cochee)
                 : etapesR;
-              // Cochée : on montre ce qui a été fait. Sinon : la version du jour.
-              // Une routine à étapes n'utilise pas les versions courte et longue.
-              const v: Version =
-                etapesR.length > 0
-                  ? "normale"
-                  : r.faitAujourdhui && r.versionDuJour
-                    ? (r.versionDuJour as Version)
-                    : version;
-              const affichee = versions[v];
               const palier = palierEtapes(
                 etapesR.map((e) => ({ essentielle: e.essentielle === 1, cochee: e.cochee })),
               );
@@ -291,13 +256,11 @@ export default function Routines() {
                             {r.ancre_nom.toLowerCase()} →{" "}
                           </Text>
                         ) : null}
-                        {affichee.nom}
+                        {r.nom}
                       </Text>
                       <Text style={[styles.versionTag, { color: t.textMuted }]}>
-                        {LIBELLES_BLOCS[blocDeRoutine(r)]}
-                        {v !== "normale" && versions.distincte[v]
-                          ? ` · version ${v}${affichee.duree ? ` · ${affichee.duree} min` : ""}`
-                          : ""}
+                        {LIBELLES_TRANCHE[trancheDeRoutine(r)]}
+                        {r.duree_min ? ` · ${r.duree_min} min` : ""}
                         {etapesR.length > 0
                           ? palier === 2
                             ? " · tout est fait"
@@ -338,9 +301,9 @@ export default function Routines() {
   };
 
   const sousTitreEnergie =
-    energie.source === "choix"
-      ? EXPLICATION_VERSION[version]
-      : "Choisis-la pour adapter tes routines : version courte, normale ou longue.";
+    energie.niveau !== null
+      ? EXPLICATION_ENERGIE[energie.niveau]
+      : "Un jour difficile ? Dis-le ici : l'appli en demandera moins.";
 
   return (
     <ScrollView
@@ -382,7 +345,8 @@ export default function Routines() {
         </Text>
         <View style={styles.energieChoix}>
           {NIVEAUX.map((n) => {
-            const actif = (energie.niveau ?? 2) === n.niveau;
+            // Rien de sélectionné tant que rien n'est choisi.
+            const actif = energie.niveau === n.niveau;
             return (
               <TouchableOpacity
                 key={n.niveau}
@@ -532,9 +496,6 @@ export default function Routines() {
         </TouchableOpacity>
       )}
 
-      <View style={{ marginTop: spacing.xl }}>
-        <CalendrierMois type="routine" titre="Routines" />
-      </View>
     </ScrollView>
   );
 }

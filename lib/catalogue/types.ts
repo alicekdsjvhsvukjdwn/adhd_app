@@ -10,7 +10,7 @@ export type Moment =
   | "reveil"
   | "matin"
   | "midi"
-  | "apres-midi"
+  | "apres_midi"
   | "soir"
   | "coucher"
   | "indifferent";

@@ -1,3 +1,9 @@
+import {
+  COLONNES_STATS,
+  SQL_MOMENTS,
+  SQL_TABLES_HORS_MIGRATIONS,
+  SQL_VERSIONS_EN_ETAPES,
+} from "../schema";
 import { getDatabase } from "./client";
 
 /**
@@ -633,6 +639,37 @@ const MIGRATIONS: Migration[] = [
         prises.push(c);
         await db.runAsync("UPDATE listes SET couleur = ? WHERE id = ?", c, l.id);
       }
+    },
+  },
+
+  {
+    version: 18,
+    nom: "rangement : tables créées hors migrations",
+    run: async (db) => {
+      // ancres, stats, preferences, event_log, meta : créées jusqu'ici à la demande.
+      await db.execAsync(SQL_TABLES_HORS_MIGRATIONS);
+      const colonnes = (
+        await db.getAllAsync<{ name: string }>("PRAGMA table_info(stats)")
+      ).map((c) => c.name);
+      for (const c of COLONNES_STATS) {
+        if (!colonnes.includes(c.nom)) await db.execAsync(c.sql);
+      }
+    },
+  },
+
+  {
+    version: 19,
+    nom: "moments : une seule orthographe",
+    run: async (db) => {
+      await db.execAsync(SQL_MOMENTS);
+    },
+  },
+
+  {
+    version: 20,
+    nom: "versions courte et longue devenues des étapes",
+    run: async (db) => {
+      await db.execAsync(SQL_VERSIONS_EN_ETAPES);
     },
   },
 ];
