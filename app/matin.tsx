@@ -26,7 +26,7 @@ const VISAGES: { q: Qualite; libelle: string; Icone: typeof Smile }[] = [
 ];
 
 /**
- * Le matin, juste après « Je me lève » : la nuit, puis 2 questions.
+ * Le matin, juste après « Je me suis levée » : la nuit, puis 2 questions.
  * Chaque tap est gardé tout de suite ; la nuit est complète (et rapporte
  * ses points) quand les deux réponses sont données.
  */

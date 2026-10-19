@@ -17,10 +17,6 @@ export function hhmmDe(minutes: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
-export function decalerHeure(hhmm: string, deltaMin: number): string {
-  return hhmmDe(minutesDe(hhmm) + deltaMin);
-}
-
 /**
  * Durée de la nuit en minutes. Un coucher après le lever sur l'horloge
  * (23:30 → 07:00) passe minuit. Coucher = lever : 0.
@@ -65,53 +61,62 @@ export const lireCoucher = (v: string | null): Coucher | null =>
 
 export const ecrireCoucher = (c: Coucher) => `${c.date} ${c.heure}`;
 
-/** Avant cette heure le soir, un tap sans nuit en cours veut dire « je viens de me lever ». */
+/** Le soir commence à 18 h ; le matin à 4 h (avant, on se couche encore) ; l'après-midi à 12 h. */
 export const HEURE_SOIR = 18;
-/** Avant 4 h, on se couche encore (pas un lever). */
 export const HEURE_MATIN = 4;
-/** Nuit en cours encore ouverte à partir de 11 h : le lever a été oublié. */
-export const HEURE_LEVER_OUBLIE = 11;
+export const HEURE_MIDI = 12;
+
+const jourVoisin = (date: string, n: number) => {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
 
 /** La nuit est datée du jour du lever : un coucher l'après-midi ou le soir donne le lendemain. */
 export function jourDuLever(c: Coucher): string {
-  if (minutesDe(c.heure) < 12 * 60) return c.date;
-  const d = new Date(c.date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
+  return minutesDe(c.heure) < 12 * 60 ? c.date : jourVoisin(c.date, 1);
 }
 
 /** Oubli du soir : l'heure de coucher donnée au lever, pour la nuit qui finit `aujourdhui`. */
 export function coucherPour(aujourdhui: string, heure: string): Coucher {
-  if (minutesDe(heure) < 12 * 60) return { date: aujourdhui, heure };
-  const d = new Date(aujourdhui + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() - 1);
-  return { date: d.toISOString().slice(0, 10), heure };
+  return minutesDe(heure) < 12 * 60 ? { date: aujourdhui, heure } : { date: jourVoisin(aujourdhui, -1), heure };
 }
 
 /**
- * Le grand bouton. Nuit en cours : « Je me lève ». Sinon, en journée
- * (4 h – 18 h) tant que la nuit du jour n'est pas notée : « Je me lève »
- * aussi (le coucher a été oublié). Sinon : « Je vais dormir ».
+ * Ce que montre l'onglet Suivi :
+ * - 18 h – 4 h : « Je vais dormir », ou « Couchée à … · ajuster » si c'est fait ;
+ * - 4 h – 18 h, nuit du jour notée : le résumé de la nuit ;
+ * - 4 h – 12 h : « Je me suis levée » ; 12 h – 18 h : « Noter mon heure de lever », discret.
  */
-export function boutonSommeil(p: {
-  enCours: Coucher | null;
-  heure: number;
-  nuitDuJourNotee: boolean;
-}): "dormir" | "lever" {
-  if (p.enCours) return "lever";
-  if (p.heure >= HEURE_MATIN && p.heure < HEURE_SOIR && !p.nuitDuJourNotee) return "lever";
-  return "dormir";
+export type EtatSommeil = "dormir" | "couchee" | "lever" | "lever_discret" | "resume";
+
+export function etatSommeil(p: { heure: number; enCours: Coucher | null; leverNote: boolean }): EtatSommeil {
+  if (p.heure >= HEURE_SOIR || p.heure < HEURE_MATIN) return p.enCours ? "couchee" : "dormir";
+  if (p.leverNote) return "resume";
+  return p.heure < HEURE_MIDI ? "lever" : "lever_discret";
+}
+
+/** Raccourci « il y a 30 min » : à 0 h 10, 23 h 40 la veille. */
+export function ilYa(aujourdhui: string, maintenantMin: number, minutes: number): Coucher {
+  const m = maintenantMin - minutes;
+  return { date: m < 0 ? jourVoisin(aujourdhui, -1) : aujourdhui, heure: hhmmDe(m) };
 }
 
 /**
- * Lever oublié : la nuit en cours est encore ouverte à partir de 11 h le
- * jour du lever (ou plus tard encore).
+ * Coucher ajusté : le jour le plus proche de maintenant (à ±12 h). À 0 h 10,
+ * 23 h 40 est la veille ; à 23 h 50, 0 h 30 est le lendemain (nuit du jour qui suit).
  */
-export function leverOublie(enCours: Coucher | null, aujourdhui: string, heure: number): boolean {
-  if (!enCours) return false;
-  const lever = jourDuLever(enCours);
-  return aujourdhui > lever || (aujourdhui === lever && heure >= HEURE_LEVER_OUBLIE);
+export function dateDuCoucher(aujourdhui: string, maintenantMin: number, heure: string): Coucher {
+  const ecart = minutesDe(heure) - maintenantMin;
+  const date = ecart > 720 ? jourVoisin(aujourdhui, -1) : ecart < -720 ? jourVoisin(aujourdhui, 1) : aujourdhui;
+  return { date, heure };
 }
+
+/** « 23:12 » → « 23 h 12 ». */
+export const heureLisible = (hhmm: string) => hhmm.replace(":", " h ");
+
+/** Heure locale d'un instant : « 07:05 ». */
+export const hhmmMaintenant = (d = new Date()) => hhmmDe(d.getHours() * 60 + d.getMinutes());
 
 /** Échelle commune des barres de la semaine : 21 h en haut, 11 h en bas. */
 export const ECHELLE_DEBUT = 21 * 60;

@@ -7,12 +7,11 @@ import {
   View,
 } from "react-native";
 import { Texte } from "../components/Texte";
-import { PlusMoins } from "../components/PlusMoins";
+import { SelecteurHeure } from "../components/SelecteurHeure";
 import { decalerJours } from "../lib/dates";
 import { getAujourdhui } from "../lib/db/completions";
 import { enregistrerNuit, getNuit, heuresParDefaut } from "../lib/db/sommeil";
 import {
-  decalerHeure,
   dureeLisible,
   dureeSommeilMin,
   nuitRapporte,
@@ -21,8 +20,6 @@ import {
   type Qualite,
 } from "../lib/suivi-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
-
-const PAS_MIN = 15;
 
 function jourLisible(date: string): string {
   const aujourdhui = getAujourdhui();
@@ -39,7 +36,8 @@ function jourLisible(date: string): string {
 /**
  * Saisie du matin, en quelques taps : heures pré-remplies avec la veille,
  * qualité, écrans. La nuit est datée du jour du lever ; les flèches
- * permettent de remplir ou corriger un jour oublié.
+ * permettent de remplir ou corriger un jour oublié. Un tap sur une heure
+ * ouvre le sélecteur.
  */
 export default function Sommeil() {
   const router = useRouter();
@@ -54,6 +52,7 @@ export default function Sommeil() {
   const [ecrans, setEcrans] = useState<0 | 1 | null>(null);
   const [dejaNotee, setDejaNotee] = useState(false);
   const [enregistrement, setEnregistrement] = useState(false);
+  const [feuille, setFeuille] = useState<"coucher" | "lever" | null>(null);
 
   useEffect(() => {
     let actif = true;
@@ -148,22 +147,22 @@ export default function Sommeil() {
       </View>
 
       <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-        <View style={styles.heure}>
-          <Texte style={[styles.labelHeure, { color: t.textSecondary }]}>Coucher</Texte>
-          <PlusMoins
-            valeur={coucher}
-            libelle="Heure de coucher"
-            onPas={(s) => setCoucher((h) => decalerHeure(h, s * PAS_MIN))}
-          />
-        </View>
-        <View style={styles.heure}>
-          <Texte style={[styles.labelHeure, { color: t.textSecondary }]}>Lever</Texte>
-          <PlusMoins
-            valeur={lever}
-            libelle="Heure de lever"
-            onPas={(s) => setLever((h) => decalerHeure(h, s * PAS_MIN))}
-          />
-        </View>
+        {(
+          [
+            ["coucher", "Coucher", coucher],
+            ["lever", "Lever", lever],
+          ] as const
+        ).map(([cle, libelle, valeur]) => (
+          <TouchableOpacity
+            key={cle}
+            style={styles.heure}
+            onPress={() => setFeuille(cle)}
+            accessibilityLabel={`Heure de ${cle}, ${valeur}`}
+          >
+            <Texte style={[styles.labelHeure, { color: t.textSecondary }]}>{libelle}</Texte>
+            <Texte style={[styles.valeurHeure, { color: t.accentText, borderColor: t.border }]}>{valeur}</Texte>
+          </TouchableOpacity>
+        ))}
         <Texte style={[styles.duree, { color: t.textPrimary }]}>
           {dureeLisible(dureeSommeilMin(coucher, lever))} de nuit
         </Texte>
@@ -193,6 +192,18 @@ export default function Sommeil() {
       >
         <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>Enregistrer</Texte>
       </TouchableOpacity>
+
+      <SelecteurHeure
+        visible={feuille !== null}
+        titre={feuille === "coucher" ? "Couchée à quelle heure ?" : "Levée à quelle heure ?"}
+        heure={feuille === "coucher" ? coucher : lever}
+        onFermer={() => setFeuille(null)}
+        onValider={(h) => {
+          if (feuille === "coucher") setCoucher(h);
+          else setLever(h);
+          setFeuille(null);
+        }}
+      />
     </ScrollView>
   );
 }
@@ -213,6 +224,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   labelHeure: { fontSize: typography.body, fontWeight: "600" },
+  valeurHeure: {
+    fontSize: typography.h2,
+    fontWeight: "600",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
   duree: { fontSize: typography.body, fontWeight: "600", textAlign: "center" },
   ligneChoix: { flexDirection: "row", gap: spacing.sm },
   choix: {

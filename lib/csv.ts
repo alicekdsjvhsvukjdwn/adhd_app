@@ -277,7 +277,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       saisi_le: ISO,
       maj_le: ISO,
       reponses:
-        "1 = qualité et écrans donnés ; 0 = nuit écrite au « Je me lève » sans les réponses du matin : qualite (2) et ecrans (0) sont alors des valeurs par défaut, à ignorer (filtrer reponses = 1)",
+        "1 = qualité et écrans donnés ; 0 = nuit écrite au « Je me suis levée » (ou « Je me lève », avant) sans les réponses du matin : qualite (2) et ecrans (0) sont alors des valeurs par défaut, à ignorer (filtrer reponses = 1)",
     },
   },
   sport_reglages: {

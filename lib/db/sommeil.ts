@@ -2,6 +2,7 @@ import { dateLocale } from "../dates";
 import {
   dureeSommeilMin,
   ecrireCoucher,
+  hhmmMaintenant,
   jourDuLever,
   lireCoucher,
   nuitRapporte,
@@ -47,9 +48,6 @@ async function ecrireMeta(cle: string, valeur: string | null): Promise<void> {
   if (valeur === null) await db.runAsync("DELETE FROM meta WHERE cle = ?", cle);
   else await db.runAsync("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)", cle, valeur);
 }
-
-const heureLocale = (d = new Date()) =>
-  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
 export async function getNuit(date: string): Promise<Nuit | null> {
   const db = await getDatabase();
@@ -115,14 +113,17 @@ export const getNuitEnCours = async (): Promise<Coucher | null> =>
 
 /** « Je vais dormir » : l'heure de coucher, maintenant. */
 export async function jeVaisDormir(): Promise<void> {
-  await ecrireMeta(CLE_EN_COURS, ecrireCoucher({ date: dateLocale(), heure: heureLocale() }));
+  await ecrireMeta(CLE_EN_COURS, ecrireCoucher({ date: dateLocale(), heure: hhmmMaintenant() }));
 }
+
+/** « Couchée à … · ajuster ». */
+export const ajusterCoucher = (c: Coucher) => ecrireMeta(CLE_EN_COURS, ecrireCoucher(c));
 
 /** Tap « Je vais dormir » par erreur. */
 export const annulerNuitEnCours = () => ecrireMeta(CLE_EN_COURS, null);
 
 /**
- * « Je me lève » : écrit la nuit tout de suite (rien ne se perd), réponses
+ * « Je me suis levée » : écrit la nuit tout de suite (rien ne se perd), réponses
  * à 0 jusqu'aux taps du matin. `coucher` : la nuit en cours, ou l'heure
  * donnée après un oubli du soir. `lever` : maintenant, sauf oubli du matin.
  * Une nuit déjà notée garde ses réponses. Renvoie le jour de la nuit.
@@ -131,7 +132,7 @@ export async function jeMeLeve(p: { coucher?: Coucher; lever?: string } = {}): P
   const coucher = p.coucher ?? (await getNuitEnCours());
   if (!coucher) throw new Error("Pas de nuit en cours");
   const date = jourDuLever(coucher);
-  const lever = p.lever ?? heureLocale();
+  const lever = p.lever ?? hhmmMaintenant();
   const db = await getDatabase();
   const maintenant = new Date().toISOString();
   await db.runAsync(
@@ -149,6 +150,19 @@ export async function jeMeLeve(p: { coucher?: Coucher; lever?: string } = {}): P
   );
   await ecrireMeta(CLE_EN_COURS, null);
   return date;
+}
+
+/** Heures ajustées après « Je me suis levée » : réponses et points inchangés. */
+export async function corrigerHeures(date: string, coucher: string, lever: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE sommeil SET coucher = ?, lever = ?, duree_min = ?, maj_le = ? WHERE date = ?",
+    coucher,
+    lever,
+    dureeSommeilMin(coucher, lever),
+    new Date().toISOString(),
+    date,
+  );
 }
 
 export async function getReponses(date: string): Promise<ReponsesMatin> {

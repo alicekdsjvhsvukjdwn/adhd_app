@@ -8,28 +8,34 @@ import {
   View,
 } from "react-native";
 import { JOURS_LONGS } from "../../components/CalendrierMois";
-import { PlusMoins } from "../../components/PlusMoins";
+import { SelecteurHeure } from "../../components/SelecteurHeure";
 import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import { decalerJours } from "../../lib/dates";
 import { meditationsRecentes } from "../../lib/db/meditations";
 import {
+  ajusterCoucher,
   annulerNuitEnCours,
+  corrigerHeures,
   getNuit,
   getNuitEnCours,
   heuresParDefaut,
   jeMeLeve,
   jeVaisDormir,
   nuitsEntre,
+  type Nuit,
 } from "../../lib/db/sommeil";
 import { getReglages, seancesCetteSemaine } from "../../lib/db/sport";
 import { semaineDe } from "../../lib/regles-taches";
 import {
   barresSemaine,
-  boutonSommeil,
   coucherPour,
-  decalerHeure,
-  leverOublie,
+  dateDuCoucher,
+  dureeLisible,
+  etatSommeil,
+  heureLisible,
+  hhmmMaintenant,
+  minutesDe,
   type BarreNuit,
   type Coucher,
 } from "../../lib/suivi-regles";
@@ -37,7 +43,6 @@ import { heureDecimale, radius, spacing, typography, useTheme } from "../../lib/
 
 const TAILLE = 210;
 const HAUTEUR_SEMAINE = 120;
-const PAS_MIN = 15;
 
 /** Teintes du grand bouton : indigo le soir, bleu clair au lever. */
 const TEINTES = {
@@ -45,12 +50,18 @@ const TEINTES = {
   lever: { clair: "#BAE6FD", fond: "#0C4A6E", anneau1: "#082F49", anneau2: "#06233A", texte: "#E0F2FE" },
 };
 const INDIGO = "#818CF8";
-
-type Demande = { type: "coucher" | "lever"; heure: string };
+const BLEU_CLAIR = "#7DD3FC";
 
 /**
- * Suivi : le sommeil en un geste, la semaine en barres, et l'entrée vers
- * Méditer et Sport. Rien ici ne change le tri des tâches ni les routines.
+ * Lever en cours de saisie. `ecrite` : jour de la nuit déjà écrite (tap du
+ * matin, rien ne se perd si la feuille est fermée), null sinon.
+ */
+type Saisie = { coucher: Coucher; lever: string; ecrite: string | null; demanderCoucher: boolean };
+
+/**
+ * Suivi : le sommeil selon l'heure (etatSommeil, lib/suivi-regles.ts), la
+ * semaine en barres, et l'entrée vers Méditer et Sport. Rien ici ne change
+ * le tri des tâches ni les routines.
  */
 export default function Suivi() {
   const router = useRouter();
@@ -58,24 +69,19 @@ export default function Suivi() {
   const aujourdhui = useJourCourant();
 
   const [enCours, setEnCours] = useState<Coucher | null>(null);
-  const [nuitNotee, setNuitNotee] = useState(false);
+  const [nuit, setNuit] = useState<Nuit | null>(null);
   const [barres, setBarres] = useState<BarreNuit[]>([]);
-  const [demande, setDemande] = useState<Demande | null>(null);
+  const [saisie, setSaisie] = useState<Saisie | null>(null);
+  const [feuille, setFeuille] = useState<"lever" | "coucher" | "couchee" | null>(null);
   const [seances, setSeances] = useState(0);
   const [sportConfigure, setSportConfigure] = useState(true);
   const [meditations, setMeditations] = useState(0);
 
   const charger = useCallback(async () => {
-    const c = await getNuitEnCours();
-    setEnCours(c);
-    setNuitNotee(!!(await getNuit(aujourdhui)));
+    setEnCours(await getNuitEnCours());
+    setNuit(await getNuit(aujourdhui));
     const semaine = semaineDe(aujourdhui);
     setBarres(barresSemaine(await nuitsEntre(semaine[0], semaine[6]), semaine));
-    // Lever oublié : on demande l'heure, pré-remplie avec l'habitude.
-    if (leverOublie(c, aujourdhui, heureDecimale())) {
-      const h = await heuresParDefaut(aujourdhui);
-      setDemande({ type: "lever", heure: h.lever });
-    }
     setSeances(await seancesCetteSemaine());
     setSportConfigure((await getReglages()).configure);
     setMeditations(await meditationsRecentes(decalerJours(aujourdhui, -6)));
@@ -87,33 +93,77 @@ export default function Suivi() {
     }, [charger]),
   );
 
-  const etat = boutonSommeil({ enCours, heure: heureDecimale(), nuitDuJourNotee: nuitNotee });
-  const teinte = TEINTES[etat];
+  const etat = etatSommeil({ heure: heureDecimale(), enCours, leverNote: !!nuit });
 
-  const leve = async (p: Parameters<typeof jeMeLeve>[0]) => {
-    setDemande(null);
-    const date = await jeMeLeve(p);
+  /** Matin : lever à maintenant, écrit tout de suite. Après-midi : l'habitude, écrite à la validation. */
+  const commencerLever = async (maintenant: boolean) => {
+    const h = await heuresParDefaut(aujourdhui);
+    const coucher = enCours ?? coucherPour(aujourdhui, h.coucher);
+    const lever = maintenant ? hhmmMaintenant() : h.lever;
+    const ecrite = maintenant ? await jeMeLeve({ coucher, lever }) : null;
+    setSaisie({ coucher, lever, ecrite, demanderCoucher: !enCours });
+    setFeuille("lever");
+  };
+
+  /** Fin du lever : la nuit (écrite ou corrigée), puis les 2 questions. */
+  const finirLever = async (s: Saisie) => {
+    setFeuille(null);
+    setSaisie(null);
+    let date = s.ecrite;
+    if (date) await corrigerHeures(date, s.coucher.heure, s.lever);
+    else date = await jeMeLeve({ coucher: s.coucher, lever: s.lever });
     router.push(`/matin?date=${date}`);
   };
 
-  const onBouton = async () => {
-    if (etat === "dormir") {
-      setDemande(null);
-      await jeVaisDormir();
-      await charger();
-    } else if (enCours) {
-      await leve({});
-    } else {
-      // Pas de tap hier soir : l'heure de coucher d'abord.
-      const h = await heuresParDefaut(aujourdhui);
-      setDemande({ type: "coucher", heure: h.coucher });
-    }
+  const validerLever = async (hhmm: string) => {
+    if (!saisie) return;
+    const s = { ...saisie, lever: hhmm };
+    // Pas de coucher noté hier soir : on le demande, avec la même feuille.
+    if (s.demanderCoucher) {
+      setSaisie(s);
+      setFeuille("coucher");
+    } else await finirLever(s);
   };
 
-  const validerDemande = async () => {
-    if (!demande) return;
-    if (demande.type === "coucher") await leve({ coucher: coucherPour(aujourdhui, demande.heure) });
-    else await leve({ lever: demande.heure });
+  const fermerFeuille = async () => {
+    // Nuit déjà écrite au tap du matin : fermer garde ce qui est là et passe aux questions.
+    if (saisie?.ecrite) return finirLever(saisie);
+    setFeuille(null);
+    setSaisie(null);
+  };
+
+  const validerFeuille = async (hhmm: string) => {
+    if (feuille === "lever") return validerLever(hhmm);
+    if (feuille === "coucher" && saisie) return finirLever({ ...saisie, coucher: coucherPour(aujourdhui, hhmm) });
+    // « Couchée à … · ajuster » : le jour le plus proche de maintenant (passage de minuit).
+    setFeuille(null);
+    await ajusterCoucher(dateDuCoucher(aujourdhui, minutesDe(hhmmMaintenant()), hhmm));
+    await charger();
+  };
+
+  const grandBouton = (genre: "dormir" | "lever", libelle: string, onPress?: () => void) => {
+    const teinte = TEINTES[genre];
+    return (
+      <View style={[styles.anneau, { width: TAILLE + 36, height: TAILLE + 36, backgroundColor: teinte.anneau2 }]}>
+        <View style={[styles.anneau, { width: TAILLE + 16, height: TAILLE + 16, backgroundColor: teinte.anneau1 }]}>
+          <TouchableOpacity
+            onPress={onPress}
+            disabled={!onPress}
+            activeOpacity={0.8}
+            style={[styles.bouton, { width: TAILLE, height: TAILLE, backgroundColor: teinte.fond }]}
+            accessibilityRole="button"
+            accessibilityLabel={libelle}
+          >
+            {genre === "dormir" ? (
+              <Moon color={teinte.clair} size={52} strokeWidth={1.6} />
+            ) : (
+              <Sun color={teinte.clair} size={52} strokeWidth={1.6} />
+            )}
+            <Texte style={[styles.boutonTexte, { color: teinte.texte }]}>{libelle}</Texte>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -123,76 +173,104 @@ export default function Suivi() {
     >
       <Texte style={[styles.titre, { color: t.textPrimary }]}>Suivi</Texte>
 
-      {/* ── Le grand bouton ── */}
+      {/* ── Le sommeil, selon l'heure ── */}
       <View style={styles.centre}>
-        <View style={[styles.anneau, { width: TAILLE + 36, height: TAILLE + 36, backgroundColor: teinte.anneau2 }]}>
-          <View style={[styles.anneau, { width: TAILLE + 16, height: TAILLE + 16, backgroundColor: teinte.anneau1 }]}>
-            <TouchableOpacity
-              onPress={onBouton}
-              activeOpacity={0.8}
-              style={[styles.bouton, { width: TAILLE, height: TAILLE, backgroundColor: teinte.fond }]}
-              accessibilityRole="button"
-              accessibilityLabel={etat === "dormir" ? "Je vais dormir" : "Je me lève"}
-            >
-              {etat === "dormir" ? (
-                <Moon color={teinte.clair} size={52} strokeWidth={1.6} />
-              ) : (
-                <Sun color={teinte.clair} size={52} strokeWidth={1.6} />
-              )}
-              <Texte style={[styles.boutonTexte, { color: teinte.texte }]}>
-                {etat === "dormir" ? "Je vais dormir" : "Je me lève"}
-              </Texte>
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Texte style={[styles.phrase, { color: t.textSecondary }]}>
-          {enCours
-            ? `Couchée à ${enCours.heure}. Demain matin : Je me lève.`
-            : "Un tap en te couchant. Demain matin : Je me lève."}
-        </Texte>
-        {enCours && (
-          <TouchableOpacity
-            onPress={async () => {
-              await annulerNuitEnCours();
-              setDemande(null);
+        {etat === "dormir" && (
+          <>
+            {grandBouton("dormir", "Je vais dormir", async () => {
+              await jeVaisDormir();
               await charger();
-            }}
-            hitSlop={8}
+            })}
+            <Texte style={[styles.phrase, { color: t.textSecondary }]}>Un tap en te couchant.</Texte>
+          </>
+        )}
+        {etat === "couchee" && enCours && (
+          <>
+            {grandBouton("dormir", "Bonne nuit")}
+            <View style={styles.liens}>
+              <Texte style={[styles.phrase, { color: t.textSecondary, marginTop: 0 }]}>
+                Couchée à {heureLisible(enCours.heure)} ·{" "}
+              </Texte>
+              <TouchableOpacity onPress={() => setFeuille("couchee")} hitSlop={8}>
+                <Texte style={[styles.lien, { color: t.accentText, marginTop: 0 }]}>ajuster</Texte>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={async () => {
+                await annulerNuitEnCours();
+                await charger();
+              }}
+              hitSlop={8}
+            >
+              <Texte style={[styles.lien, { color: t.textMuted }]}>Annuler (tapé par erreur)</Texte>
+            </TouchableOpacity>
+          </>
+        )}
+        {etat === "lever" && (
+          <>
+            {grandBouton("lever", "Je me suis levée", () => commencerLever(true))}
+            <Texte style={[styles.phrase, { color: t.textSecondary }]}>
+              Un tap en te levant, puis 2 questions.
+            </Texte>
+          </>
+        )}
+        {etat === "lever_discret" && (
+          <TouchableOpacity
+            onPress={() => commencerLever(false)}
+            style={[styles.discret, { borderColor: t.border, backgroundColor: t.bgCard }]}
           >
-            <Texte style={[styles.lien, { color: t.textMuted }]}>Annuler (tapé par erreur)</Texte>
+            <Sun color={BLEU_CLAIR} size={20} strokeWidth={1.8} />
+            <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>Noter mon heure de lever</Texte>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* ── Oubli du soir ou du matin ── */}
-      {demande && (
+      {etat === "resume" && nuit && (
         <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border }]}>
-          <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>
-            {demande.type === "coucher"
-              ? "Tu t'es couchée vers quelle heure ?"
-              : "Tu t'es levée vers quelle heure ?"}
-          </Texte>
-          <View style={styles.demandeLigne}>
-            <PlusMoins
-              valeur={demande.heure}
-              libelle={demande.type === "coucher" ? "Heure de coucher" : "Heure de lever"}
-              onPas={(s) => setDemande((d) => d && { ...d, heure: decalerHeure(d.heure, s * PAS_MIN) })}
-              grand
-            />
-            <TouchableOpacity
-              onPress={validerDemande}
-              style={[styles.valider, { backgroundColor: t.accent }]}
-            >
-              <Texte style={[styles.validerTexte, { color: t.textOnAccent }]}>Valider</Texte>
-            </TouchableOpacity>
+          <View style={styles.resumeHaut}>
+            <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>
+              Ta nuit · {dureeLisible(nuit.duree_min)}
+            </Texte>
+            <View style={styles.liens}>
+              {nuit.reponses === 0 && (
+                <TouchableOpacity onPress={() => router.push(`/matin?date=${nuit.date}`)} hitSlop={8}>
+                  <Texte style={[styles.lien, { color: t.accentText, marginTop: 0 }]}>2 questions · </Texte>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => router.push(`/sommeil?date=${nuit.date}`)} hitSlop={8}>
+                <Texte style={[styles.lien, { color: t.accentText, marginTop: 0 }]}>corriger</Texte>
+              </TouchableOpacity>
+            </View>
           </View>
-          {demande.type === "coucher" && (
-            <TouchableOpacity onPress={() => setDemande(null)} hitSlop={8}>
-              <Texte style={[styles.lien, { color: t.textMuted, marginTop: spacing.sm }]}>Pas maintenant</Texte>
-            </TouchableOpacity>
-          )}
+          <View style={styles.nuitLigne}>
+            <Texte style={[styles.sous, { color: t.textMuted }]}>{nuit.coucher}</Texte>
+            <Moon color={INDIGO} size={16} strokeWidth={1.8} />
+            <View style={[styles.nuitBarre, { backgroundColor: INDIGO }]} />
+            <Sun color={BLEU_CLAIR} size={16} strokeWidth={1.8} />
+            <Texte style={[styles.sous, { color: t.textMuted }]}>{nuit.lever}</Texte>
+          </View>
         </View>
       )}
+
+      <SelecteurHeure
+        visible={feuille !== null}
+        titre={
+          feuille === "lever"
+            ? "Levée à quelle heure ?"
+            : feuille === "coucher"
+              ? "Et couchée hier vers quelle heure ?"
+              : "Couchée à quelle heure ?"
+        }
+        heure={
+          feuille === "lever"
+            ? (saisie?.lever ?? hhmmMaintenant())
+            : feuille === "coucher"
+              ? (saisie?.coucher.heure ?? "23:00")
+              : (enCours?.heure ?? hhmmMaintenant())
+        }
+        onFermer={fermerFeuille}
+        onValider={validerFeuille}
+      />
 
       {/* ── Ma semaine ── */}
       <Texte style={[styles.surtitre, { color: t.textMuted }]}>MA SEMAINE</Texte>
@@ -286,14 +364,19 @@ const styles = StyleSheet.create({
   carte: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, marginTop: spacing.md },
   carteTitre: { fontSize: typography.body, fontWeight: "600" },
   sous: { fontSize: typography.small },
-  demandeLigne: {
+  liens: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
+  discret: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
   },
-  valider: { borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
-  validerTexte: { fontSize: typography.body, fontWeight: "700" },
+  resumeHaut: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  nuitLigne: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  nuitBarre: { flex: 1, height: 8, borderRadius: 4 },
 
   semaine: { flexDirection: "row", gap: 8 },
   colonne: { flex: 1, alignItems: "center" },
