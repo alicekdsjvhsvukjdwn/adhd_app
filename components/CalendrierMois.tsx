@@ -20,7 +20,7 @@ import { useCouleurCategorie } from "../lib/theme-categories";
  * montre ce qui a été fait, jamais ce qui manque.
  */
 
-const MOIS = [
+export const MOIS = [
   "janvier",
   "février",
   "mars",
@@ -34,7 +34,7 @@ const MOIS = [
   "novembre",
   "décembre",
 ];
-const JOURS_LONGS = [
+export const JOURS_LONGS = [
   "dimanche",
   "lundi",
   "mardi",

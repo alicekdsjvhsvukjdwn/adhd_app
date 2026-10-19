@@ -1,5 +1,6 @@
 import {
   COLONNES_STATS,
+  SQL_CATEGORIES_RECOMPENSES,
   SQL_COULEURS_LISTES,
   SQL_MOMENTS,
   SQL_TABLES_HORS_MIGRATIONS,
@@ -679,6 +680,18 @@ const MIGRATIONS: Migration[] = [
     nom: "nouvelle palette des listes",
     run: async (db) => {
       await db.execAsync(SQL_COULEURS_LISTES);
+    },
+  },
+
+  {
+    version: 22,
+    nom: "catégories des récompenses",
+    run: async (db) => {
+      // 'plaisirs' | 'sorties' | 'musique' | 'temps' | 'gros' (lib/recompenses-regles.ts)
+      await db.execAsync(`
+        ALTER TABLE recompenses ADD COLUMN categorie TEXT NOT NULL DEFAULT 'plaisirs';
+      `);
+      await db.execAsync(SQL_CATEGORIES_RECOMPENSES);
     },
   },
 ];

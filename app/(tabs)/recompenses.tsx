@@ -13,9 +13,8 @@ import {
   View,
 } from "react-native";
 import { Texte, ChampTexte } from "../../components/Texte";
-import { Swipeable } from "react-native-gesture-handler";
+import { IconeRecompense } from "../../components/IconeRecompense";
 import {
-    IDEES_RECOMPENSES,
     REGLES_POINTS,
     acheter,
     ajouterRecompense,
@@ -29,23 +28,17 @@ import {
     type Achat,
     type Recompense,
 } from "../../lib/db/recompenses";
+import {
+  CATEGORIES_RECOMPENSES,
+  ICONES_RECOMPENSES,
+  categorieRecompense,
+  etageres,
+  etatRecompense,
+  type CategorieRecompense,
+} from "../../lib/recompenses-regles";
 import { niveauDePoints, totalAffiche } from "../../lib/regles-taches";
-import { radius, spacing, typography, useTheme } from "../../lib/theme";
+import { avecAlpha, radius, spacing, typography, useTheme } from "../../lib/theme";
 
-const ICONES = [
-  "☕",
-  "🎮",
-  "📺",
-  "🍰",
-  "🛁",
-  "📚",
-  "🍿",
-  "🎧",
-  "🍕",
-  "🛍️",
-  "🌳",
-  "🎨",
-];
 const PRIX = [25, 50, 100, 150, 300, 500];
 
 const MOIS_COURTS = [
@@ -69,7 +62,13 @@ function dateCourte(d: string, aujourdhui: string): string {
   return `${x.getUTCDate()} ${MOIS_COURTS[x.getUTCMonth()]}`;
 }
 
-type Formulaire = { id?: number; nom: string; icone: string; prix: string };
+type Formulaire = {
+  id?: number;
+  nom: string;
+  icone: string;
+  prix: string;
+  categorie: CategorieRecompense;
+};
 
 export default function Recompenses() {
   const t = useTheme();
@@ -81,6 +80,7 @@ export default function Recompenses() {
   const [achats, setAchats] = useState<Achat[]>([]);
   const [formulaire, setFormulaire] = useState<Formulaire | null>(null);
   const [voirRegles, setVoirRegles] = useState(false);
+  const [voirAchats, setVoirAchats] = useState(false);
   const [bravo, setBravo] = useState<string | null>(null);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -111,8 +111,6 @@ export default function Recompenses() {
   );
 
   const niveau = niveauDePoints(total);
-  const nomsPris = new Set(liste.map((r) => r.nom));
-  const idees = IDEES_RECOMPENSES.filter((i) => !nomsPris.has(i.nom));
 
   const onOffrir = (r: Recompense) => {
     if (solde < r.prix) {
@@ -123,7 +121,7 @@ export default function Recompenses() {
       return;
     }
     Alert.alert(
-      `${r.icone ?? "🎁"} ${r.nom}`,
+      r.nom,
       `Dépenser ${r.prix} points ? Il t'en restera ${solde - r.prix}.`,
       [
         { text: "Pas maintenant", style: "cancel" },
@@ -131,9 +129,7 @@ export default function Recompenses() {
           text: "Je me l'offre",
           onPress: async () => {
             if (await acheter(r)) {
-              setBravo(
-                `${r.icone ?? "🎉"} Profite bien : ${r.nom.toLowerCase()} !`,
-              );
+              setBravo(`🎉 Profite bien : ${r.nom.toLowerCase()} !`);
               if (minuteur.current) clearTimeout(minuteur.current);
               minuteur.current = setTimeout(() => setBravo(null), 4000);
             }
@@ -162,9 +158,19 @@ export default function Recompenses() {
     );
   };
 
-  const onSupprimer = (r: Recompense) => {
-    Alert.alert("Supprimer cette récompense ?", r.nom, [
-      { text: "Garder", style: "cancel" },
+  const modifier = (r: Recompense) =>
+    setFormulaire({
+      id: r.id,
+      nom: r.nom,
+      icone: r.icone ?? "cadeau",
+      prix: String(r.prix),
+      categorie: categorieRecompense(r.categorie).cle,
+    });
+
+  /** Appui long sur une carte : modifier ou supprimer (les étagères défilent, pas de glisser). */
+  const onOptions = (r: Recompense) => {
+    Alert.alert(r.nom, undefined, [
+      { text: "Modifier", onPress: () => modifier(r) },
       {
         text: "Supprimer",
         style: "destructive",
@@ -173,6 +179,7 @@ export default function Recompenses() {
           await charger();
         },
       },
+      { text: "Fermer", style: "cancel" },
     ]);
   };
 
@@ -182,257 +189,183 @@ export default function Recompenses() {
 
   const enregistrer = async () => {
     if (!formulaire || !formulaireValide) return;
-    const r = { nom: formulaire.nom, icone: formulaire.icone, prix: prixSaisi };
+    const r = {
+      nom: formulaire.nom,
+      icone: formulaire.icone,
+      prix: prixSaisi,
+      categorie: formulaire.categorie,
+    };
     if (formulaire.id) await modifierRecompense({ id: formulaire.id, ...r });
     else await ajouterRecompense(r);
     setFormulaire(null);
     await charger();
   };
 
+  const couleurFormulaire = formulaire
+    ? categorieRecompense(formulaire.categorie).couleur
+    : t.accent;
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }}
-      >
-        <Texte style={[styles.titre, { color: t.textPrimary }]}>
-          Récompenses
-        </Texte>
-
-        {/* Solde */}
-        <View style={[styles.solde, { backgroundColor: t.bgHighlight }]}>
-          <Texte style={[styles.soldeChiffre, { color: t.textPrimary }]}>
-            {solde} pts
-          </Texte>
-          <Texte style={[styles.soldeTexte, { color: t.accentText }]}>
-            à dépenser
-          </Texte>
-          <Texte style={[styles.soldeDetail, { color: t.textSecondary }]}>
-            Niveau {niveau} · {totalAffiche(total)} points gagnés au total
-          </Texte>
+      <ScrollView contentContainerStyle={{ paddingTop: 60, paddingBottom: spacing.xxxl * 2 }}>
+        {/* En-tête : le solde en pastille */}
+        <View style={styles.entete}>
+          <Texte style={[styles.titre, { color: t.textPrimary }]}>Récompenses</Texte>
+          <View style={[styles.solde, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+            <Texte style={[styles.soldeChiffre, { color: t.accent }]}>{solde}</Texte>
+            <Texte style={[styles.soldeTexte, { color: t.textSecondary }]}>
+              pts à dépenser
+            </Texte>
+          </View>
         </View>
 
-        {/* Mes récompenses */}
-        <View style={styles.titreLigne}>
-          <Texte style={[styles.section, { color: t.textPrimary }]}>
-            Mes récompenses
-          </Texte>
-          <TouchableOpacity
-            style={[styles.plus, { backgroundColor: t.accent }]}
-            onPress={() =>
-              setFormulaire({ nom: "", icone: ICONES[0], prix: "50" })
-            }
-            accessibilityLabel="Créer une récompense"
-          >
-            <Texte style={[styles.plusTexte, { color: t.textOnAccent }]}>+</Texte>
-          </TouchableOpacity>
-        </View>
-
-        {liste.length === 0 && (
-          <Texte style={[styles.vide, { color: t.textMuted }]}>
-            Choisis ce qui te fait vraiment plaisir : c'est ce qui rend les
-            points utiles.
-          </Texte>
-        )}
-
-        {liste.map((r) => {
-          const pret = solde >= r.prix;
-          const part = Math.min(1, solde / r.prix);
+        {/* Une étagère par catégorie */}
+        {etageres(liste.map((r) => r.categorie)).map((cle) => {
+          const cat = categorieRecompense(cle);
+          const dedans = liste.filter((r) => categorieRecompense(r.categorie).cle === cle);
           return (
-            <Swipeable
-              key={r.id}
-              renderRightActions={() => (
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[styles.action, { backgroundColor: t.accentText }]}
-                    onPress={() =>
-                      setFormulaire({
-                        id: r.id,
-                        nom: r.nom,
-                        icone: r.icone ?? ICONES[0],
-                        prix: String(r.prix),
-                      })
-                    }
-                  >
-                    <Texte
-                      style={[styles.actionTexte, { color: t.textOnAccent }]}
-                    >
-                      Modifier
-                    </Texte>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.action, { backgroundColor: t.danger }]}
-                    onPress={() => onSupprimer(r)}
-                  >
-                    <Texte
-                      style={[styles.actionTexte, { color: t.textOnAccent }]}
-                    >
-                      Supprimer
-                    </Texte>
-                  </TouchableOpacity>
-                </View>
-              )}
-            >
-              <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-                <View style={styles.carteHaut}>
-                  <Texte style={styles.icone}>{r.icone ?? "🎁"}</Texte>
-                  <View style={{ flex: 1 }}>
-                    <Texte style={[styles.nom, { color: t.textPrimary }]}>
-                      {r.nom}
-                    </Texte>
-                    <Texte style={[styles.prix, { color: t.textSecondary }]}>
-                      {r.prix} pts
-                    </Texte>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.offrir,
-                      pret
-                        ? { backgroundColor: t.accent, borderColor: t.accent }
-                        : { borderColor: t.border },
-                    ]}
-                    onPress={() => onOffrir(r)}
-                  >
-                    <Texte
+            <View key={cle} style={styles.etagere}>
+              <View style={styles.etagereTitre}>
+                <View style={[styles.point, { backgroundColor: cat.couleur }]} />
+                <Texte style={[styles.section, { color: t.textPrimary }]}>{cat.nom}</Texte>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rangee}
+              >
+                {dedans.map((r) => {
+                  const { accessible, part } = etatRecompense(r.prix, solde);
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      onPress={() => onOffrir(r)}
+                      onLongPress={() => onOptions(r)}
+                      accessibilityHint="Appui long : modifier ou supprimer"
+                      accessibilityLabel={`${r.nom}, ${r.prix} points${accessible ? "" : ", pas encore"}`}
                       style={[
-                        styles.offrirTexte,
-                        { color: pret ? t.textOnAccent : t.textMuted },
+                        styles.carte,
+                        accessible
+                          ? { backgroundColor: avecAlpha(cat.couleur, 0.12), borderColor: cat.couleur }
+                          : { backgroundColor: t.bgCard, borderColor: t.border, opacity: 0.7 },
                       ]}
                     >
-                      {pret ? "Je me l'offre" : `Encore ${r.prix - solde}`}
-                    </Texte>
-                  </TouchableOpacity>
-                </View>
-                {!pret && (
-                  <View style={[styles.barre, { backgroundColor: t.bgApp }]}>
-                    <View
-                      style={{
-                        flex: part,
-                        backgroundColor: t.success,
-                        borderRadius: 4,
-                      }}
-                    />
-                    <View style={{ flex: 1 - part }} />
-                  </View>
-                )}
-              </View>
-            </Swipeable>
+                      <IconeRecompense icone={r.icone} couleur={cat.couleur} taille={26} />
+                      <Texte
+                        style={[styles.nom, { color: t.textPrimary }]}
+                        numberOfLines={2}
+                      >
+                        {r.nom}
+                      </Texte>
+                      {accessible ? (
+                        <Texte style={[styles.prix, { color: cat.couleur }]}>{r.prix} pts</Texte>
+                      ) : (
+                        <View style={[styles.barre, { backgroundColor: t.bgApp }]}>
+                          <View style={{ flex: part, backgroundColor: cat.couleur, borderRadius: 2 }} />
+                          <View style={{ flex: 1 - part }} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  onPress={() =>
+                    setFormulaire({ nom: "", icone: "cadeau", prix: "50", categorie: cle })
+                  }
+                  style={[styles.carte, styles.ajouter, { borderColor: t.border }]}
+                  accessibilityLabel={`Ajouter une récompense dans ${cat.nom}`}
+                >
+                  <Texte style={[styles.ajouterTexte, { color: t.textMuted }]}>+ Ajouter</Texte>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
           );
         })}
 
-        {/* Idées à ajouter d'un tap */}
-        {idees.length > 0 && (
-          <>
-            <Texte style={[styles.sousSection, { color: t.textSecondary }]}>
-              {liste.length === 0
-                ? "Des idées pour commencer"
-                : "D'autres idées"}
-            </Texte>
-            <View style={styles.idees}>
-              {idees.map((i) => (
-                <TouchableOpacity
-                  key={i.nom}
-                  style={[
-                    styles.idee,
-                    { backgroundColor: t.bgCard, borderColor: t.border },
-                  ]}
-                  onPress={async () => {
-                    await ajouterRecompense(i);
-                    await charger();
-                  }}
-                >
-                  <Texte style={[styles.ideeTexte, { color: t.textPrimary }]}>
-                    {i.icone} {i.nom}
-                  </Texte>
-                  <Texte style={[styles.ideePrix, { color: t.textMuted }]}>
-                    + {i.prix} pts
-                  </Texte>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Comment gagner des points */}
-        <TouchableOpacity
-          style={[styles.regles, { backgroundColor: t.bgCard }]}
-          onPress={() => setVoirRegles(!voirRegles)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.reglesEntete}>
-            <Texte style={[styles.reglesTitre, { color: t.textPrimary }]}>
-              Comment gagner des points
-            </Texte>
-            <Texte style={[styles.chevron, { color: t.textMuted }]}>
-              {voirRegles ? "−" : "+"}
-            </Texte>
-          </View>
-          {voirRegles && (
-            <>
-              {REGLES_POINTS.map((r) => (
-                <View key={r.action} style={styles.regle}>
-                  <Texte
-                    style={[styles.regleAction, { color: t.textSecondary }]}
-                  >
-                    {r.action}
-                  </Texte>
-                  <Texte style={[styles.reglePoints, { color: t.accentText }]}>
-                    {r.points}
-                  </Texte>
-                </View>
-              ))}
-              <Texte style={[styles.reglesNote, { color: t.textMuted }]}>
-                Avec 3 routines et 3 tâches, on gagne environ 60
-                points par jour : un café vaut une journée, un ciné une semaine.
-                Ton niveau dépend du total gagné : dépenser ne le fait pas
-                baisser, décocher reprend les points.
-              </Texte>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Historique */}
-        {achats.length > 0 && (
-          <>
-            <Texte
-              style={[
-                styles.section,
-                { color: t.textPrimary, marginTop: spacing.xl },
-              ]}
+        <View style={{ paddingHorizontal: spacing.xl }}>
+          {/* Dernières récompenses */}
+          {achats.length > 0 && (
+            <TouchableOpacity
+              style={[styles.repliable, { backgroundColor: t.bgCard }]}
+              onPress={() => setVoirAchats(!voirAchats)}
+              activeOpacity={0.8}
             >
-              Dernières récompenses
-            </Texte>
-            {achats.some((a) => a.date === aujourdhui) && (
-              <Texte
-                style={[
-                  styles.vide,
-                  { color: t.textMuted, fontStyle: "normal" },
-                ]}
-              >
-                Achat par erreur ? Touche-le pour l'annuler, le jour même.
+              <View style={styles.repliableEntete}>
+                <Texte style={[styles.repliableTitre, { color: t.textPrimary }]}>
+                  Dernières récompenses
+                </Texte>
+                <Texte style={[styles.chevron, { color: t.textMuted }]}>
+                  {voirAchats ? "−" : "+"}
+                </Texte>
+              </View>
+              {voirAchats && (
+                <>
+                  {achats.some((a) => a.date === aujourdhui) && (
+                    <Texte style={[styles.note, { color: t.textMuted }]}>
+                      Achat par erreur ? Touche-le pour l&apos;annuler, le jour même.
+                    </Texte>
+                  )}
+                  {achats.map((a) => (
+                    <TouchableOpacity
+                      key={a.id}
+                      disabled={a.date !== aujourdhui}
+                      onPress={() => onAnnulerAchat(a)}
+                      style={[styles.achat, { borderBottomColor: t.border }]}
+                    >
+                      <IconeRecompense icone={a.icone} couleur={t.textSecondary} taille={18} />
+                      <Texte style={[styles.achatNom, { color: t.textPrimary }]}>{a.nom}</Texte>
+                      <Texte style={[styles.achatDate, { color: t.textMuted }]}>
+                        {dateCourte(a.date, aujourdhui)}
+                      </Texte>
+                      <Texte style={[styles.achatPrix, { color: t.textSecondary }]}>
+                        −{a.prix}
+                      </Texte>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Comment gagner des points */}
+          <TouchableOpacity
+            style={[styles.repliable, { backgroundColor: t.bgCard }]}
+            onPress={() => setVoirRegles(!voirRegles)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.repliableEntete}>
+              <Texte style={[styles.repliableTitre, { color: t.textPrimary }]}>
+                Comment gagner des points
               </Texte>
+              <Texte style={[styles.chevron, { color: t.textMuted }]}>
+                {voirRegles ? "−" : "+"}
+              </Texte>
+            </View>
+            {voirRegles && (
+              <>
+                <Texte style={[styles.note, { color: t.textSecondary }]}>
+                  Niveau {niveau} · {totalAffiche(total)} points gagnés au total
+                </Texte>
+                {REGLES_POINTS.map((r) => (
+                  <View key={r.action} style={styles.regle}>
+                    <Texte style={[styles.regleAction, { color: t.textSecondary }]}>
+                      {r.action}
+                    </Texte>
+                    <Texte style={[styles.reglePoints, { color: t.accentText }]}>
+                      {r.points}
+                    </Texte>
+                  </View>
+                ))}
+                <Texte style={[styles.reglesNote, { color: t.textMuted }]}>
+                  Avec 3 routines et 3 tâches, on gagne environ 60
+                  points par jour : un café vaut une journée, un ciné une semaine.
+                  Ton niveau dépend du total gagné : dépenser ne le fait pas
+                  baisser, décocher reprend les points.
+                </Texte>
+              </>
             )}
-            {achats.map((a) => (
-              <TouchableOpacity
-                key={a.id}
-                disabled={a.date !== aujourdhui}
-                onPress={() => onAnnulerAchat(a)}
-                style={[styles.achat, { borderBottomColor: t.border }]}
-              >
-                <Texte style={styles.achatIcone}>{a.icone ?? "🎁"}</Texte>
-                <Texte style={[styles.achatNom, { color: t.textPrimary }]}>
-                  {a.nom}
-                </Texte>
-                <Texte style={[styles.achatDate, { color: t.textMuted }]}>
-                  {dateCourte(a.date, aujourdhui)}
-                </Texte>
-                <Texte style={[styles.achatPrix, { color: t.textSecondary }]}>
-                  −{a.prix}
-                </Texte>
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {bravo && (
@@ -462,26 +395,63 @@ export default function Recompenses() {
                       : "Nouvelle récompense"}
                   </Texte>
 
+                  <View style={styles.categories}>
+                    {CATEGORIES_RECOMPENSES.map((c) => {
+                      const actif = formulaire.categorie === c.cle;
+                      return (
+                        <TouchableOpacity
+                          key={c.cle}
+                          onPress={() => setFormulaire({ ...formulaire, categorie: c.cle })}
+                          style={[
+                            styles.prixPastille,
+                            {
+                              backgroundColor: actif ? avecAlpha(c.couleur, 0.15) : t.bgCard,
+                              borderColor: actif ? c.couleur : t.border,
+                            },
+                          ]}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: actif }}
+                        >
+                          <Texte
+                            style={{
+                              color: actif ? c.couleur : t.textSecondary,
+                              fontSize: typography.small,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {c.nom}
+                          </Texte>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
                   <View style={styles.icones}>
-                    {ICONES.map((i) => (
-                      <TouchableOpacity
-                        key={i}
-                        onPress={() =>
-                          setFormulaire({ ...formulaire, icone: i })
-                        }
-                        style={[
-                          styles.iconeChoix,
-                          {
-                            backgroundColor:
-                              formulaire.icone === i ? t.bgHighlight : t.bgCard,
-                            borderColor:
-                              formulaire.icone === i ? t.accent : "transparent",
-                          },
-                        ]}
-                      >
-                        <Texte style={{ fontSize: 20 }}>{i}</Texte>
-                      </TouchableOpacity>
-                    ))}
+                    {ICONES_RECOMPENSES.map((i) => {
+                      const actif = formulaire.icone === i;
+                      return (
+                        <TouchableOpacity
+                          key={i}
+                          onPress={() => setFormulaire({ ...formulaire, icone: i })}
+                          style={[
+                            styles.iconeChoix,
+                            {
+                              backgroundColor: actif ? avecAlpha(couleurFormulaire, 0.15) : t.bgCard,
+                              borderColor: actif ? couleurFormulaire : "transparent",
+                            },
+                          ]}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: actif }}
+                          accessibilityLabel={`Icône ${i}`}
+                        >
+                          <IconeRecompense
+                            icone={i}
+                            couleur={actif ? couleurFormulaire : t.textSecondary}
+                            taille={20}
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
 
                   <ChampTexte
@@ -602,97 +572,64 @@ export default function Recompenses() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
-  titre: {
-    fontSize: typography.h1,
-    fontWeight: "600",
+  entete: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
     marginBottom: spacing.lg,
   },
-
-  solde: { borderRadius: radius.lg, padding: spacing.lg, alignItems: "center" },
-  soldeChiffre: { fontSize: 40, fontWeight: "300" },
-  soldeTexte: {
-    fontSize: typography.small,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  soldeDetail: { fontSize: typography.small, marginTop: spacing.sm },
-
-  titreLigne: {
+  titre: { fontSize: typography.h1, fontWeight: "600" },
+  solde: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  section: { fontSize: typography.h2, fontWeight: "600" },
-  sousSection: {
-    fontSize: typography.small,
-    fontWeight: "600",
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  plus: {
-    width: 36,
-    height: 36,
+    alignItems: "baseline",
+    gap: 6,
+    borderWidth: 1,
     borderRadius: radius.pill,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  plusTexte: { fontSize: 22, lineHeight: 24, fontWeight: "500" },
-  vide: {
-    fontSize: typography.small,
-    fontStyle: "italic",
-    marginBottom: spacing.sm,
-    lineHeight: 18,
-  },
-
-  carte: {
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  carteHaut: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  icone: { fontSize: 28 },
-  nom: { fontSize: typography.body, fontWeight: "600" },
-  prix: { fontSize: typography.small, marginTop: 2 },
-  offrir: {
-    borderWidth: 1,
-    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 6,
   },
-  offrirTexte: { fontSize: typography.small, fontWeight: "600" },
-  barre: {
-    height: 6,
-    borderRadius: 3,
+  soldeChiffre: { fontSize: 22, fontWeight: "700" },
+  soldeTexte: { fontSize: typography.small, fontWeight: "600" },
+
+  etagere: { marginBottom: spacing.lg },
+  etagereTitre: {
     flexDirection: "row",
-    overflow: "hidden",
-    marginTop: spacing.sm,
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
   },
-
-  idees: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  idee: {
+  point: { width: 8, height: 8, borderRadius: 4 },
+  section: { fontSize: typography.body, fontWeight: "600" },
+  rangee: { gap: spacing.sm, paddingHorizontal: spacing.xl },
+  carte: {
+    width: 118,
+    height: 104,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    padding: spacing.md,
+    justifyContent: "space-between",
   },
-  ideeTexte: { fontSize: typography.small, fontWeight: "500" },
-  ideePrix: { fontSize: typography.tiny, marginTop: 2 },
+  nom: { fontSize: typography.small, fontWeight: "600", lineHeight: 16 },
+  prix: { fontSize: typography.small, fontWeight: "700" },
+  barre: { height: 4, borderRadius: 2, flexDirection: "row", overflow: "hidden" },
+  ajouter: { borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
+  ajouterTexte: { fontSize: typography.small, fontWeight: "600" },
 
-  regles: {
+  repliable: {
     borderRadius: radius.lg,
     padding: spacing.lg,
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
   },
-  reglesEntete: {
+  repliableEntete: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  reglesTitre: { fontSize: typography.body, fontWeight: "600" },
+  repliableTitre: { fontSize: typography.body, fontWeight: "600" },
   chevron: { fontSize: 20 },
+  note: { fontSize: typography.small, marginTop: spacing.sm, lineHeight: 18 },
   regle: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -715,7 +652,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
   },
-  achatIcone: { fontSize: 18 },
   achatNom: { flex: 1, fontSize: typography.bodySmall },
   achatDate: { fontSize: typography.tiny },
   achatPrix: {
@@ -724,17 +660,6 @@ const styles = StyleSheet.create({
     width: 44,
     textAlign: "right",
   },
-
-  actions: { flexDirection: "row" },
-  action: {
-    justifyContent: "center",
-    alignItems: "center",
-    width: 86,
-    borderRadius: radius.md,
-    marginBottom: spacing.sm,
-    marginLeft: 4,
-  },
-  actionTexte: { fontWeight: "600", fontSize: typography.small },
 
   bandeau: {
     position: "absolute",
@@ -757,6 +682,12 @@ const styles = StyleSheet.create({
   formTitre: {
     fontSize: typography.h2,
     fontWeight: "600",
+    marginBottom: spacing.md,
+  },
+  categories: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
     marginBottom: spacing.md,
   },
   icones: {

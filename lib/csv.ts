@@ -192,7 +192,14 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   },
   recompenses: {
     table: "Récompenses réelles définies.",
-    colonnes: { id: "identifiant", nom: "texte", icone: "emoji", prix: "points", cree_le: ISO },
+    colonnes: {
+      id: "identifiant",
+      nom: "texte",
+      icone: "icône au trait ('cafe', 'ecran', 'gateau', 'ticket', 'musique', 'montagne', 'casque', 'vinyle', 'clavier', 'lit', 'livre', 'cadeau', 'etoile', 'avion', 'manette') ou emoji des premières versions",
+      prix: "points",
+      cree_le: ISO,
+      categorie: "'plaisirs' | 'sorties' | 'musique' | 'temps' (temps pour moi) | 'gros' (gros objectifs)",
+    },
   },
   achats: {
     table: "Récompenses achetées (nom et prix recopiés). Solde = stats.points_total − somme des prix.",
@@ -200,7 +207,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       id: "identifiant",
       recompense_id: "récompense d'origine, vide si supprimée",
       nom: "texte",
-      icone: "emoji",
+      icone: "icône au trait ou emoji (comme recompenses.icone)",
       prix: "points",
       date: JOUR,
       horodatage: ISO,

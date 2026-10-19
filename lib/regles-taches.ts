@@ -211,6 +211,33 @@ export function libelleCompte(fait: number, cible: number, periode: Periode): st
   return `${fait}/${cible} ${periode === "semaine" ? "cette semaine" : "ce mois-ci"}`;
 }
 
+// ─── Tâches : la semaine en cours ───────────────────────────────────────
+
+/** Les 7 jours, du lundi au dimanche, de la semaine qui contient `iso`. */
+export function semaineDe(iso: string): string[] {
+  const lundi = debutPeriode(iso, "semaine");
+  return [0, 1, 2, 3, 4, 5, 6].map((i) => decalerJours(lundi, i));
+}
+
+/** Par jour de `jours`, la couleur de chaque tâche dont l'échéance tombe ce jour-là. */
+export function pointsEcheance(
+  taches: { echeance: string | null; couleur: string }[],
+  jours: string[],
+): Record<string, string[]> {
+  const res: Record<string, string[]> = Object.fromEntries(jours.map((j) => [j, []]));
+  for (const t of taches) if (t.echeance && res[t.echeance]) res[t.echeance].push(t.couleur);
+  return res;
+}
+
+/** « en retard », « échéance aujourd'hui », « échéance demain », « échéance dans 3 j ». */
+export function libelleEcheance(echeance: string, aujourdhui: string): string {
+  const j = Math.round((Date.parse(echeance) - Date.parse(aujourdhui)) / 86400000);
+  if (j < 0) return "en retard";
+  if (j === 0) return "échéance aujourd'hui";
+  if (j === 1) return "échéance demain";
+  return `échéance dans ${j} j`;
+}
+
 // ─── Carnet ─────────────────────────────────────────────────────────────
 
 /**

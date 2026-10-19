@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +15,7 @@ import {
 import { Texte, ChampTexte } from "../../components/Texte";
 import { Swipeable } from "react-native-gesture-handler";
 import { BarresObjectif } from "../../components/BarresObjectif";
+import { JOURS_LONGS, MOIS } from "../../components/CalendrierMois";
 import { PlusMoins } from "../../components/PlusMoins";
 import { ZoneNote } from "../../components/ZoneNote";
 import { useJourCourant } from "../../hooks/useJourCourant";
@@ -46,13 +49,16 @@ import {
 import { getAujourdhui } from "../../lib/db/completions";
 import {
   libelleCompte,
+  libelleEcheance,
+  pointsEcheance,
   POINTS_DERNIERE_ETAPE,
   POINTS_ETAPE,
+  semaineDe,
   type Periode,
 } from "../../lib/regles-taches";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
-import { radius, spacing, typography, useTheme } from "../../lib/theme";
+import { avecAlpha, melanger, radius, spacing, typography, useTheme } from "../../lib/theme";
 import { CLES_COULEURS, useCouleurListe } from "../../lib/theme-listes";
 
 type Annulable =
@@ -67,7 +73,6 @@ export default function Taches() {
 
   const [classement, setClassement] = useState<Proposition[]>([]);
   const [etapes, setEtapes] = useState<Record<number, Etape[]>>({});
-  const [voirPlusTard, setVoirPlusTard] = useState(false);
   const [jourDifficile, setJourDifficile] = useState(false);
   // « Une autre » : rang dans l'ordre du jour difficile. Rien n'est enregistré.
   const [rangUneAutre, setRangUneAutre] = useState(0);
@@ -94,6 +99,14 @@ export default function Taches() {
   const [nouvelleTache, setNouvelleTache] = useState("");
   const [tacheNotee, setTacheNotee] = useState<string | null>(null);
   const [annulable, setAnnulable] = useState<Annulable | null>(null);
+  /** Jour de la bande de la semaine choisi ; null = aujourd'hui (« Mes 3 »). */
+  const [jourChoisi, setJourChoisi] = useState<string | null>(null);
+  /** Feuille du bouton « + ». */
+  const [feuille, setFeuille] = useState(false);
+  // iOS n'ouvre pas une modale pendant qu'une autre se ferme : la gestion des listes attend.
+  const gestionApres = useRef(false);
+  /** Objectif de chaque liste qui en a un : où en est la période en cours. */
+  const [objectifs, setObjectifs] = useState<Record<number, { fait: number; cible: number }>>({});
   const minuteurNotee = useRef<ReturnType<typeof setTimeout> | null>(null);
   const minuteurAnnuler = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -119,6 +132,15 @@ export default function Taches() {
     setNoms(Object.fromEntries(l.map((x) => [x.id, x.nom])));
     setIcones(Object.fromEntries(l.map((x) => [x.id, x.icone ?? ""])));
     setFiltre((f) => (f !== null && !l.some((x) => x.id === f) ? null : f));
+    const suivis = await Promise.all(l.map((x) => suiviObjectif(x)));
+    setObjectifs(
+      Object.fromEntries(
+        l.flatMap((x, i) => {
+          const s = suivis[i];
+          return s ? [[x.id, { fait: s.periodes[s.periodes.length - 1].fait, cible: s.cible }]] : [];
+        }),
+      ),
+    );
   }, []);
 
   useFocusEffect(
@@ -145,6 +167,7 @@ export default function Taches() {
     });
     setNouvelleTache("");
     Keyboard.dismiss();
+    setFeuille(false);
     setTacheNotee(nom);
     if (minuteurNotee.current) clearTimeout(minuteurNotee.current);
     minuteurNotee.current = setTimeout(() => setTacheNotee(null), 4000);
@@ -293,50 +316,6 @@ export default function Taches() {
     );
   };
 
-  const carteJourDifficile = (p: Proposition) => {
-    const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
-    return (
-      <View style={[styles.carte, styles.carteListe, { backgroundColor: t.bgCard, borderLeftColor: bordure(p) }]}>
-        {prochaine ? (
-          <>
-            {/* Tâche découpée : seulement sa prochaine étape */}
-            <Texte style={[styles.premiere, { color: t.textMuted, marginTop: 0 }]}>
-              {p.nom}
-            </Texte>
-            <TouchableOpacity
-              onPress={() => onEtape(p, prochaine)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: false }}
-            >
-              <Texte style={[styles.nom, { color: t.textPrimary }]}>
-                ○ {prochaine.nom}
-              </Texte>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <TouchableOpacity
-            onPress={() => onTerminer(p)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: false }}
-          >
-            <Texte style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Texte>
-            {p.premiere_action ? (
-              <Texte style={[styles.premiere, { color: t.textSecondary }]}>
-                Commencer par : {p.premiere_action}
-              </Texte>
-            ) : null}
-            {p.duree_min ? (
-              <Texte style={[styles.premiere, { color: t.textMuted }]}>
-                {p.duree_min} min
-              </Texte>
-            ) : null}
-          </TouchableOpacity>
-        )}
-        {boutonJeCommence(p)}
-      </View>
-    );
-  };
-
   const carte = (p: Proposition, rang: number) => {
           const liste = etapes[p.itemId] ?? [];
           const faites = liste.filter((e) => e.faite === 1).length;
@@ -463,17 +442,113 @@ export default function Taches() {
           );
           };
 
-  // Jour difficile (vue « Toutes ») : une seule tâche (voir ordreJourDifficile), le reste attend.
-  const modeUnique = jourDifficile && filtre === null;
-  const ordre = modeUnique
+  const couleurDe = (id: number | null) =>
+    couleurListe(listes.find((l) => l.id === id)?.couleur ?? null).fond;
+
+  /**
+   * « Mes 3 » : grande carte, numéro et cercle de la couleur de la liste.
+   * Tâche à étapes : barre segmentée, le cercle coche la prochaine étape.
+   * rang null : sans numéro (tâches d'un autre jour de la semaine).
+   */
+  const carteGrande = (p: Proposition, rang: number | null) => {
+    const liste = etapes[p.itemId] ?? [];
+    const suivante = liste.find((e) => e.faite === 0);
+    const couleur = couleurDe(p.liste_id);
+    const raison =
+      p.raison === "Échéance proche" && p.echeance
+        ? libelleEcheance(p.echeance, jour)
+        : p.raison.charAt(0).toLowerCase() + p.raison.slice(1);
+    const ligne = [
+      nomListe(p.liste_id)?.nom,
+      raison,
+      p.compte ? libelleCompte(p.compte.fait, p.compte.cible, p.compte.periode) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <Swipeable key={p.itemId} renderRightActions={() => actions(p)}>
+        <View style={[styles.grande, { backgroundColor: t.bgCard }]}>
+          <View style={styles.grandeLigne}>
+            {rang !== null && (
+              <Texte style={[styles.numero, { color: couleur }]}>{rang + 1}</Texte>
+            )}
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
+              onLongPress={() => historique(p)}
+              accessibilityHint="Toucher : modifier · appui long : historique"
+            >
+              <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={2}>
+                {p.nom}
+              </Texte>
+              {liste.length > 0 && (
+                <>
+                  <View style={styles.segments}>
+                    {liste.map((e) => (
+                      <View
+                        key={e.id}
+                        style={[
+                          styles.segment,
+                          { backgroundColor: e.faite ? couleur : avecAlpha(couleur, 0.2) },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  {suivante && (
+                    <Texte style={[styles.raisonLigne, { color: t.textSecondary }]} numberOfLines={1}>
+                      Ensuite : {suivante.nom}
+                    </Texte>
+                  )}
+                </>
+              )}
+              <Texte style={[styles.raisonLigne, { color: t.textMuted }]} numberOfLines={1}>
+                {p.exploration ? "🔄 " : ""}
+                {ligne}
+              </Texte>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => (suivante ? onEtape(p, suivante) : onTerminer(p))}
+              hitSlop={10}
+              style={[styles.cercle, { borderColor: couleur }]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: false }}
+              accessibilityLabel={suivante ? `Cocher l'étape ${suivante.nom}` : `Cocher ${p.nom}`}
+            />
+          </View>
+          {rang === 0 && boutonJeCommence(p)}
+        </View>
+      </Swipeable>
+    );
+  };
+
+  // Jour difficile : une seule tâche (voir ordreJourDifficile), le reste attend.
+  const ordre = jourDifficile
     ? ordreJourDifficile(classement, (id) =>
         (etapes[id] ?? []).some((e) => e.faite === 0),
       )
     : [];
   const unique = ordre.length > 0 ? ordre[rangUneAutre % ordre.length] : null;
-  const maintenant = modeUnique ? [] : classement.filter((p) => p.propose);
-  const plusTard = modeUnique ? [] : classement.filter((p) => !p.propose);
+  const maintenant = jourDifficile ? [] : classement.filter((p) => p.propose);
   const dansListe = filtre === null ? [] : classement.filter((p) => p.liste_id === filtre);
+
+  const semaine = semaineDe(jour);
+  const points = pointsEcheance(
+    classement.map((p) => ({ echeance: p.echeance, couleur: couleurDe(p.liste_id) })),
+    semaine,
+  );
+  const duJour = jourChoisi ? classement.filter((p) => p.echeance === jourChoisi) : [];
+  const dateDe = (iso: string) => new Date(iso + "T00:00:00Z");
+  const aujourdhuiDate = dateDe(jour);
+
+  const boutonPlus = (
+    <TouchableOpacity
+      onPress={() => setFeuille(true)}
+      style={[styles.plus, { backgroundColor: t.accent }]}
+      accessibilityLabel="Ajouter une tâche"
+    >
+      <Texte style={[styles.plusTexte, { color: t.textOnAccent }]}>+</Texte>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
@@ -482,121 +557,20 @@ export default function Taches() {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }}
       >
-        <Texte style={[styles.titre, { color: t.textPrimary }]}>Tâches</Texte>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtres}
-          style={{ marginBottom: spacing.md, flexGrow: 0 }}
-        >
-          {[
-            { id: null as number | null, nom: "Toutes", icone: null as string | null, couleur: null as string | null },
-            ...listes,
-          ].map(
-            (l) => {
-              const actif = filtre === l.id;
-              // « Toutes » garde l'accent ; une liste prend sa couleur.
-              const c =
-                l.id === null
-                  ? { fond: t.accent, texte: t.textOnAccent }
-                  : couleurListe(l.couleur);
-              const n =
-                l.id === null
-                  ? classement.length
-                  : classement.filter((p) => p.liste_id === l.id).length;
-              return (
-                <TouchableOpacity
-                  key={l.id ?? "toutes"}
-                  onPress={() => {
-                    setNoteOuverte(null);
-                    setFiltre(l.id);
-                  }}
-                  style={[
-                    styles.filtre,
-                    {
-                      backgroundColor: actif ? c.fond : t.bgCard,
-                      borderColor: l.id === null && !actif ? t.border : c.fond,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: actif }}
-                >
-                  <Texte
-                    style={[
-                      styles.filtreTexte,
-                      { color: actif ? c.texte : t.textSecondary },
-                    ]}
-                  >
-                    {l.icone ? `${l.icone} ` : ""}
-                    {l.nom}
-                    {n > 0 ? ` · ${n}` : ""}
-                  </Texte>
-                </TouchableOpacity>
-              );
-            },
-          )}
-          <TouchableOpacity
-            onPress={() => setGestion(true)}
-            style={[styles.filtre, { borderColor: t.border }]}
-            accessibilityLabel="Gérer les listes"
-          >
-            <Texte style={[styles.filtreTexte, { color: t.textMuted }]}>✎ Listes</Texte>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Noter en une ligne : l'appli devine le domaine et trie */}
-        <View style={styles.ajout}>
-          <ChampTexte
-            style={[
-              styles.champ,
-              { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
-            ]}
-            placeholder={
-              listeActive ? `Une tâche pour ${listeActive.nom}` : "Une tâche à noter"
-            }
-            placeholderTextColor={t.textMuted}
-            value={nouvelleTache}
-            onChangeText={setNouvelleTache}
-            onSubmitEditing={onNoter}
-            returnKeyType="done"
-          />
-          <TouchableOpacity
-            style={[styles.boutonNoter, { backgroundColor: t.accent }]}
-            onPress={onNoter}
-          >
-            <Texte style={[styles.boutonNoterTexte, { color: t.textOnAccent }]}>Noter</Texte>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.ajoutPied}>
-          {tacheNotee ? (
-            <Texte style={[styles.confirmation, { color: t.textSecondary }]}>
-              ✓ « {tacheNotee} » est notée
-              {filtre === null && listes[0] ? ` dans ${listes[0].nom}` : ""}.
-            </Texte>
-          ) : (
-            <View />
-          )}
-          <TouchableOpacity
-            onPress={() => {
-              const n = nouvelleTache.trim();
-              setNouvelleTache("");
-              const params = [
-                n ? `nom=${encodeURIComponent(n)}` : null,
-                filtre !== null ? `liste=${filtre}` : null,
-              ].filter(Boolean);
-              router.push(
-                params.length ? `/nouvelle-tache?${params.join("&")}` : "/nouvelle-tache",
-              );
-            }}
-            hitSlop={8}
-          >
-            <Texte style={[styles.lien, { color: t.accentText }]}>Plus d'options</Texte>
-          </TouchableOpacity>
-        </View>
-
         {filtre !== null ? (
           <>
+            <View style={styles.entete}>
+              <TouchableOpacity
+                onPress={() => {
+                  setNoteOuverte(null);
+                  setFiltre(null);
+                }}
+                hitSlop={12}
+              >
+                <Texte style={[styles.lien, { color: t.accentText }]}>‹ Tâches</Texte>
+              </TouchableOpacity>
+              {boutonPlus}
+            </View>
             <Texte style={[styles.section, { color: t.textPrimary }]}>
               {listeActive?.icone ? `${listeActive.icone} ` : ""}
               {listeActive?.nom}
@@ -685,97 +659,272 @@ export default function Taches() {
             {zoneNote}
             {dansListe.length === 0 ? (
               <Texte style={[styles.vide, { color: t.textMuted }]}>
-                Rien dans cette liste pour l'instant.
+                Rien dans cette liste pour l&apos;instant.
               </Texte>
             ) : (
               <Texte style={[styles.vide, { color: t.textMuted, fontStyle: "normal" }]}>
-                Dans l'ordre où l'appli te les conseille.
+                Dans l&apos;ordre où l&apos;appli te les conseille.
               </Texte>
             )}
             {dansListe.map(carte)}
           </>
         ) : (
           <>
-        <Texte style={[styles.section, { color: t.textPrimary }]}>
-          {modeUnique ? "Une seule chose" : "À faire maintenant"}
-        </Texte>
-        {zoneNote}
-        {modeUnique && unique && (
-          <>
-            <Texte style={[styles.vide, { color: t.textMuted, marginTop: 0 }]}>
-              Jour difficile : le reste attend.
-            </Texte>
-            {carteJourDifficile(unique)}
-            {ordre.length > 1 && (
-              <TouchableOpacity
-                onPress={() => setRangUneAutre(rangUneAutre + 1)}
-                hitSlop={8}
-                style={styles.uneAutre}
-              >
-                <Texte style={[styles.lien, { color: t.accentText }]}>Une autre</Texte>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
-        {(modeUnique ? !unique : maintenant.length === 0) && (
-          <Texte style={[styles.vide, { color: t.textMuted }]}>
-            Aucune tâche en cours.
-          </Texte>
-        )}
-
-        {maintenant.map(carte)}
-
-        {plusTard.length > 0 && (
-          <>
-            <TouchableOpacity
-              style={styles.plusTardEntete}
-              onPress={() => setVoirPlusTard(!voirPlusTard)}
-            >
-              <Texte style={[styles.section, { color: t.textPrimary, marginTop: 0 }]}>
-                Plus tard · {plusTard.length}
-              </Texte>
-              <Texte style={[styles.chevron, { color: t.textMuted }]}>
-                {voirPlusTard ? "−" : "+"}
-              </Texte>
-            </TouchableOpacity>
-            {!voirPlusTard && (
-              <Texte style={[styles.vide, { color: t.textMuted }]}>
-                L'appli les proposera au bon moment.
+            {/* En-tête : le jour, la date, « + » */}
+            <View style={styles.entete}>
+              <View>
+                <Texte style={[styles.jourSemaine, { color: t.accent }]}>
+                  {JOURS_LONGS[aujourdhuiDate.getUTCDay()].toUpperCase()}
+                </Texte>
+                <Texte style={[styles.date, { color: t.textPrimary }]}>
+                  {aujourdhuiDate.getUTCDate()} {MOIS[aujourdhuiDate.getUTCMonth()]}
+                </Texte>
+              </View>
+              {boutonPlus}
+            </View>
+            {tacheNotee && (
+              <Texte style={[styles.confirmation, { color: t.textSecondary }]}>
+                ✓ « {tacheNotee} » est notée{listes[0] ? ` dans ${listes[0].nom}` : ""}.
               </Texte>
             )}
-            {voirPlusTard &&
-              plusTard.map((p) => {
-                const liste = etapes[p.itemId] ?? [];
-                const faites = liste.filter((e) => e.faite === 1).length;
+
+            {/* La semaine : points des échéances */}
+            <View style={styles.semaine}>
+              {semaine.map((d) => {
+                const estAujourdhui = d === jour;
+                const choisi = d === jourChoisi;
+                const date = dateDe(d);
                 return (
-                  <Swipeable key={p.itemId} renderRightActions={() => actions(p)}>
-                    <TouchableOpacity
-                      style={[styles.ligne, { backgroundColor: t.bgCard }]}
-                      onPress={() =>
-                        liste.length > 0
-                          ? router.push(`/nouvelle-tache?id=${p.itemId}`)
-                          : onTerminer(p)
-                      }
+                  <TouchableOpacity
+                    key={d}
+                    onPress={() => setJourChoisi(estAujourdhui || choisi ? null : d)}
+                    style={[
+                      styles.jour,
+                      estAujourdhui
+                        ? { backgroundColor: t.accent, borderColor: t.accent }
+                        : { backgroundColor: t.bgCard, borderColor: choisi ? t.accent : t.border },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: choisi || (estAujourdhui && !jourChoisi) }}
+                    accessibilityLabel={`${JOURS_LONGS[date.getUTCDay()]} ${date.getUTCDate()}, ${points[d].length} échéance${points[d].length > 1 ? "s" : ""}`}
+                  >
+                    <Texte
+                      style={[
+                        styles.jourNom,
+                        { color: estAujourdhui ? t.textOnAccent : t.textMuted },
+                      ]}
                     >
-                      <Texte style={[styles.ligneNom, { color: t.textPrimary }]}>
-                        ○ {p.nom}
-                      </Texte>
-                      {liste.length > 0 && (
-                        <Texte style={[styles.progressionTexte, { color: t.textMuted }]}>
-                          {faites}/{liste.length}
-                        </Texte>
-                      )}
-                    </TouchableOpacity>
-                  </Swipeable>
+                      {JOURS_LONGS[date.getUTCDay()].slice(0, 3)}
+                    </Texte>
+                    <Texte
+                      style={[
+                        styles.jourNumero,
+                        { color: estAujourdhui ? t.textOnAccent : t.textPrimary },
+                      ]}
+                    >
+                      {date.getUTCDate()}
+                    </Texte>
+                    <View style={styles.jourPoints}>
+                      {points[d].slice(0, 4).map((c, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.jourPoint,
+                            { backgroundColor: c, borderColor: estAujourdhui ? t.textOnAccent : c },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </TouchableOpacity>
                 );
               })}
+            </View>
+
+            {zoneNote}
+
+            {jourChoisi ? (
+              <>
+                <Texte style={[styles.surtitre, { color: t.textMuted }]}>
+                  ÉCHÉANCE {JOURS_LONGS[dateDe(jourChoisi).getUTCDay()].toUpperCase()}{" "}
+                  {dateDe(jourChoisi).getUTCDate()}
+                </Texte>
+                {duJour.length === 0 && (
+                  <Texte style={[styles.vide, { color: t.textMuted }]}>
+                    Aucune tâche à rendre ce jour-là.
+                  </Texte>
+                )}
+                {duJour.map((p) => carteGrande(p, null))}
+              </>
+            ) : (
+              <>
+                <Texte style={[styles.surtitre, { color: t.textMuted }]}>
+                  {jourDifficile ? "UNE SEULE CHOSE" : "MES 3 POUR AUJOURD'HUI"}
+                </Texte>
+                {jourDifficile && unique && (
+                  <>
+                    <Texte style={[styles.vide, { color: t.textMuted }]}>
+                      Jour difficile : le reste attend.
+                    </Texte>
+                    {carteGrande(unique, 0)}
+                    {ordre.length > 1 && (
+                      <TouchableOpacity
+                        onPress={() => setRangUneAutre(rangUneAutre + 1)}
+                        hitSlop={8}
+                        style={styles.uneAutre}
+                      >
+                        <Texte style={[styles.lien, { color: t.accentText }]}>Une autre</Texte>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+                {(jourDifficile ? !unique : maintenant.length === 0) && (
+                  <Texte style={[styles.vide, { color: t.textMuted }]}>
+                    Aucune tâche en cours.
+                  </Texte>
+                )}
+                {maintenant.map((p, i) => carteGrande(p, i))}
+              </>
+            )}
+
+            {/* Par liste */}
+            <Texte style={[styles.surtitre, { color: t.textMuted }]}>PAR LISTE</Texte>
+            <View style={styles.grille}>
+              {listes.map((l) => {
+                const c = couleurListe(l.couleur).fond;
+                const actives = classement.filter((p) => p.liste_id === l.id);
+                const objectif = objectifs[l.id];
+                return (
+                  <TouchableOpacity
+                    key={l.id}
+                    onPress={() => {
+                      setNoteOuverte(null);
+                      setFiltre(l.id);
+                    }}
+                    style={[
+                      styles.tuile,
+                      { backgroundColor: avecAlpha(c, 0.08), borderColor: melanger(c, "#000000", 0.55) },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${l.nom}, ${actives.length} tâche${actives.length > 1 ? "s" : ""}`}
+                  >
+                    <Texte style={[styles.tuileNom, { color: c }]} numberOfLines={1}>
+                      {l.nom}
+                    </Texte>
+                    <View style={styles.tuilePoints}>
+                      {actives.slice(0, 5).map((p) => (
+                        <View key={p.itemId} style={[styles.tuilePoint, { backgroundColor: c }]} />
+                      ))}
+                    </View>
+                    <Texte style={[styles.tuileEnsuite, { color: t.textSecondary }]} numberOfLines={2}>
+                      {actives[0] ? `Ensuite : ${actives[0].nom}` : "Rien à faire"}
+                    </Texte>
+                    {objectif && (
+                      <View style={[styles.tuileBarre, { backgroundColor: avecAlpha(c, 0.2) }]}>
+                        <View
+                          style={{
+                            width: `${Math.min(100, (objectif.fait / objectif.cible) * 100)}%`,
+                            height: "100%",
+                            backgroundColor: c,
+                          }}
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                onPress={() => setGestion(true)}
+                style={[styles.tuile, styles.tuileNouvelle, { borderColor: t.border }]}
+                accessibilityRole="button"
+              >
+                <Texte style={[styles.lien, { color: t.textMuted }]}>+ Nouvelle liste</Texte>
+              </TouchableOpacity>
+            </View>
           </>
         )}
-
-          </>
-        )}
-
       </ScrollView>
+
+      {/* Bouton « + » : noter vite, tâche complète, listes */}
+      <Modal
+        visible={feuille}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFeuille(false)}
+        onDismiss={() => {
+          if (!gestionApres.current) return;
+          gestionApres.current = false;
+          setGestion(true);
+        }}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <Pressable style={styles.fondBas} onPress={() => setFeuille(false)}>
+            <Pressable style={[styles.feuille, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+              <Texte style={[styles.gestionTitre, { color: t.textPrimary }]}>
+                {listeActive ? `Ajouter dans ${listeActive.nom}` : "Ajouter"}
+              </Texte>
+              <View style={styles.ajout}>
+                <ChampTexte
+                  style={[
+                    styles.champ,
+                    { backgroundColor: t.bgApp, borderColor: t.border, color: t.textPrimary },
+                  ]}
+                  placeholder={listeActive ? `Une tâche pour ${listeActive.nom}` : "Une tâche à noter"}
+                  placeholderTextColor={t.textMuted}
+                  value={nouvelleTache}
+                  onChangeText={setNouvelleTache}
+                  onSubmitEditing={onNoter}
+                  returnKeyType="done"
+                  autoFocus
+                />
+                <TouchableOpacity
+                  style={[styles.boutonNoter, { backgroundColor: t.accent }]}
+                  onPress={onNoter}
+                >
+                  <Texte style={[styles.boutonNoterTexte, { color: t.textOnAccent }]}>Noter</Texte>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[styles.feuilleLigne, { borderTopColor: t.border }]}
+                onPress={() => {
+                  const n = nouvelleTache.trim();
+                  setNouvelleTache("");
+                  setFeuille(false);
+                  const params = [
+                    n ? `nom=${encodeURIComponent(n)}` : null,
+                    filtre !== null ? `liste=${filtre}` : null,
+                  ].filter(Boolean);
+                  router.push(
+                    params.length ? `/nouvelle-tache?${params.join("&")}` : "/nouvelle-tache",
+                  );
+                }}
+              >
+                <Texte style={[styles.feuilleTexte, { color: t.textPrimary }]}>
+                  Nouvelle tâche complète
+                </Texte>
+                <Texte style={[styles.feuilleAide, { color: t.textMuted }]}>
+                  étapes, échéance, moment…
+                </Texte>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.feuilleLigne, { borderTopColor: t.border }]}
+                onPress={() => {
+                  setFeuille(false);
+                  if (Platform.OS === "ios") gestionApres.current = true;
+                  else setGestion(true);
+                }}
+              >
+                <Texte style={[styles.feuilleTexte, { color: t.textPrimary }]}>Gérer mes listes</Texte>
+                <Texte style={[styles.feuilleAide, { color: t.textMuted }]}>
+                  noms, icônes, couleurs
+                </Texte>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal
         visible={gestion}
@@ -933,7 +1082,80 @@ export default function Taches() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
-  titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: spacing.lg },
+
+  entete: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  jourSemaine: { fontSize: typography.small, fontWeight: "700", letterSpacing: 1 },
+  date: { fontSize: 30, fontWeight: "600" },
+  plus: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
+  plusTexte: { fontSize: 26, lineHeight: 30, fontWeight: "500" },
+
+  semaine: { flexDirection: "row", gap: 6, marginBottom: spacing.sm },
+  jour: {
+    flex: 1,
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: 6,
+  },
+  jourNom: { fontSize: 11, fontWeight: "600" },
+  jourNumero: { fontSize: typography.body, fontWeight: "700", marginTop: 2 },
+  jourPoints: { flexDirection: "row", gap: 2, height: 6, marginTop: 4 },
+  jourPoint: { width: 6, height: 6, borderRadius: 3, borderWidth: 1 },
+
+  surtitre: {
+    fontSize: typography.tiny,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+
+  grande: {
+    minHeight: 78,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    justifyContent: "center",
+  },
+  grandeLigne: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  numero: { fontSize: 34, fontWeight: "700", width: 26, textAlign: "center" },
+  raisonLigne: { fontSize: typography.small, marginTop: 3 },
+  segments: { flexDirection: "row", gap: 3, marginTop: 6 },
+  segment: { flex: 1, height: 4, borderRadius: 2 },
+  cercle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2 },
+
+  grille: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  tuile: {
+    width: "48.5%",
+    minHeight: 112,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  tuileNom: { fontSize: typography.body, fontWeight: "700" },
+  tuilePoints: { flexDirection: "row", gap: 4, height: 6, marginTop: 6 },
+  tuilePoint: { width: 6, height: 6, borderRadius: 3 },
+  tuileEnsuite: { fontSize: typography.small, marginTop: 6, flex: 1 },
+  tuileBarre: { height: 4, borderRadius: 2, overflow: "hidden", marginTop: spacing.sm },
+  tuileNouvelle: { borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
+
+  fondBas: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  feuille: {
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  feuilleLigne: { borderTopWidth: 1, paddingVertical: spacing.md, marginTop: spacing.md },
+  feuilleTexte: { fontSize: typography.body, fontWeight: "600" },
+  feuilleAide: { fontSize: typography.small, marginTop: 2 },
 
   compte: { fontSize: typography.small, fontWeight: "700", marginBottom: 4 },
   liensListe: {
@@ -959,7 +1181,6 @@ const styles = StyleSheet.create({
   },
   jeCommenceTexte: { fontSize: typography.small, fontWeight: "600" },
   ajout: { flexDirection: "row", gap: spacing.sm },
-  filtres: { gap: spacing.sm, paddingRight: spacing.xl },
   filtre: {
     borderWidth: 1,
     borderRadius: radius.pill,
@@ -997,13 +1218,6 @@ const styles = StyleSheet.create({
   },
   boutonNoter: { borderRadius: radius.md, paddingHorizontal: spacing.lg, justifyContent: "center" },
   boutonNoterTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
-  ajoutPied: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 6,
-    minHeight: 18,
-  },
   confirmation: { flex: 1, fontSize: typography.small, marginRight: spacing.md },
   lien: { fontSize: typography.small, fontWeight: "600" },
 
@@ -1055,22 +1269,6 @@ const styles = StyleSheet.create({
   etapeNom: { flex: 1, fontSize: typography.bodySmall },
   bonus: { fontSize: typography.tiny, marginTop: 4 },
 
-  plusTardEntete: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-  },
-  chevron: { fontSize: 22 },
-  ligne: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  ligneNom: { flex: 1, fontSize: typography.body },
 
   actions: { flexDirection: "row" },
   action: {

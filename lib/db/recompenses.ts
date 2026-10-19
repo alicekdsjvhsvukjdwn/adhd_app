@@ -17,8 +17,10 @@ import { getAujourdhui } from "./completions";
 export type Recompense = {
   id: number;
   nom: string;
+  /** Clé d'ICONES_RECOMPENSES, ou un emoji des premières versions. */
   icone: string | null;
   prix: number;
+  categorie: string;
 };
 
 export type Achat = {
@@ -60,22 +62,10 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
   { action: "Changer l'énergie du jour", points: "recalcule les routines à étapes" },
 ];
 
-/** Idées de départ, prix calibrés sur ~60 points gagnés par jour. */
-export const IDEES_RECOMPENSES: Omit<Recompense, "id">[] = [
-  { icone: "☕", nom: "Aller boire un café", prix: 50 },
-  { icone: "📺", nom: "Un épisode de série", prix: 60 },
-  { icone: "🍰", nom: "Une pâtisserie", prix: 80 },
-  { icone: "🎮", nom: "Une heure de jeu vidéo", prix: 120 },
-  { icone: "🛁", nom: "Un moment cocooning", prix: 100 },
-  { icone: "📚", nom: "Un nouveau livre", prix: 300 },
-  { icone: "🍿", nom: "Une séance de ciné", prix: 400 },
-  { icone: "🎧", nom: "Un album ou un concert", prix: 600 },
-];
-
 export async function getRecompenses(): Promise<Recompense[]> {
   const db = await getDatabase();
   return db.getAllAsync<Recompense>(
-    "SELECT id, nom, icone, prix FROM recompenses ORDER BY prix, id",
+    "SELECT id, nom, icone, prix, categorie FROM recompenses ORDER BY prix, id",
   );
 }
 
@@ -84,10 +74,11 @@ export async function ajouterRecompense(
 ): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
-    "INSERT INTO recompenses (nom, icone, prix, cree_le) VALUES (?, ?, ?, ?)",
+    "INSERT INTO recompenses (nom, icone, prix, categorie, cree_le) VALUES (?, ?, ?, ?, ?)",
     r.nom.trim(),
     r.icone,
     Math.max(1, Math.round(r.prix)),
+    r.categorie,
     new Date().toISOString(),
   );
 }
@@ -95,10 +86,11 @@ export async function ajouterRecompense(
 export async function modifierRecompense(r: Recompense): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
-    "UPDATE recompenses SET nom = ?, icone = ?, prix = ? WHERE id = ?",
+    "UPDATE recompenses SET nom = ?, icone = ?, prix = ?, categorie = ? WHERE id = ?",
     r.nom.trim(),
     r.icone,
     Math.max(1, Math.round(r.prix)),
+    r.categorie,
     r.id,
   );
 }

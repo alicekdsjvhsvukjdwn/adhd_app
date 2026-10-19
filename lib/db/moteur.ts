@@ -82,6 +82,7 @@ export type Proposition = {
   nom: string;
   premiere_action: string | null;
   duree_min: number | null;
+  echeance: string | null;
   score: number;
   composantes: Composantes;
   rang: number;
@@ -246,6 +247,7 @@ function construire(
     nom: n.c.nom,
     premiere_action: n.c.premiere_action,
     duree_min: n.c.duree_min,
+    echeance: n.c.echeance,
     score: n.score,
     composantes: n.composantes,
     rang,

@@ -442,6 +442,10 @@ export default function Routines() {
           selection={selection}
           heure={heure}
           onSelection={setChoix}
+          // Le centre bascule entre « Tout » et le domaine par défaut.
+          onCentre={() =>
+            setChoix(vueTout ? domaineParDefaut(pourAnneau, t.moment) : "tout")
+          }
         />
       </View>
 

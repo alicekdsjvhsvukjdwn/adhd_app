@@ -24,6 +24,7 @@ test("migrations déjà appliquées sur le téléphone : jamais renommées", () 
   assert.equal(nom(15), "objectifs de liste par semaine ou par mois");
   assert.equal(nom(16), "carnet : notes des tâches faites");
   assert.equal(nom(17), "couleur des listes");
+  assert.equal(nom(22), "catégories des récompenses");
 });
 
 test("migrations 12 et suivantes : toute colonne NOT NULL a un DEFAULT", () => {

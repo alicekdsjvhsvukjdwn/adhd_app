@@ -32,6 +32,7 @@ export function AnneauDomaines({
   selection,
   heure,
   onSelection,
+  onCentre,
 }: {
   taille: number;
   /** Par domaine, de 0 à 1 ; null = aucune routine aujourd'hui. */
@@ -43,6 +44,8 @@ export function AnneauDomaines({
   /** Heure locale décimale, pour la bille. */
   heure: number;
   onSelection: (d: Domaine) => void;
+  /** Toucher le centre (à l'intérieur du cercle de la journée). */
+  onCentre: () => void;
 }) {
   const t = useTheme();
   const c = taille / 2;
@@ -67,6 +70,8 @@ export function AnneauDomaines({
           epaisseurChoisie,
         );
         if (d) onSelection(d);
+        else if (Math.hypot(e.nativeEvent.locationX - c, e.nativeEvent.locationY - c) < rayonJournee)
+          onCentre();
       }}
       accessibilityRole="adjustable"
       accessibilityLabel="Anneau des domaines"

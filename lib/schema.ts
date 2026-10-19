@@ -1,5 +1,5 @@
 /**
- * SQL des migrations 18 à 20 et des lignes de départ, sans accès à la base :
+ * SQL des migrations 18 à 22 et des lignes de départ, sans accès à la base :
  * testable seul contre une vraie base SQLite (tests/schema.test.mjs).
  */
 
@@ -124,6 +124,33 @@ export const SQL_COULEURS_LISTES = `
 `;
 
 /**
+ * Migration 22 (après l'ajout de recompenses.categorie) : catégorie devinée d'après le nom (minuscules ; lower() de
+ * SQLite ne touche pas aux accents, d'où les deux orthographes). L'ordre
+ * compte : « concert » est de la musique avant d'être une sortie. Rejouable :
+ * ne touche que les récompenses restées en Petits plaisirs.
+ */
+export const SQL_CATEGORIES_RECOMPENSES = `
+  UPDATE recompenses SET categorie = CASE
+    WHEN lower(nom) LIKE '%album%' OR lower(nom) LIKE '%concert%' OR lower(nom) LIKE '%musique%'
+      OR lower(nom) LIKE '%vinyle%' OR lower(nom) LIKE '%disque%' OR lower(nom) LIKE '%casque%'
+      THEN 'musique'
+    WHEN lower(nom) LIKE '%voyage%' OR lower(nom) LIKE '%week-end%' OR lower(nom) LIKE '%weekend%'
+      OR lower(nom) LIKE '%vacances%'
+      THEN 'gros'
+    WHEN lower(nom) LIKE '%ciné%' OR lower(nom) LIKE '%cine%' OR lower(nom) LIKE '%resto%'
+      OR lower(nom) LIKE '%sortie%' OR lower(nom) LIKE '%expo%' OR lower(nom) LIKE '%musée%'
+      OR lower(nom) LIKE '%théâtre%' OR lower(nom) LIKE '%theatre%'
+      THEN 'sorties'
+    WHEN lower(nom) LIKE '%cocooning%' OR lower(nom) LIKE '%bain%' OR lower(nom) LIKE '%livre%'
+      OR lower(nom) LIKE '%jeu%' OR lower(nom) LIKE '%sieste%' OR lower(nom) LIKE '%massage%'
+      OR lower(nom) LIKE '%épisode%' OR lower(nom) LIKE '%episode%' OR lower(nom) LIKE '%série%'
+      THEN 'temps'
+    ELSE 'plaisirs'
+  END
+  WHERE categorie = 'plaisirs';
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */
@@ -132,5 +159,6 @@ export function transformationsApres(schemaSauvegarde: number): string[] {
     ...(schemaSauvegarde < 19 ? [SQL_MOMENTS] : []),
     ...(schemaSauvegarde < 20 ? [SQL_VERSIONS_EN_ETAPES] : []),
     ...(schemaSauvegarde < 21 ? [SQL_COULEURS_LISTES] : []),
+    ...(schemaSauvegarde < 22 ? [SQL_CATEGORIES_RECOMPENSES] : []),
   ];
 }
