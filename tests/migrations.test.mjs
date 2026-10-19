@@ -26,6 +26,7 @@ test("migrations déjà appliquées sur le téléphone : jamais renommées", () 
   assert.equal(nom(17), "couleur des listes");
   assert.equal(nom(22), "catégories des récompenses");
   assert.equal(nom(23), "sommeil en un geste, méditation, arbre de skills");
+  assert.equal(nom(24), "séances guidées");
 });
 
 test("migrations 12 et suivantes : toute colonne NOT NULL a un DEFAULT", () => {

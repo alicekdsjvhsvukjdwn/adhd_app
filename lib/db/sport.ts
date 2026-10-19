@@ -258,9 +258,22 @@ export async function commencerSeance(): Promise<number> {
   return r.lastInsertRowId;
 }
 
+/** Une séance (skills ou guidée) a déjà rapporté ce jour-là : les points du sport sont une fois par jour. */
+export async function sportPayeLe(date: string): Promise<boolean> {
+  const db = await getDatabase();
+  const r = await db.getFirstAsync<{ n: number }>(
+    `SELECT (SELECT COUNT(*) FROM seances WHERE date = ? AND points_donnes > 0)
+          + (SELECT COUNT(*) FROM seances_guidees WHERE date = ? AND points_donnes > 0) AS n`,
+    date,
+    date,
+  );
+  return (r?.n ?? 0) > 0;
+}
+
 /**
  * Enregistre une série dès qu'elle change : rien ne se perd si l'appli
- * se ferme en cours de séance. La première série faite donne les points.
+ * se ferme en cours de séance. La première série faite donne les points,
+ * si aucune séance n'a rapporté aujourd'hui.
  */
 export async function enregistrerSerie(
   seanceId: number,
@@ -294,11 +307,11 @@ export async function enregistrerSerie(
   }
 
   if (realise > 0) {
-    const s = await db.getFirstAsync<{ points_donnes: number }>(
-      "SELECT points_donnes FROM seances WHERE id = ?",
+    const s = await db.getFirstAsync<{ points_donnes: number; date: string }>(
+      "SELECT points_donnes, date FROM seances WHERE id = ?",
       seanceId,
     );
-    if (s && s.points_donnes === 0) {
+    if (s && s.points_donnes === 0 && !(await sportPayeLe(s.date))) {
       await db.runAsync("UPDATE seances SET points_donnes = ? WHERE id = ?", POINTS_SEANCE, seanceId);
       await addPoints(POINTS_SEANCE);
     }
@@ -330,12 +343,16 @@ export async function terminerSeance(seanceId: number): Promise<void> {
   );
 }
 
-/** Séances faites sur les 7 derniers jours. */
+/** Séances faites sur les 7 derniers jours, skills et guidées. */
 export async function seancesCetteSemaine(): Promise<number> {
   const db = await getDatabase();
+  const depuis = decalerJours(getAujourdhui(), -6);
   const r = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM seances WHERE date >= ? AND points_donnes > 0",
-    decalerJours(getAujourdhui(), -6),
+    `SELECT (SELECT COUNT(*) FROM seances se WHERE date >= ?
+               AND EXISTS (SELECT 1 FROM series s WHERE s.seance_id = se.id AND s.realise > 0))
+          + (SELECT COUNT(*) FROM seances_guidees WHERE date >= ?) AS n`,
+    depuis,
+    depuis,
   );
   return r?.n ?? 0;
 }

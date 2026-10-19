@@ -112,7 +112,7 @@ export const SKILLS: Skill[] = [
     prerequis: [],
     etapes: [
       e("Planche", 3, 60, "s", ["Coudes sous les épaules", "Fesses serrées, bassin neutre"], ["Planche sur les genoux"]),
-      e("Hollow hold", 3, 30, "s", ["Bas du dos collé au sol", "Bras et jambes tendus, bas"], ["Hollow genoux pliés"]),
+      e("Hollow body hold", 3, 30, "s", ["Bas du dos collé au sol", "Bras et jambes tendus, bas"], ["Hollow genoux pliés"]),
     ],
   },
 

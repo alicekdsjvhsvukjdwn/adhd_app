@@ -4,6 +4,7 @@ import {
   SQL_COULEURS_LISTES,
   SQL_SKILLS_DEPUIS_PALIERS,
   SQL_TABLES_LOT4,
+  SQL_TABLES_SEANCES_GUIDEES,
   SQL_MOMENTS,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
@@ -708,6 +709,14 @@ const MIGRATIONS: Migration[] = [
       `);
       await db.execAsync(SQL_TABLES_LOT4);
       await db.execAsync(SQL_SKILLS_DEPUIS_PALIERS);
+    },
+  },
+
+  {
+    version: 24,
+    nom: "séances guidées",
+    run: async (db) => {
+      await db.execAsync(SQL_TABLES_SEANCES_GUIDEES);
     },
   },
 ];

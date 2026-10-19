@@ -59,7 +59,10 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
     action: "Une nuit complète : heures, qualité et écrans (des 7 derniers jours, une fois par nuit)",
     points: `+${POINTS_NUIT}`,
   },
-  { action: "Une séance de sport, même partielle", points: `+${POINTS_SEANCE}` },
+  {
+    action: "Une séance de sport, skills ou guidée, même partielle (une fois par jour)",
+    points: `+${POINTS_SEANCE}`,
+  },
   { action: "Sport : une étape d'un skill validée (une fois par étape)", points: `+${POINTS_ETAPE_SKILL}` },
   { action: "Sport : un skill maîtrisé (une fois par skill)", points: `+${POINTS_MAITRISE}` },
   {

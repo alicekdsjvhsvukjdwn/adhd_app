@@ -15,6 +15,14 @@ const FIGURES: Record<string, { d: string; tete: [number, number] }> = {
   muscleup: { d: "M8 30h48 M24 30l4-7 M40 30l-4-7 M32 19v20 M32 39l-2 16", tete: [32, 13] },
   frontlever: { d: "M10 8h44 M28 8v19 M28 27h28", tete: [22, 27] },
   planche: { d: "M8 56h48 M24 56V41 M24 41h30", tete: [18, 41] },
+  // Exercices des séances guidées (lib/exercices.ts)
+  pike_taps: { d: "M8 58h48 M16 57l8-13 M24 44l8-14 M32 30l16 27", tete: [19, 48] },
+  snow_angels: { d: "M8 58h48 M18 52h32l6 3 M18 52L8 42 M18 52l-8 2", tete: [13, 50] },
+  pont: { d: "M8 58h48 M16 55L32 40 M32 40l10 2l4 13", tete: [11, 54] },
+  planche_laterale: { d: "M8 58h48 M18 57l1-13 M19 44L54 55 M19 44l-1-18", tete: [24, 40] },
+  hollow: { d: "M8 60h48 M18 47Q34 58 54 44 M18 47L6 40", tete: [21, 41] },
+  squat: { d: "M8 58h48 M28 36l12 6l-2 15 M28 36l-2-14 M27 26l16 1", tete: [25, 17] },
+  chat_vache: { d: "M8 58h48 M20 57V44 M20 44Q32 38 44 44 M44 44v13", tete: [14, 42] },
 };
 
 export function FigureSkill({ skill, couleur, taille }: { skill: string; couleur: string; taille: number }) {

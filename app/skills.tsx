@@ -3,6 +3,7 @@ import { Check, Lock } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { FigureSkill, GRIS, Segments, VERT } from "../components/FigureSkill";
+import { OngletSeances } from "../components/OngletSeances";
 import { Texte } from "../components/Texte";
 import {
   configurerSport,
@@ -17,6 +18,7 @@ import { critere, NIVEAUX, SKILLS, statut, type EtatSkill, type Statut } from ".
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
+ * Sport, deux onglets. Séances : séances guidées (components/OngletSeances).
  * Mes skills : l'arbre par niveau, où j'en suis sur chacun, et les
  * étapes prêtes à valider. Premier lancement : « où tu en es ? ».
  */
@@ -26,6 +28,7 @@ export default function Skills() {
   const [reglages, setReglages] = useState<Reglages | null>(null);
   const [etats, setEtats] = useState<Record<string, EtatSkill>>({});
   const [aValider, setAValider] = useState<string[]>([]);
+  const [onglet, setOnglet] = useState<"skills" | "seances">("skills");
 
   // Premier lancement
   const [barre, setBarre] = useState<boolean | null>(null);
@@ -72,8 +75,8 @@ export default function Skills() {
         <Texte style={[styles.retour, { color: t.accentText }]}>← Retour</Texte>
       </TouchableOpacity>
       <View style={styles.entete}>
-        <Texte style={[styles.titre, { color: t.textPrimary }]}>Mes skills</Texte>
-        {reglages?.configure && (
+        <Texte style={[styles.titre, { color: t.textPrimary }]}>Sport</Texte>
+        {reglages?.configure && onglet === "skills" && (
           <TouchableOpacity
             onPress={() => router.push("/seance")}
             style={[styles.seance, { backgroundColor: t.accent }]}
@@ -82,8 +85,37 @@ export default function Skills() {
           </TouchableOpacity>
         )}
       </View>
+      <View style={[styles.onglets, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+        {(
+          [
+            ["skills", "Mes skills"],
+            ["seances", "Séances"],
+          ] as const
+        ).map(([cle, libelle]) => (
+          <TouchableOpacity
+            key={cle}
+            onPress={() => setOnglet(cle)}
+            style={[styles.onglet, onglet === cle && { backgroundColor: t.accent }]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: onglet === cle }}
+          >
+            <Texte style={[styles.ongletTexte, { color: onglet === cle ? t.textOnAccent : t.textSecondary }]}>
+              {libelle}
+            </Texte>
+          </TouchableOpacity>
+        ))}
+      </View>
     </>
   );
+
+  if (onglet === "seances") {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
+        {entete}
+        <OngletSeances />
+      </ScrollView>
+    );
+  }
 
   if (reglages && !reglages.configure) {
     return (
@@ -244,6 +276,9 @@ const styles = StyleSheet.create({
   retour: { fontSize: typography.body, fontWeight: "600", marginBottom: spacing.lg },
   entete: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   titre: { fontSize: typography.h1, fontWeight: "600" },
+  onglets: { flexDirection: "row", borderRadius: radius.pill, borderWidth: 1, padding: 3, marginTop: spacing.lg },
+  onglet: { flex: 1, borderRadius: radius.pill, paddingVertical: spacing.sm, alignItems: "center" },
+  ongletTexte: { fontSize: typography.bodySmall, fontWeight: "700" },
   seance: { borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   seanceTexte: { fontSize: typography.bodySmall, fontWeight: "700" },
   pastilles: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.lg },

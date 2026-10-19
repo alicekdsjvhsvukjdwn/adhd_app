@@ -303,7 +303,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       date: JOUR,
       debut: ISO,
       fin: `${ISO} ; vide si la séance n'a pas été terminée`,
-      points_donnes: "points accordés pour la séance (10, ou 0 si aucune série faite)",
+      points_donnes: "points accordés pour la séance (10 pour la première séance du jour, skills ou guidée ; sinon 0)",
     },
   },
   series: {
@@ -366,6 +366,29 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       terminee: `allée jusqu'au bout : ${BOOL}`,
       points_donnes: "5 pour la première du jour, sinon 0",
       horodatage: ISO,
+    },
+  },
+  seances_guidees: {
+    table: "Séances guidées faites (au moins un exercice fait jusqu'au bout).",
+    colonnes: {
+      id: "identifiant",
+      date: JOUR,
+      seance: "'reveil' (Ma routine du matin) ou zone-durée : 'haut-10', 'mobilite-5'…",
+      duree_s: "durée réelle, secondes (pauses non comptées)",
+      exercices: "ids des exercices faits jusqu'au bout, dans l'ordre, séparés par des virgules (un par tour)",
+      terminee: `allée jusqu'au bout : ${BOOL}`,
+      points_donnes: "10 pour la première séance du jour, skills ou guidée ; sinon 0",
+      horodatage: ISO,
+    },
+  },
+  seance_perso: {
+    table: "Une seule ligne : Ma routine du matin modifiée (sans ligne : la version d'origine).",
+    colonnes: {
+      id: "toujours 1",
+      exercices: "ids des exercices, dans l'ordre, séparés par des virgules",
+      effort_s: "effort par exercice, secondes",
+      repos_s: "repos entre deux exercices, secondes",
+      lien: "lien de la vidéo, vide sinon",
     },
   },
 };

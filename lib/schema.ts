@@ -189,6 +189,34 @@ export const SQL_TABLES_LOT4 = `
 `;
 
 /**
+ * Migration 24 : séances guidées (lib/seances.ts) et la séance perso
+ * « Ma routine du matin » (sans ligne : REVEIL_DEFAUT).
+ */
+export const SQL_TABLES_SEANCES_GUIDEES = `
+  CREATE TABLE IF NOT EXISTS seances_guidees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL DEFAULT '',
+    -- id de lib/seances.ts, ou 'reveil'
+    seance TEXT NOT NULL DEFAULT '',
+    duree_s INTEGER NOT NULL DEFAULT 0,
+    -- ids des exercices faits jusqu'au bout, séparés par des virgules
+    exercices TEXT NOT NULL DEFAULT '',
+    terminee INTEGER NOT NULL DEFAULT 0,
+    points_donnes INTEGER NOT NULL DEFAULT 0,
+    horodatage TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_seances_guidees_date ON seances_guidees(date);
+
+  CREATE TABLE IF NOT EXISTS seance_perso (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    exercices TEXT NOT NULL DEFAULT '',
+    effort_s INTEGER NOT NULL DEFAULT 45,
+    repos_s INTEGER NOT NULL DEFAULT 15,
+    lien TEXT NOT NULL DEFAULT ''
+  );
+`;
+
+/**
  * Migration 23 : les paliers des 4 familles deviennent des étapes de skills
  * (Pousser → Pompe, Tirer → Traction, Jambes → Pistol, Gainage → Gainage).
  * Recopie volontaire des échelles : la migration ne change pas si le

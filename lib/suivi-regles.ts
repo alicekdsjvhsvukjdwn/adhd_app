@@ -39,7 +39,7 @@ export function dureeLisible(min: number): string {
 export const QUALITES = { 1: "mauvaise", 2: "moyenne", 3: "bonne" } as const;
 export type Qualite = 1 | 2 | 3;
 
-/** Points (voir REGLES_POINTS) : une fois par nuit, une fois par séance même partielle. */
+/** Points (voir REGLES_POINTS) : une fois par nuit ; le sport (skills ou guidé), une fois par jour même partiel. */
 export const POINTS_NUIT = 5;
 export const POINTS_SEANCE = 10;
 
