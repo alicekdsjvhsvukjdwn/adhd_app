@@ -63,9 +63,10 @@ export default function Sommeil() {
       if (!actif) return;
       setCoucher(h.coucher);
       setLever(h.lever);
-      setQualite(nuit?.qualite ?? null);
-      setEcrans(nuit?.ecrans ?? null);
-      setDejaNotee(!!nuit);
+      // Nuit écrite au lever sans réponses : qualité et écrans par défaut, pas encore choisis.
+      setQualite(nuit?.reponses ? nuit.qualite : null);
+      setEcrans(nuit?.reponses ? nuit.ecrans : null);
+      setDejaNotee(nuit?.reponses === 1);
     })();
     return () => {
       actif = false;

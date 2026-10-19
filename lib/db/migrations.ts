@@ -2,6 +2,8 @@ import {
   COLONNES_STATS,
   SQL_CATEGORIES_RECOMPENSES,
   SQL_COULEURS_LISTES,
+  SQL_SKILLS_DEPUIS_PALIERS,
+  SQL_TABLES_LOT4,
   SQL_MOMENTS,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
@@ -692,6 +694,20 @@ const MIGRATIONS: Migration[] = [
         ALTER TABLE recompenses ADD COLUMN categorie TEXT NOT NULL DEFAULT 'plaisirs';
       `);
       await db.execAsync(SQL_CATEGORIES_RECOMPENSES);
+    },
+  },
+
+  {
+    version: 23,
+    nom: "sommeil en un geste, méditation, arbre de skills",
+    run: async (db) => {
+      // 0 tant que la qualité et les écrans du matin ne sont pas donnés
+      // (nuit écrite dès « Je me lève ») ; les nuits d'avant restent à 1.
+      await db.execAsync(`
+        ALTER TABLE sommeil ADD COLUMN reponses INTEGER NOT NULL DEFAULT 1;
+      `);
+      await db.execAsync(SQL_TABLES_LOT4);
+      await db.execAsync(SQL_SKILLS_DEPUIS_PALIERS);
     },
   },
 ];

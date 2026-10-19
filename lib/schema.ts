@@ -1,5 +1,5 @@
 /**
- * SQL des migrations 18 à 22 et des lignes de départ, sans accès à la base :
+ * SQL des migrations 18 à 23 et des lignes de départ, sans accès à la base :
  * testable seul contre une vraie base SQLite (tests/schema.test.mjs).
  */
 
@@ -151,6 +151,73 @@ export const SQL_CATEGORIES_RECOMPENSES = `
 `;
 
 /**
+ * Migration 23 : méditation et arbre de skills. Tables nouvelles seulement :
+ * sport_paliers et paliers_historique restent, en archive.
+ */
+export const SQL_TABLES_LOT4 = `
+  CREATE TABLE IF NOT EXISTS meditations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL DEFAULT '',
+    -- id du catalogue (lib/meditations.ts)
+    seance TEXT NOT NULL DEFAULT '',
+    duree_s INTEGER NOT NULL DEFAULT 0,
+    terminee INTEGER NOT NULL DEFAULT 0,
+    points_donnes INTEGER NOT NULL DEFAULT 0,
+    horodatage TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_meditations_date ON meditations(date);
+
+  -- Étape en cours de chaque skill (lib/skills.ts) ; sans ligne : étape 1, inactif.
+  CREATE TABLE IF NOT EXISTS skills_etat (
+    skill TEXT PRIMARY KEY,
+    etape INTEGER NOT NULL DEFAULT 1,
+    actif INTEGER NOT NULL DEFAULT 0,
+    maj_le TEXT NOT NULL DEFAULT ''
+  );
+
+  -- 'depart' | 'valide' | 'refuse' | 'manuel' | 'maitrise'
+  CREATE TABLE IF NOT EXISTS skills_historique (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL DEFAULT '',
+    horodatage TEXT NOT NULL DEFAULT '',
+    skill TEXT NOT NULL DEFAULT '',
+    de INTEGER,
+    vers INTEGER NOT NULL DEFAULT 0,
+    origine TEXT NOT NULL DEFAULT '',
+    points INTEGER NOT NULL DEFAULT 0
+  );
+`;
+
+/**
+ * Migration 23 : les paliers des 4 familles deviennent des étapes de skills
+ * (Pousser → Pompe, Tirer → Traction, Jambes → Pistol, Gainage → Gainage).
+ * Recopie volontaire des échelles : la migration ne change pas si le
+ * catalogue change. Traction reste inactive sans barre. Rejouable : un skill
+ * déjà présent n'est pas touché.
+ */
+export const SQL_SKILLS_DEPUIS_PALIERS = `
+  INSERT OR IGNORE INTO skills_etat (skill, etape, actif, maj_le)
+  SELECT
+    CASE famille WHEN 'pousser' THEN 'pompe' WHEN 'tirer' THEN 'traction'
+      WHEN 'jambes' THEN 'pistol' ELSE 'gainage' END,
+    CASE famille
+      WHEN 'pousser' THEN MIN(palier, 5)
+      WHEN 'tirer' THEN CASE palier WHEN 1 THEN 3 WHEN 2 THEN 3 WHEN 3 THEN 4 WHEN 4 THEN 5 ELSE 7 END
+      WHEN 'jambes' THEN CASE WHEN palier >= 4 THEN 5 ELSE palier END
+      ELSE CASE WHEN palier >= 3 THEN 2 ELSE 1 END
+    END,
+    CASE WHEN famille = 'tirer'
+      AND COALESCE((SELECT barre_traction FROM sport_reglages WHERE id = 1), 0) = 0 THEN 0 ELSE 1 END,
+    maj_le
+  FROM sport_paliers
+  WHERE famille IN ('pousser', 'tirer', 'jambes', 'gainage');
+
+  INSERT INTO skills_historique (date, horodatage, skill, de, vers, origine)
+  SELECT substr(maj_le, 1, 10), maj_le, skill, NULL, etape, 'depart' FROM skills_etat
+  WHERE NOT EXISTS (SELECT 1 FROM skills_historique h WHERE h.skill = skills_etat.skill);
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */
@@ -160,5 +227,6 @@ export function transformationsApres(schemaSauvegarde: number): string[] {
     ...(schemaSauvegarde < 20 ? [SQL_VERSIONS_EN_ETAPES] : []),
     ...(schemaSauvegarde < 21 ? [SQL_COULEURS_LISTES] : []),
     ...(schemaSauvegarde < 22 ? [SQL_CATEGORIES_RECOMPENSES] : []),
+    ...(schemaSauvegarde < 23 ? [SQL_SKILLS_DEPUIS_PALIERS] : []),
   ];
 }

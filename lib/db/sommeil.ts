@@ -1,10 +1,15 @@
-import { decalerJours } from "../dates";
+import { dateLocale } from "../dates";
 import {
   dureeSommeilMin,
+  ecrireCoucher,
+  jourDuLever,
+  lireCoucher,
   nuitRapporte,
-  ecartTypeCoucherMin,
   POINTS_NUIT,
+  reponsesCompletes,
+  type Coucher,
   type Qualite,
+  type ReponsesMatin,
 } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
@@ -13,6 +18,7 @@ import { addPoints } from "./stats";
 /**
  * Sommeil : une nuit par jour du lever. Aucune autre partie de l'appli
  * (moteur, routines, Jour difficile) ne lit cette table.
+ * La nuit en cours (coucher tapé, pas encore levée) vit dans meta.
  */
 
 export type Nuit = {
@@ -22,13 +28,40 @@ export type Nuit = {
   duree_min: number;
   qualite: Qualite;
   ecrans: 0 | 1;
+  /** 0 tant que qualité et écrans du matin ne sont pas donnés (valeurs par défaut). */
+  reponses: 0 | 1;
 };
+
+const COLONNES = "date, coucher, lever, duree_min, qualite, ecrans, reponses";
+const CLE_EN_COURS = "nuit_en_cours";
+const cleReponses = (date: string) => `nuit_reponses:${date}`;
+
+async function lireMeta(cle: string): Promise<string | null> {
+  const db = await getDatabase();
+  const r = await db.getFirstAsync<{ valeur: string }>("SELECT valeur FROM meta WHERE cle = ?", cle);
+  return r?.valeur ?? null;
+}
+
+async function ecrireMeta(cle: string, valeur: string | null): Promise<void> {
+  const db = await getDatabase();
+  if (valeur === null) await db.runAsync("DELETE FROM meta WHERE cle = ?", cle);
+  else await db.runAsync("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)", cle, valeur);
+}
+
+const heureLocale = (d = new Date()) =>
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
 export async function getNuit(date: string): Promise<Nuit | null> {
   const db = await getDatabase();
-  return db.getFirstAsync<Nuit>(
-    "SELECT date, coucher, lever, duree_min, qualite, ecrans FROM sommeil WHERE date = ?",
-    date,
+  return db.getFirstAsync<Nuit>(`SELECT ${COLONNES} FROM sommeil WHERE date = ?`, date);
+}
+
+export async function nuitsEntre(debut: string, fin: string): Promise<Nuit[]> {
+  const db = await getDatabase();
+  return db.getAllAsync<Nuit>(
+    `SELECT ${COLONNES} FROM sommeil WHERE date >= ? AND date <= ? ORDER BY date`,
+    debut,
+    fin,
   );
 }
 
@@ -44,21 +77,24 @@ export async function heuresParDefaut(
   return veille ?? { coucher: "23:00", lever: "07:00" };
 }
 
-/**
- * Enregistre ou corrige une nuit. Les points ne sont donnés qu'à la première
- * saisie, et seulement pour une nuit des 7 derniers jours.
- */
-export async function enregistrerNuit(n: Omit<Nuit, "duree_min">): Promise<void> {
+/** Points de la nuit, une seule fois : quand ses réponses passent à « données ». */
+async function pointsSiComplete(date: string, avant: Nuit | null): Promise<void> {
+  if (avant?.reponses === 1) return;
+  if (nuitRapporte(date, getAujourdhui())) await addPoints(POINTS_NUIT);
+}
+
+/** Écran de saisie complet (« corriger ») : la nuit a toutes ses réponses. */
+export async function enregistrerNuit(n: Omit<Nuit, "duree_min" | "reponses">): Promise<void> {
   const db = await getDatabase();
   const maintenant = new Date().toISOString();
   const existante = await getNuit(n.date);
   await db.runAsync(
-    `INSERT INTO sommeil (date, coucher, lever, duree_min, qualite, ecrans, saisi_le, maj_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO sommeil (date, coucher, lever, duree_min, qualite, ecrans, reponses, saisi_le, maj_le)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
      ON CONFLICT(date) DO UPDATE SET
        coucher = excluded.coucher, lever = excluded.lever,
        duree_min = excluded.duree_min, qualite = excluded.qualite,
-       ecrans = excluded.ecrans, maj_le = excluded.maj_le`,
+       ecrans = excluded.ecrans, reponses = 1, maj_le = excluded.maj_le`,
     n.date,
     n.coucher,
     n.lever,
@@ -68,35 +104,93 @@ export async function enregistrerNuit(n: Omit<Nuit, "duree_min">): Promise<void>
     maintenant,
     maintenant,
   );
-  if (!existante && nuitRapporte(n.date, getAujourdhui())) await addPoints(POINTS_NUIT);
+  await ecrireMeta(cleReponses(n.date), null);
+  await pointsSiComplete(n.date, existante);
 }
 
-export type ResumeSommeil = {
-  derniere: Nuit | null;
-  /** Durée moyenne des nuits notées sur les 7 derniers jours, ou null. */
-  moyenne7j: number | null;
-  nuits7j: number;
-  /** Écart type de l'heure de coucher sur ces nuits, minutes. */
-  ecartCoucher: number | null;
-};
+// ─── En un geste ────────────────────────────────────────────────────────
 
-export async function resumeSommeil(): Promise<ResumeSommeil> {
+export const getNuitEnCours = async (): Promise<Coucher | null> =>
+  lireCoucher(await lireMeta(CLE_EN_COURS));
+
+/** « Je vais dormir » : l'heure de coucher, maintenant. */
+export async function jeVaisDormir(): Promise<void> {
+  await ecrireMeta(CLE_EN_COURS, ecrireCoucher({ date: dateLocale(), heure: heureLocale() }));
+}
+
+/** Tap « Je vais dormir » par erreur. */
+export const annulerNuitEnCours = () => ecrireMeta(CLE_EN_COURS, null);
+
+/**
+ * « Je me lève » : écrit la nuit tout de suite (rien ne se perd), réponses
+ * à 0 jusqu'aux taps du matin. `coucher` : la nuit en cours, ou l'heure
+ * donnée après un oubli du soir. `lever` : maintenant, sauf oubli du matin.
+ * Une nuit déjà notée garde ses réponses. Renvoie le jour de la nuit.
+ */
+export async function jeMeLeve(p: { coucher?: Coucher; lever?: string } = {}): Promise<string> {
+  const coucher = p.coucher ?? (await getNuitEnCours());
+  if (!coucher) throw new Error("Pas de nuit en cours");
+  const date = jourDuLever(coucher);
+  const lever = p.lever ?? heureLocale();
   const db = await getDatabase();
-  const debut = decalerJours(getAujourdhui(), -6);
-  const nuits = await db.getAllAsync<Nuit>(
-    "SELECT date, coucher, lever, duree_min, qualite, ecrans FROM sommeil WHERE date >= ? ORDER BY date DESC",
-    debut,
+  const maintenant = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO sommeil (date, coucher, lever, duree_min, reponses, saisi_le, maj_le)
+     VALUES (?, ?, ?, ?, 0, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET
+       coucher = excluded.coucher, lever = excluded.lever,
+       duree_min = excluded.duree_min, maj_le = excluded.maj_le`,
+    date,
+    coucher.heure,
+    lever,
+    dureeSommeilMin(coucher.heure, lever),
+    maintenant,
+    maintenant,
   );
-  const derniere = await db.getFirstAsync<Nuit>(
-    "SELECT date, coucher, lever, duree_min, qualite, ecrans FROM sommeil ORDER BY date DESC LIMIT 1",
+  await ecrireMeta(CLE_EN_COURS, null);
+  return date;
+}
+
+export async function getReponses(date: string): Promise<ReponsesMatin> {
+  const nuit = await getNuit(date);
+  if (nuit?.reponses === 1) return { qualite: nuit.qualite, ecrans: nuit.ecrans };
+  try {
+    return JSON.parse((await lireMeta(cleReponses(date))) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Un tap du matin (qualité ou écrans), gardé tout de suite. Avec les deux,
+ * la nuit est complète : réponses à 1, et les points une fois.
+ */
+export async function repondre(date: string, r: ReponsesMatin): Promise<void> {
+  const avant = await getNuit(date);
+  const toutes = { ...(await getReponses(date)), ...r };
+  const db = await getDatabase();
+  if (avant?.reponses === 1) {
+    // Déjà complète : on corrige simplement.
+    await db.runAsync(
+      "UPDATE sommeil SET qualite = ?, ecrans = ?, maj_le = ? WHERE date = ?",
+      toutes.qualite ?? avant.qualite,
+      toutes.ecrans ?? avant.ecrans,
+      new Date().toISOString(),
+      date,
+    );
+    return;
+  }
+  if (!reponsesCompletes(toutes)) {
+    await ecrireMeta(cleReponses(date), JSON.stringify(toutes));
+    return;
+  }
+  await db.runAsync(
+    "UPDATE sommeil SET qualite = ?, ecrans = ?, reponses = 1, maj_le = ? WHERE date = ?",
+    toutes.qualite,
+    toutes.ecrans,
+    new Date().toISOString(),
+    date,
   );
-  return {
-    derniere,
-    moyenne7j:
-      nuits.length > 0
-        ? nuits.reduce((s, n) => s + n.duree_min, 0) / nuits.length
-        : null,
-    nuits7j: nuits.length,
-    ecartCoucher: ecartTypeCoucherMin(nuits.map((n) => n.coucher)),
-  };
+  await ecrireMeta(cleReponses(date), null);
+  await pointsSiComplete(date, avant);
 }

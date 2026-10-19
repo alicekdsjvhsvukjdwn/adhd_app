@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   SQL_CATEGORIES_RECOMPENSES,
   SQL_COULEURS_LISTES,
+  SQL_SKILLS_DEPUIS_PALIERS,
   SQL_LIGNES_DE_BASE,
   SQL_MOMENTS,
   SQL_TABLES_HORS_MIGRATIONS,
@@ -102,11 +103,13 @@ test("20 : versions écrites à la main → étapes, selon la règle", () => {
 
 test("restauration : on ne rejoue que ce que la sauvegarde n'a pas connu", () => {
   const C = SQL_CATEGORIES_RECOMPENSES;
-  assert.deepEqual(transformationsApres(17), [SQL_MOMENTS, SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C]);
-  assert.deepEqual(transformationsApres(19), [SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C]);
-  assert.deepEqual(transformationsApres(20), [SQL_COULEURS_LISTES, C]);
-  assert.deepEqual(transformationsApres(21), [C]);
-  assert.deepEqual(transformationsApres(22), []);
+  const S = SQL_SKILLS_DEPUIS_PALIERS;
+  assert.deepEqual(transformationsApres(17), [SQL_MOMENTS, SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C, S]);
+  assert.deepEqual(transformationsApres(19), [SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C, S]);
+  assert.deepEqual(transformationsApres(20), [SQL_COULEURS_LISTES, C, S]);
+  assert.deepEqual(transformationsApres(21), [C, S]);
+  assert.deepEqual(transformationsApres(22), [SQL_SKILLS_DEPUIS_PALIERS]);
+  assert.deepEqual(transformationsApres(23), []);
 });
 
 test("21 : anciennes couleurs de listes remappées une à une, rejouable", async () => {

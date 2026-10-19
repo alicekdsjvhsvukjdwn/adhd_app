@@ -1,23 +1,27 @@
 import { decalerJours } from "../dates";
 import {
-  FAMILLES,
-  nbPaliers,
-  palier,
-  palierDepart,
-  POINTS_SEANCE,
-  proposerMontee,
-  UNITE,
-  type Famille,
-  type Palier,
-  type Unite,
-} from "../suivi-regles";
+  choisirEntretien,
+  etapeDepart,
+  maitrise,
+  MAX_ACTIFS,
+  pointsValidation,
+  proposerValidation,
+  skill,
+  SKILLS,
+  statut,
+  type Etape,
+  type EtatSkill,
+  type Skill,
+} from "../skills";
+import { POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { addPoints } from "./stats";
 
 /**
- * Sport : callisthénie guidée, 4 familles avec une échelle de paliers
- * (lib/suivi-regles.ts). Aucune autre partie de l'appli ne lit ces tables.
+ * Sport : arbre de skills (lib/skills.ts). Séances et séries restent dans
+ * seances / series (famille = id du skill, palier = numéro d'étape).
+ * Aucune autre partie de l'appli ne lit ces tables.
  */
 
 export type Reglages = { configure: boolean; barre: boolean };
@@ -30,140 +34,216 @@ export async function getReglages(): Promise<Reglages> {
   return { configure: !!r, barre: r?.barre_traction === 1 };
 }
 
-async function journaliserPalier(
-  famille: Famille,
-  de: number | null,
-  vers: number,
-  origine: "depart" | "propose_accepte" | "propose_refuse" | "manuel",
-) {
+export async function getEtats(): Promise<Record<string, EtatSkill>> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ skill: string; etape: number; actif: number }>(
+    "SELECT skill, etape, actif FROM skills_etat",
+  );
+  return Object.fromEntries(rows.map((r) => [r.skill, { etape: r.etape, actif: r.actif === 1 }]));
+}
+
+type Origine = "depart" | "valide" | "refuse" | "manuel" | "maitrise";
+
+async function journaliser(id: string, de: number | null, vers: number, origine: Origine, points = 0) {
   const db = await getDatabase();
   await db.runAsync(
-    `INSERT INTO paliers_historique (date, horodatage, famille, de, vers, origine)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO skills_historique (date, horodatage, skill, de, vers, origine, points)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     getAujourdhui(),
     new Date().toISOString(),
-    famille,
+    id,
     de,
     vers,
     origine,
+    points,
   );
 }
 
-/** Premier lancement : barre de traction et palier de départ par famille. */
+async function ecrireEtat(id: string, e: EtatSkill) {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO skills_etat (skill, etape, actif, maj_le) VALUES (?, ?, ?, ?)
+     ON CONFLICT(skill) DO UPDATE SET etape = excluded.etape, actif = excluded.actif, maj_le = excluded.maj_le`,
+    id,
+    e.etape,
+    e.actif ? 1 : 0,
+    new Date().toISOString(),
+  );
+}
+
+/** Premier lancement : barre, et où on en est sur chaque fondation (actives d'emblée). */
 export async function configurerSport(
   barre: boolean,
-  choix: Record<Famille, number | "inconnu">,
+  choix: Record<string, number | "inconnu">,
 ): Promise<void> {
   const db = await getDatabase();
-  const maintenant = new Date().toISOString();
   await db.runAsync(
     `INSERT OR REPLACE INTO sport_reglages (id, barre_traction, configure_le) VALUES (1, ?, ?)`,
     barre ? 1 : 0,
-    maintenant,
+    new Date().toISOString(),
   );
-  for (const f of FAMILLES) {
-    const n = palierDepart(f, choix[f], barre);
-    await db.runAsync(
-      "INSERT OR REPLACE INTO sport_paliers (famille, palier, maj_le) VALUES (?, ?, ?)",
-      f,
-      n,
-      maintenant,
-    );
-    await journaliserPalier(f, null, n, "depart");
+  const etats: Record<string, EtatSkill> = {};
+  for (const s of SKILLS.filter((x) => x.niveau === "fondation")) {
+    const etape = etapeDepart(s, choix[s.id] ?? "inconnu");
+    etats[s.id] = { etape, actif: false };
+  }
+  // Actifs : les fondations accessibles et pas encore maîtrisées, au plus 4.
+  SKILLS.filter((s) => statut(s, etats, barre) === "en_cours" && etats[s.id])
+    .slice(0, MAX_ACTIFS)
+    .forEach((s) => (etats[s.id].actif = true));
+  for (const [id, e] of Object.entries(etats)) {
+    await ecrireEtat(id, e);
+    await journaliser(id, null, e.etape, "depart");
   }
 }
 
-async function getPaliers(): Promise<Record<Famille, number>> {
+/** Travailler ce skill, ou plus. Refusé (false) au-delà de 4 actifs. */
+export async function basculerActif(id: string): Promise<boolean> {
+  const etats = await getEtats();
+  const e = etats[id] ?? { etape: 1, actif: false };
+  const actifs = Object.values(etats).filter((x) => x.actif).length;
+  if (!e.actif && actifs >= MAX_ACTIFS) return false;
+  await ecrireEtat(id, { ...e, actif: !e.actif });
+  return true;
+}
+
+export type SeanceSkill = { fin: string; realise: number[] };
+
+/** Séances faites à une étape, la plus récente d'abord, séries dans l'ordre. */
+async function seancesA(id: string, etape: number): Promise<SeanceSkill[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<{ famille: Famille; palier: number }>(
-    "SELECT famille, palier FROM sport_paliers",
+  const rows = await db.getAllAsync<{ seance_id: number; quand: string; realise: number }>(
+    `SELECT s.seance_id, COALESCE(se.fin, se.debut) AS quand, s.realise
+     FROM series s JOIN seances se ON se.id = s.seance_id
+     WHERE s.famille = ? AND s.palier = ?
+     ORDER BY quand DESC, s.seance_id DESC, s.numero`,
+    id,
+    etape,
   );
-  const p = { pousser: 1, tirer: 1, jambes: 1, gainage: 1 };
-  for (const r of rows) p[r.famille] = r.palier;
-  return p;
+  const par = new Map<number, SeanceSkill>();
+  for (const r of rows) {
+    if (!par.has(r.seance_id)) par.set(r.seance_id, { fin: r.quand, realise: [] });
+    par.get(r.seance_id)!.realise.push(r.realise);
+  }
+  return [...par.values()];
 }
 
-export async function changerPalier(
-  famille: Famille,
-  vers: number,
-  origine: "propose_accepte" | "manuel",
-): Promise<void> {
-  const db = await getDatabase();
-  const de = (await getPaliers())[famille];
-  if (vers === de) return;
-  await db.runAsync(
-    "UPDATE sport_paliers SET palier = ?, maj_le = ? WHERE famille = ?",
-    vers,
-    new Date().toISOString(),
-    famille,
-  );
-  await journaliserPalier(famille, de, vers, origine);
-}
-
-/** Refus de la montée proposée : le palier reste, le refus est noté. */
-export async function refuserMontee(famille: Famille): Promise<void> {
-  const de = (await getPaliers())[famille];
-  await journaliserPalier(famille, de, de + 1, "propose_refuse");
-}
-
-export type ExerciceDuJour = {
-  famille: Famille;
-  numero: number;
-  palier: Palier;
-  unite: Unite;
-  /** Palier max accessible (barre ou non). */
-  max: number;
-  /** Le palier suivant est proposé (2 séances réussies d'affilée). */
-  montee: boolean;
+export type FicheSkill = {
+  skill: Skill;
+  etat: EtatSkill;
+  /** Dates de validation, par numéro d'étape validée (vide = avant l'appli). */
+  validees: Record<number, string>;
+  /** Séances à l'étape en cours. */
+  seances: SeanceSkill[];
+  meilleur: number | null;
+  /** Valider l'étape en cours est proposé. */
+  proposition: boolean;
 };
 
-/** Séance proposée : un exercice par famille, au palier actuel. */
+export async function ficheSkill(id: string): Promise<FicheSkill> {
+  const s = skill(id)!;
+  const etat = (await getEtats())[id] ?? { etape: 1, actif: false };
+  const db = await getDatabase();
+  const hist = await db.getAllAsync<{ de: number | null; vers: number; origine: Origine; date: string; horodatage: string }>(
+    "SELECT de, vers, origine, date, horodatage FROM skills_historique WHERE skill = ? ORDER BY horodatage",
+    id,
+  );
+  const validees: Record<number, string> = {};
+  for (const h of hist) if (h.origine === "valide" && h.de !== null) validees[h.de] = h.date;
+  const seances = maitrise(s, etat) ? [] : await seancesA(id, etat.etape);
+  const refus = hist.filter((h) => h.origine === "refuse" && h.de === etat.etape).pop();
+  return {
+    skill: s,
+    etat,
+    validees,
+    seances,
+    meilleur: seances.length ? Math.max(...seances.flatMap((x) => x.realise)) : null,
+    proposition:
+      !maitrise(s, etat) &&
+      proposerValidation({
+        seances,
+        etape: s.etapes[etat.etape - 1],
+        dernierRefus: refus?.horodatage ?? null,
+      }),
+  };
+}
+
+/**
+ * Valide l'étape en cours (proposée et acceptée). +20 la première fois
+ * pour cette étape, +50 la première fois que le skill est maîtrisé.
+ */
+export async function validerEtape(id: string): Promise<{ points: number; maitrise: boolean }> {
+  const s = skill(id)!;
+  const etat = (await getEtats())[id] ?? { etape: 1, actif: false };
+  if (maitrise(s, etat)) return { points: 0, maitrise: true };
+  const db = await getDatabase();
+  const deja = await db.getAllAsync<{ de: number | null; origine: Origine }>(
+    "SELECT de, origine FROM skills_historique WHERE skill = ? AND origine IN ('valide', 'maitrise')",
+    id,
+  );
+  const p = pointsValidation({
+    n: etat.etape,
+    nbEtapes: s.etapes.length,
+    dejaValidees: deja.filter((d) => d.origine === "valide").map((d) => d.de ?? 0),
+    dejaMaitrise: deja.some((d) => d.origine === "maitrise"),
+  });
+  const vers = etat.etape + 1;
+  const fini = vers > s.etapes.length;
+  // Maîtrisé : il quitte les actifs (place libre), l'entretien prend le relais.
+  await ecrireEtat(id, { etape: vers, actif: fini ? false : etat.actif });
+  await journaliser(id, etat.etape, vers, "valide", p.etape);
+  if (fini) await journaliser(id, etat.etape, vers, "maitrise", p.maitrise);
+  if (p.etape + p.maitrise > 0) await addPoints(p.etape + p.maitrise);
+  return { points: p.etape + p.maitrise, maitrise: fini };
+}
+
+/** « Pas encore » : l'étape reste, la proposition revient après 2 nouvelles réussites. */
+export async function refuserValidation(id: string): Promise<void> {
+  const etat = (await getEtats())[id] ?? { etape: 1, actif: false };
+  await journaliser(id, etat.etape, etat.etape + 1, "refuse");
+}
+
+/** Redescendre d'une étape (ou revenir sur un skill maîtrisé). Les points restent acquis. */
+export async function redescendre(id: string): Promise<void> {
+  const etat = (await getEtats())[id] ?? { etape: 1, actif: false };
+  if (etat.etape <= 1) return;
+  await ecrireEtat(id, { ...etat, etape: etat.etape - 1 });
+  await journaliser(id, etat.etape, etat.etape - 1, "manuel");
+}
+
+// ─── Séance ─────────────────────────────────────────────────────────────
+
+export type ExerciceDuJour = {
+  skill: Skill;
+  numero: number;
+  etape: Etape;
+  /** Série d'entretien d'un skill maîtrisé : une seule, au niveau de la dernière étape. */
+  entretien: boolean;
+};
+
+/** L'étape en cours de chaque skill actif, puis 1 série d'entretien pour au plus 2 skills maîtrisés. */
 export async function seanceProposee(): Promise<ExerciceDuJour[]> {
   const { barre } = await getReglages();
-  const paliers = await getPaliers();
-  const db = await getDatabase();
+  const etats = await getEtats();
   const res: ExerciceDuJour[] = [];
-
-  for (const f of FAMILLES) {
-    const n = paliers[f];
-    const p = palier(f, n);
-    const max = nbPaliers(f, barre);
-
-    // Séances à ce palier, la plus récente d'abord, séries dans l'ordre.
-    const series = await db.getAllAsync<{ seance_id: number; quand: string; realise: number }>(
-      `SELECT s.seance_id, COALESCE(se.fin, se.debut) AS quand, s.realise
-       FROM series s JOIN seances se ON se.id = s.seance_id
-       WHERE s.famille = ? AND s.palier = ?
-       ORDER BY quand DESC, s.seance_id DESC, s.numero`,
-      f,
-      n,
+  for (const s of SKILLS) {
+    const e = etats[s.id];
+    if (!e?.actif || statut(s, etats, barre) !== "en_cours") continue;
+    res.push({ skill: s, numero: e.etape, etape: s.etapes[e.etape - 1], entretien: false });
+  }
+  const db = await getDatabase();
+  const maitrises = [];
+  for (const s of SKILLS.filter((x) => maitrise(x, etats[x.id]) && (!x.barre || barre))) {
+    const r = await db.getFirstAsync<{ d: string | null }>(
+      "SELECT MAX(se.date) AS d FROM series s JOIN seances se ON se.id = s.seance_id WHERE s.famille = ?",
+      s.id,
     );
-    const parSeance = new Map<number, { fin: string; realise: number[] }>();
-    for (const s of series) {
-      if (!parSeance.has(s.seance_id)) parSeance.set(s.seance_id, { fin: s.quand, realise: [] });
-      parSeance.get(s.seance_id)!.realise.push(s.realise);
-    }
-    const refus = await db.getFirstAsync<{ h: string | null }>(
-      `SELECT MAX(horodatage) AS h FROM paliers_historique
-       WHERE famille = ? AND de = ? AND origine = 'propose_refuse'`,
-      f,
-      n,
-    );
-
-    res.push({
-      famille: f,
-      numero: n,
-      palier: p,
-      unite: UNITE[f],
-      max,
-      montee: proposerMontee({
-        seances: [...parSeance.values()],
-        haut: p.haut,
-        palierActuel: n,
-        palierMax: max,
-        dernierRefus: refus?.h ?? null,
-      }),
-    });
+    maitrises.push({ id: s.id, dernier: r?.d ?? null });
+  }
+  for (const id of choisirEntretien(maitrises)) {
+    const s = skill(id)!;
+    const n = s.etapes.length;
+    res.push({ skill: s, numero: n, etape: { ...s.etapes[n - 1], series: 1 }, entretien: true });
   }
   return res;
 }
@@ -192,7 +272,7 @@ export async function enregistrerSerie(
   const existante = await db.getFirstAsync<{ id: number }>(
     "SELECT id FROM series WHERE seance_id = ? AND famille = ? AND numero = ?",
     seanceId,
-    ex.famille,
+    ex.skill.id,
     numero,
   );
   if (existante) {
@@ -202,13 +282,13 @@ export async function enregistrerSerie(
       `INSERT INTO series (seance_id, famille, palier, exercice, numero, unite, objectif_bas, objectif_haut, realise)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       seanceId,
-      ex.famille,
+      ex.skill.id,
       ex.numero,
-      ex.palier.nom,
+      ex.etape.nom,
       numero,
-      ex.unite,
-      ex.palier.bas,
-      ex.palier.haut,
+      ex.etape.unite,
+      ex.etape.objectif,
+      ex.etape.objectif,
       realise,
     );
   }
@@ -250,7 +330,7 @@ export async function terminerSeance(seanceId: number): Promise<void> {
   );
 }
 
-/** Séances faites sur les 7 derniers jours (rythme indicatif : 3). */
+/** Séances faites sur les 7 derniers jours. */
 export async function seancesCetteSemaine(): Promise<number> {
   const db = await getDatabase();
   const r = await db.getFirstAsync<{ n: number }>(
@@ -258,53 +338,4 @@ export async function seancesCetteSemaine(): Promise<number> {
     decalerJours(getAujourdhui(), -6),
   );
   return r?.n ?? 0;
-}
-
-export type SeanceHistorique = {
-  date: string;
-  palier: number;
-  exercice: string;
-  unite: Unite;
-  meilleure: number;
-  series: number[];
-};
-
-/** Les dernières séances d'une famille, la plus récente d'abord. */
-export async function historiqueFamille(
-  famille: Famille,
-  limite = 12,
-): Promise<SeanceHistorique[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<{
-    seance_id: number;
-    date: string;
-    palier: number;
-    exercice: string;
-    unite: Unite;
-    realise: number;
-  }>(
-    `SELECT s.seance_id, se.date, s.palier, s.exercice, s.unite, s.realise
-     FROM series s JOIN seances se ON se.id = s.seance_id
-     WHERE s.famille = ? AND s.realise > 0
-     ORDER BY se.debut DESC, s.numero`,
-    famille,
-  );
-  const parSeance = new Map<number, SeanceHistorique>();
-  for (const r of rows) {
-    if (!parSeance.has(r.seance_id)) {
-      if (parSeance.size >= limite) break;
-      parSeance.set(r.seance_id, {
-        date: r.date,
-        palier: r.palier,
-        exercice: r.exercice,
-        unite: r.unite,
-        meilleure: 0,
-        series: [],
-      });
-    }
-    const h = parSeance.get(r.seance_id)!;
-    h.series.push(r.realise);
-    h.meilleure = Math.max(h.meilleure, r.realise);
-  }
-  return [...parSeance.values()];
 }

@@ -36,35 +36,6 @@ export function dureeLisible(min: number): string {
   return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, "0")}`;
 }
 
-/**
- * Écart type de l'heure de coucher, en minutes. Les couchers avant midi
- * comptent comme « après minuit » (00:30 = 24:30), pour que 23:30 et
- * 00:30 soient à une heure d'écart et non à 23. Null sous 2 nuits.
- */
-export function ecartTypeCoucherMin(couchers: string[]): number | null {
-  if (couchers.length < 2) return null;
-  const v = couchers.map((c) => {
-    const m = minutesDe(c);
-    return m < 720 ? m + 1440 : m;
-  });
-  const moy = v.reduce((s, x) => s + x, 0) / v.length;
-  return Math.sqrt(v.reduce((s, x) => s + (x - moy) ** 2, 0) / v.length);
-}
-
-export function phraseRegularite(ecartMin: number | null): string {
-  if (ecartMin === null) return "Régularité : il faut au moins 2 nuits.";
-  const arrondi = Math.round(ecartMin);
-  const mot =
-    ecartMin <= 30
-      ? "très régulier"
-      : ecartMin <= 60
-        ? "assez régulier"
-        : ecartMin <= 90
-          ? "plutôt irrégulier"
-          : "irrégulier";
-  return `Coucher ${mot} (± ${arrondi} min)`;
-}
-
 export const QUALITES = { 1: "mauvaise", 2: "moyenne", 3: "bonne" } as const;
 export type Qualite = 1 | 2 | 3;
 
@@ -81,115 +52,105 @@ export function nuitRapporte(date: string, aujourdhui: string): boolean {
   return ecartJ >= 0 && ecartJ < JOURS_NUIT_POINTS;
 }
 
-// ─── Sport : échelles de callisthénie ───────────────────────────────────
+// ─── Sommeil en un geste ────────────────────────────────────────────────
 
-export type Famille = "pousser" | "tirer" | "jambes" | "gainage";
-export type Unite = "reps" | "s";
-export type Palier = {
-  nom: string;
-  /** Objectif bas et haut par série (répétitions ou secondes). */
-  bas: number;
-  haut: number;
-  /** Palier qui demande une barre de traction. */
-  barre?: boolean;
-};
+/**
+ * Nuit en cours (meta nuit_en_cours) : jour et heure locaux du coucher,
+ * « AAAA-MM-JJ HH:MM ». Pas d'ISO UTC : le jour du lever se lit sans fuseau.
+ */
+export type Coucher = { date: string; heure: string };
 
-export const FAMILLES: Famille[] = ["pousser", "tirer", "jambes", "gainage"];
-export const SERIES_PAR_EXERCICE = 3;
-/** Séances réussies d'affilée au palier avant de proposer le suivant. */
-export const SEANCES_POUR_MONTER = 2;
-/** Rythme indicatif, sans jour imposé. */
-export const SEANCES_PAR_SEMAINE = 3;
+export const lireCoucher = (v: string | null): Coucher | null =>
+  v && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v) ? { date: v.slice(0, 10), heure: v.slice(11) } : null;
 
-export const LIBELLES_FAMILLE: Record<Famille, string> = {
-  pousser: "Pousser",
-  tirer: "Tirer",
-  jambes: "Jambes",
-  gainage: "Gainage",
-};
+export const ecrireCoucher = (c: Coucher) => `${c.date} ${c.heure}`;
 
-export const UNITE: Record<Famille, Unite> = {
-  pousser: "reps",
-  tirer: "reps",
-  jambes: "reps",
-  gainage: "s",
-};
+/** Avant cette heure le soir, un tap sans nuit en cours veut dire « je viens de me lever ». */
+export const HEURE_SOIR = 18;
+/** Avant 4 h, on se couche encore (pas un lever). */
+export const HEURE_MATIN = 4;
+/** Nuit en cours encore ouverte à partir de 11 h : le lever a été oublié. */
+export const HEURE_LEVER_OUBLIE = 11;
 
-/** Paliers du plus facile au plus dur ; le palier n est ECHELLES[f][n - 1]. */
-export const ECHELLES: Record<Famille, Palier[]> = {
-  pousser: [
-    { nom: "Pompes au mur", bas: 8, haut: 12 },
-    { nom: "Pompes inclinées (table)", bas: 8, haut: 12 },
-    { nom: "Pompes sur les genoux", bas: 8, haut: 12 },
-    { nom: "Pompes", bas: 8, haut: 12 },
-    { nom: "Pompes déclinées (pieds surélevés)", bas: 6, haut: 10 },
-    { nom: "Pompes diamant", bas: 6, haut: 10 },
-  ],
-  tirer: [
-    { nom: "Rowing sous une table", bas: 8, haut: 12 },
-    { nom: "Rowing australien", bas: 8, haut: 12 },
-    { nom: "Tractions négatives (5 s de descente)", bas: 3, haut: 6, barre: true },
-    { nom: "Tractions pieds au sol (assistées par les jambes)", bas: 5, haut: 8, barre: true },
-    { nom: "Tractions", bas: 3, haut: 8, barre: true },
-  ],
-  jambes: [
-    { nom: "Squat", bas: 10, haut: 15 },
-    { nom: "Fente (par jambe)", bas: 8, haut: 12 },
-    { nom: "Squat bulgare (par jambe)", bas: 6, haut: 10 },
-    { nom: "Pistol assisté (par jambe)", bas: 3, haut: 6 },
-  ],
-  gainage: [
-    { nom: "Planche sur les genoux", bas: 20, haut: 40 },
-    { nom: "Planche", bas: 30, haut: 60 },
-    { nom: "Hollow hold", bas: 20, haut: 40 },
-  ],
-};
-
-/** Nombre de paliers accessibles : sans barre, Tirer s'arrête aux rowings. */
-export function nbPaliers(f: Famille, barre: boolean): number {
-  return ECHELLES[f].filter((p) => barre || !p.barre).length;
+/** La nuit est datée du jour du lever : un coucher l'après-midi ou le soir donne le lendemain. */
+export function jourDuLever(c: Coucher): string {
+  if (minutesDe(c.heure) < 12 * 60) return c.date;
+  const d = new Date(c.date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
-export function palier(f: Famille, n: number): Palier {
-  return ECHELLES[f][Math.max(1, Math.min(ECHELLES[f].length, n)) - 1];
-}
-
-/** « Je ne sais pas » : palier 2 pour Pousser (le mur est trop facile), 1 sinon. */
-export function palierDepart(f: Famille, choix: number | "inconnu", barre: boolean): number {
-  const n = choix === "inconnu" ? (f === "pousser" ? 2 : 1) : choix;
-  return Math.max(1, Math.min(nbPaliers(f, barre), n));
-}
-
-/** Les 3 séries atteignent l'objectif haut. */
-export function seanceReussie(realise: number[], haut: number): boolean {
-  return (
-    realise.length >= SERIES_PAR_EXERCICE &&
-    realise.slice(0, SERIES_PAR_EXERCICE).every((r) => r >= haut)
-  );
+/** Oubli du soir : l'heure de coucher donnée au lever, pour la nuit qui finit `aujourdhui`. */
+export function coucherPour(aujourdhui: string, heure: string): Coucher {
+  if (minutesDe(heure) < 12 * 60) return { date: aujourdhui, heure };
+  const d = new Date(aujourdhui + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return { date: d.toISOString().slice(0, 10), heure };
 }
 
 /**
- * Faut-il proposer le palier suivant ?
- * `seances` : les séances de cette famille AU PALIER ACTUEL, la plus récente
- * d'abord, avec leur fin (ISO) et les séries réalisées.
- * `dernierRefus` : horodatage du dernier refus de monter depuis ce palier.
- * Il faut 2 séances réussies d'affilée, toutes deux après le dernier refus.
+ * Le grand bouton. Nuit en cours : « Je me lève ». Sinon, en journée
+ * (4 h – 18 h) tant que la nuit du jour n'est pas notée : « Je me lève »
+ * aussi (le coucher a été oublié). Sinon : « Je vais dormir ».
  */
-export function proposerMontee(params: {
-  seances: { fin: string; realise: number[] }[];
-  haut: number;
-  palierActuel: number;
-  palierMax: number;
-  dernierRefus: string | null;
-}): boolean {
-  const { seances, haut, palierActuel, palierMax, dernierRefus } = params;
-  if (palierActuel >= palierMax) return false;
-  const recentes = seances.slice(0, SEANCES_POUR_MONTER);
-  if (recentes.length < SEANCES_POUR_MONTER) return false;
-  if (!recentes.every((s) => seanceReussie(s.realise, haut))) return false;
-  if (dernierRefus && recentes.some((s) => s.fin <= dernierRefus)) return false;
-  return true;
+export function boutonSommeil(p: {
+  enCours: Coucher | null;
+  heure: number;
+  nuitDuJourNotee: boolean;
+}): "dormir" | "lever" {
+  if (p.enCours) return "lever";
+  if (p.heure >= HEURE_MATIN && p.heure < HEURE_SOIR && !p.nuitDuJourNotee) return "lever";
+  return "dormir";
 }
+
+/**
+ * Lever oublié : la nuit en cours est encore ouverte à partir de 11 h le
+ * jour du lever (ou plus tard encore).
+ */
+export function leverOublie(enCours: Coucher | null, aujourdhui: string, heure: number): boolean {
+  if (!enCours) return false;
+  const lever = jourDuLever(enCours);
+  return aujourdhui > lever || (aujourdhui === lever && heure >= HEURE_LEVER_OUBLIE);
+}
+
+/** Échelle commune des barres de la semaine : 21 h en haut, 11 h en bas. */
+export const ECHELLE_DEBUT = 21 * 60;
+export const ECHELLE_DUREE = 14 * 60;
+
+/** Position d'une heure sur l'échelle (0 = 21 h, 1 = 11 h), bornée. Après 18 h = avant minuit. */
+export function positionEchelle(hhmm: string): number {
+  const m = minutesDe(hhmm);
+  const depuis = m >= HEURE_SOIR * 60 ? m - ECHELLE_DEBUT : m + 24 * 60 - ECHELLE_DEBUT;
+  return Math.min(1, Math.max(0, depuis / ECHELLE_DUREE));
+}
+
+export type BarreNuit = { date: string; haut: number; bas: number; pale: boolean } | { date: string; vide: true };
+
+/**
+ * Une barre par jour de `jours` : du coucher (haut) au lever (bas).
+ * Mauvaise nuit (qualité 1 réellement donnée) : plus pâle. Sans nuit : vide.
+ */
+export function barresSemaine(
+  nuits: { date: string; coucher: string; lever: string; qualite: number; reponses: number }[],
+  jours: string[],
+): BarreNuit[] {
+  return jours.map((date) => {
+    const n = nuits.find((x) => x.date === date);
+    if (!n) return { date, vide: true as const };
+    return {
+      date,
+      haut: positionEchelle(n.coucher),
+      bas: positionEchelle(n.lever),
+      pale: n.reponses === 1 && n.qualite === 1,
+    };
+  });
+}
+
+/** Réponses du matin gardées en meta jusqu'à ce qu'il y ait les deux. */
+export type ReponsesMatin = { qualite?: Qualite; ecrans?: 0 | 1 };
+
+export const reponsesCompletes = (r: ReponsesMatin): r is { qualite: Qualite; ecrans: 0 | 1 } =>
+  r.qualite !== undefined && r.ecrans !== undefined;
 
 // ─── Liens dans Progression ─────────────────────────────────────────────
 

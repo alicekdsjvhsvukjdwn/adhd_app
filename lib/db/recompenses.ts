@@ -5,6 +5,8 @@ import {
   POINTS_ETAPE,
   POINTS_TOUTES,
 } from "../regles-taches";
+import { POINTS_MEDITATION } from "../meditations";
+import { POINTS_ETAPE_SKILL, POINTS_MAITRISE } from "../skills";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
@@ -53,8 +55,17 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
     action: "La dernière étape (étape + tâche faite + bonus)",
     points: `+${POINTS_DERNIERE_ETAPE}`,
   },
-  { action: "Une nuit notée (des 7 derniers jours, une fois par nuit)", points: `+${POINTS_NUIT}` },
+  {
+    action: "Une nuit complète : heures, qualité et écrans (des 7 derniers jours, une fois par nuit)",
+    points: `+${POINTS_NUIT}`,
+  },
   { action: "Une séance de sport, même partielle", points: `+${POINTS_SEANCE}` },
+  { action: "Sport : une étape d'un skill validée (une fois par étape)", points: `+${POINTS_ETAPE_SKILL}` },
+  { action: "Sport : un skill maîtrisé (une fois par skill)", points: `+${POINTS_MAITRISE}` },
+  {
+    action: "Une méditation terminée ou d'au moins 1 min (une fois par jour)",
+    points: `+${POINTS_MEDITATION}`,
+  },
   {
     action: "Décocher, annuler ou remettre à faire",
     points: "reprend ce qui avait été donné",

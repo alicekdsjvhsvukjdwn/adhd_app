@@ -1,4 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
+import { Dumbbell, Flower2, Moon, Sun } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   ScrollView,
@@ -6,101 +7,114 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { JOURS_LONGS } from "../../components/CalendrierMois";
+import { PlusMoins } from "../../components/PlusMoins";
 import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
-import { resumeSommeil, type ResumeSommeil } from "../../lib/db/sommeil";
+import { decalerJours } from "../../lib/dates";
+import { meditationsRecentes } from "../../lib/db/meditations";
 import {
-  changerPalier,
-  configurerSport,
-  getReglages,
-  historiqueFamille,
-  refuserMontee,
-  seanceProposee,
-  seancesCetteSemaine,
-  type ExerciceDuJour,
-  type Reglages,
-  type SeanceHistorique,
-} from "../../lib/db/sport";
+  annulerNuitEnCours,
+  getNuit,
+  getNuitEnCours,
+  heuresParDefaut,
+  jeMeLeve,
+  jeVaisDormir,
+  nuitsEntre,
+} from "../../lib/db/sommeil";
+import { getReglages, seancesCetteSemaine } from "../../lib/db/sport";
+import { semaineDe } from "../../lib/regles-taches";
 import {
-  dureeLisible,
-  ECHELLES,
-  FAMILLES,
-  LIBELLES_FAMILLE,
-  nbPaliers,
-  palier,
-  phraseRegularite,
-  QUALITES,
-  SEANCES_PAR_SEMAINE,
-  type Famille,
+  barresSemaine,
+  boutonSommeil,
+  coucherPour,
+  decalerHeure,
+  leverOublie,
+  type BarreNuit,
+  type Coucher,
 } from "../../lib/suivi-regles";
-import { radius, spacing, typography, useTheme } from "../../lib/theme";
+import { heureDecimale, radius, spacing, typography, useTheme } from "../../lib/theme";
+
+const TAILLE = 210;
+const HAUTEUR_SEMAINE = 120;
+const PAS_MIN = 15;
+
+/** Teintes du grand bouton : indigo le soir, bleu clair au lever. */
+const TEINTES = {
+  dormir: { clair: "#A5B4FC", fond: "#312E81", anneau1: "#1E1B4B", anneau2: "#15133A", texte: "#E0E7FF" },
+  lever: { clair: "#BAE6FD", fond: "#0C4A6E", anneau1: "#082F49", anneau2: "#06233A", texte: "#E0F2FE" },
+};
+const INDIGO = "#818CF8";
+
+type Demande = { type: "coucher" | "lever"; heure: string };
 
 /**
- * Suivi du sommeil et du sport. Rien ici ne change le tri des tâches,
- * les routines ou Jour difficile : les liens se lisent dans Progression.
+ * Suivi : le sommeil en un geste, la semaine en barres, et l'entrée vers
+ * Méditer et Sport. Rien ici ne change le tri des tâches ni les routines.
  */
 export default function Suivi() {
   const router = useRouter();
   const t = useTheme();
   const aujourdhui = useJourCourant();
 
-  const [sommeil, setSommeil] = useState<ResumeSommeil | null>(null);
-  const [reglages, setReglages] = useState<Reglages | null>(null);
-  const [exercices, setExercices] = useState<ExerciceDuJour[]>([]);
-  const [semaine, setSemaine] = useState(0);
-  const [ouverte, setOuverte] = useState<Famille | null>(null);
-  const [historique, setHistorique] = useState<SeanceHistorique[]>([]);
-
-  // Premier lancement du sport
-  const [barre, setBarre] = useState<boolean | null>(null);
-  const [depart, setDepart] = useState<Record<Famille, number | "inconnu">>({
-    pousser: "inconnu",
-    tirer: "inconnu",
-    jambes: "inconnu",
-    gainage: "inconnu",
-  });
+  const [enCours, setEnCours] = useState<Coucher | null>(null);
+  const [nuitNotee, setNuitNotee] = useState(false);
+  const [barres, setBarres] = useState<BarreNuit[]>([]);
+  const [demande, setDemande] = useState<Demande | null>(null);
+  const [seances, setSeances] = useState(0);
+  const [sportConfigure, setSportConfigure] = useState(true);
+  const [meditations, setMeditations] = useState(0);
 
   const charger = useCallback(async () => {
-    setSommeil(await resumeSommeil());
-    const r = await getReglages();
-    setReglages(r);
-    if (r.configure) {
-      setExercices(await seanceProposee());
-      setSemaine(await seancesCetteSemaine());
+    const c = await getNuitEnCours();
+    setEnCours(c);
+    setNuitNotee(!!(await getNuit(aujourdhui)));
+    const semaine = semaineDe(aujourdhui);
+    setBarres(barresSemaine(await nuitsEntre(semaine[0], semaine[6]), semaine));
+    // Lever oublié : on demande l'heure, pré-remplie avec l'habitude.
+    if (leverOublie(c, aujourdhui, heureDecimale())) {
+      const h = await heuresParDefaut(aujourdhui);
+      setDemande({ type: "lever", heure: h.lever });
     }
-  }, []);
+    setSeances(await seancesCetteSemaine());
+    setSportConfigure((await getReglages()).configure);
+    setMeditations(await meditationsRecentes(decalerJours(aujourdhui, -6)));
+  }, [aujourdhui]);
 
   useFocusEffect(
     useCallback(() => {
       charger();
-    }, [charger, aujourdhui]),
+    }, [charger]),
   );
 
-  const ouvrir = async (f: Famille) => {
-    if (ouverte === f) return setOuverte(null);
-    setHistorique(await historiqueFamille(f));
-    setOuverte(f);
+  const etat = boutonSommeil({ enCours, heure: heureDecimale(), nuitDuJourNotee: nuitNotee });
+  const teinte = TEINTES[etat];
+
+  const leve = async (p: Parameters<typeof jeMeLeve>[0]) => {
+    setDemande(null);
+    const date = await jeMeLeve(p);
+    router.push(`/matin?date=${date}`);
   };
 
-  const puce = (actif: boolean, libelle: string, onPress: () => void) => (
-    <TouchableOpacity
-      key={libelle}
-      onPress={onPress}
-      style={[
-        styles.puce,
-        { backgroundColor: actif ? t.accent : t.bgApp, borderColor: actif ? t.accent : t.border },
-      ]}
-      accessibilityRole="radio"
-      accessibilityState={{ selected: actif }}
-    >
-      <Texte style={[styles.puceTexte, { color: actif ? t.textOnAccent : t.textSecondary }]}>
-        {libelle}
-      </Texte>
-    </TouchableOpacity>
-  );
+  const onBouton = async () => {
+    if (etat === "dormir") {
+      setDemande(null);
+      await jeVaisDormir();
+      await charger();
+    } else if (enCours) {
+      await leve({});
+    } else {
+      // Pas de tap hier soir : l'heure de coucher d'abord.
+      const h = await heuresParDefaut(aujourdhui);
+      setDemande({ type: "coucher", heure: h.coucher });
+    }
+  };
 
-  const derniere = sommeil?.derniere;
-  const nuitDuJourNotee = derniere?.date === aujourdhui;
+  const validerDemande = async () => {
+    if (!demande) return;
+    if (demande.type === "coucher") await leve({ coucher: coucherPour(aujourdhui, demande.heure) });
+    else await leve({ lever: demande.heure });
+  };
 
   return (
     <ScrollView
@@ -109,196 +123,145 @@ export default function Suivi() {
     >
       <Texte style={[styles.titre, { color: t.textPrimary }]}>Suivi</Texte>
 
-      {/* ── Sommeil ── */}
-      <Texte style={[styles.section, { color: t.textPrimary }]}>🌙 Sommeil</Texte>
-      <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-        {derniere ? (
-          <>
-            <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
-              Dernière nuit : {dureeLisible(derniere.duree_min)} · {QUALITES[derniere.qualite]}
-            </Texte>
-            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
-              {derniere.coucher} → {derniere.lever} ·{" "}
-              {derniere.ecrans ? "avec écrans" : "sans écrans"}
-              {nuitDuJourNotee ? "" : ` · nuit du ${derniere.date.slice(8)}/${derniere.date.slice(5, 7)}`}
-            </Texte>
-            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
-              {sommeil.moyenne7j !== null
-                ? `Moyenne sur 7 jours : ${dureeLisible(sommeil.moyenne7j)} (${sommeil.nuits7j} nuit${sommeil.nuits7j > 1 ? "s" : ""})`
-                : "Aucune nuit notée ces 7 derniers jours."}
-            </Texte>
-            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
-              {phraseRegularite(sommeil.ecartCoucher)}
-            </Texte>
-          </>
-        ) : (
-          <Texte style={[styles.ligne, { color: t.textSecondary }]}>
-            Aucune nuit notée pour l&apos;instant.
-          </Texte>
-        )}
-        <TouchableOpacity
-          style={[styles.bouton, { backgroundColor: nuitDuJourNotee ? t.bgApp : t.accent }]}
-          onPress={() => router.push("/sommeil")}
-        >
-          <Texte
-            style={[styles.boutonTexte, { color: nuitDuJourNotee ? t.accentText : t.textOnAccent }]}
-          >
-            {nuitDuJourNotee ? "Corriger cette nuit" : "Noter cette nuit"}
-          </Texte>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Sport ── */}
-      <Texte style={[styles.section, { color: t.textPrimary }]}>💪 Sport</Texte>
-      {reglages && !reglages.configure ? (
-        <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-          <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
-            As-tu une barre de traction ?
-          </Texte>
-          <View style={styles.puces}>
-            {puce(barre === true, "Oui", () => setBarre(true))}
-            {puce(barre === false, "Non", () => setBarre(false))}
-          </View>
-
-          {barre !== null && (
-            <>
-              <Texte style={[styles.ligneForte, { color: t.textPrimary, marginTop: spacing.lg }]}>
-                Par où commencer ?
-              </Texte>
-              {FAMILLES.map((f) => (
-                <View key={f} style={{ marginTop: spacing.md }}>
-                  <Texte style={[styles.ligne, { color: t.textSecondary }]}>
-                    {LIBELLES_FAMILLE[f]}
-                  </Texte>
-                  <View style={styles.puces}>
-                    {puce(depart[f] === "inconnu", "Je ne sais pas", () =>
-                      setDepart({ ...depart, [f]: "inconnu" }),
-                    )}
-                    {ECHELLES[f].slice(0, nbPaliers(f, barre)).map((p, i) =>
-                      puce(depart[f] === i + 1, `${i + 1}. ${p.nom}`, () =>
-                        setDepart({ ...depart, [f]: i + 1 }),
-                      ),
-                    )}
-                  </View>
-                </View>
-              ))}
-              <TouchableOpacity
-                style={[styles.bouton, { backgroundColor: t.accent }]}
-                onPress={async () => {
-                  await configurerSport(barre, depart);
-                  await charger();
-                }}
-              >
-                <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>C&apos;est parti</Texte>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      ) : reglages?.configure ? (
-        <>
-          <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
-            <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
-              {semaine}/{SEANCES_PAR_SEMAINE} séances ces 7 derniers jours
-            </Texte>
-            <Texte style={[styles.ligne, { color: t.textMuted }]}>
-              Rythme indicatif, sans jour imposé.
-            </Texte>
+      {/* ── Le grand bouton ── */}
+      <View style={styles.centre}>
+        <View style={[styles.anneau, { width: TAILLE + 36, height: TAILLE + 36, backgroundColor: teinte.anneau2 }]}>
+          <View style={[styles.anneau, { width: TAILLE + 16, height: TAILLE + 16, backgroundColor: teinte.anneau1 }]}>
             <TouchableOpacity
-              style={[styles.bouton, { backgroundColor: t.accent }]}
-              onPress={() => router.push("/seance")}
+              onPress={onBouton}
+              activeOpacity={0.8}
+              style={[styles.bouton, { width: TAILLE, height: TAILLE, backgroundColor: teinte.fond }]}
+              accessibilityRole="button"
+              accessibilityLabel={etat === "dormir" ? "Je vais dormir" : "Je me lève"}
             >
-              <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>
-                Commencer une séance
+              {etat === "dormir" ? (
+                <Moon color={teinte.clair} size={52} strokeWidth={1.6} />
+              ) : (
+                <Sun color={teinte.clair} size={52} strokeWidth={1.6} />
+              )}
+              <Texte style={[styles.boutonTexte, { color: teinte.texte }]}>
+                {etat === "dormir" ? "Je vais dormir" : "Je me lève"}
               </Texte>
             </TouchableOpacity>
           </View>
+        </View>
+        <Texte style={[styles.phrase, { color: t.textSecondary }]}>
+          {enCours
+            ? `Couchée à ${enCours.heure}. Demain matin : Je me lève.`
+            : "Un tap en te couchant. Demain matin : Je me lève."}
+        </Texte>
+        {enCours && (
+          <TouchableOpacity
+            onPress={async () => {
+              await annulerNuitEnCours();
+              setDemande(null);
+              await charger();
+            }}
+            hitSlop={8}
+          >
+            <Texte style={[styles.lien, { color: t.textMuted }]}>Annuler (tapé par erreur)</Texte>
+          </TouchableOpacity>
+        )}
+      </View>
 
-          {exercices.map((ex) => (
-            <View key={ex.famille} style={[styles.carte, { backgroundColor: t.bgCard }]}>
-              <TouchableOpacity
-                onPress={() => ouvrir(ex.famille)}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: ouverte === ex.famille }}
+      {/* ── Oubli du soir ou du matin ── */}
+      {demande && (
+        <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+          <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>
+            {demande.type === "coucher"
+              ? "Tu t'es couchée vers quelle heure ?"
+              : "Tu t'es levée vers quelle heure ?"}
+          </Texte>
+          <View style={styles.demandeLigne}>
+            <PlusMoins
+              valeur={demande.heure}
+              libelle={demande.type === "coucher" ? "Heure de coucher" : "Heure de lever"}
+              onPas={(s) => setDemande((d) => d && { ...d, heure: decalerHeure(d.heure, s * PAS_MIN) })}
+              grand
+            />
+            <TouchableOpacity
+              onPress={validerDemande}
+              style={[styles.valider, { backgroundColor: t.accent }]}
+            >
+              <Texte style={[styles.validerTexte, { color: t.textOnAccent }]}>Valider</Texte>
+            </TouchableOpacity>
+          </View>
+          {demande.type === "coucher" && (
+            <TouchableOpacity onPress={() => setDemande(null)} hitSlop={8}>
+              <Texte style={[styles.lien, { color: t.textMuted, marginTop: spacing.sm }]}>Pas maintenant</Texte>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* ── Ma semaine ── */}
+      <Texte style={[styles.surtitre, { color: t.textMuted }]}>MA SEMAINE</Texte>
+      <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+        <View style={styles.semaine}>
+          {barres.map((b) => (
+            <View key={b.date} style={styles.colonne}>
+              <View style={{ height: HAUTEUR_SEMAINE, width: "100%", alignItems: "center" }}>
+                {"vide" in b ? (
+                  <View style={[styles.vide, { borderColor: t.border }]} />
+                ) : (
+                  <View
+                    accessibilityLabel={`Nuit du ${b.date}`}
+                    style={[
+                      styles.barre,
+                      {
+                        top: b.haut * HAUTEUR_SEMAINE,
+                        height: Math.max(4, (b.bas - b.haut) * HAUTEUR_SEMAINE),
+                        backgroundColor: INDIGO,
+                        opacity: b.pale ? 0.4 : 1,
+                      },
+                    ]}
+                  />
+                )}
+              </View>
+              <Texte
+                style={[
+                  styles.jour,
+                  { color: b.date === aujourdhui ? t.accent : t.textMuted },
+                ]}
               >
-                <Texte style={[styles.famille, { color: t.accentText }]}>
-                  {LIBELLES_FAMILLE[ex.famille]} · palier {ex.numero}/{ex.max}
-                </Texte>
-                <Texte style={[styles.ligneForte, { color: t.textPrimary }]}>
-                  {ex.palier.nom} {ouverte === ex.famille ? "−" : "+"}
-                </Texte>
-              </TouchableOpacity>
-
-              {ex.montee && (
-                <View style={[styles.montee, { backgroundColor: t.bgHighlight }]}>
-                  <Texte style={[styles.ligne, { color: t.textPrimary }]}>
-                    Objectif atteint deux fois de suite. Passer à «{" "}
-                    {palier(ex.famille, ex.numero + 1).nom} » ?
-                  </Texte>
-                  <View style={styles.puces}>
-                    {puce(true, "Monter", async () => {
-                      await changerPalier(ex.famille, ex.numero + 1, "propose_accepte");
-                      await charger();
-                    })}
-                    {puce(false, "Pas encore", async () => {
-                      await refuserMontee(ex.famille);
-                      await charger();
-                    })}
-                  </View>
-                </View>
-              )}
-
-              {ouverte === ex.famille && (
-                <View style={{ marginTop: spacing.md }}>
-                  {historique.length === 0 ? (
-                    <Texte style={[styles.ligne, { color: t.textMuted }]}>
-                      Pas encore de séance.
-                    </Texte>
-                  ) : (
-                    (() => {
-                      const max = Math.max(...historique.map((h) => h.meilleure));
-                      return historique.map((h, i) => (
-                        <View key={i} style={styles.histo}>
-                          <Texte style={[styles.histoDate, { color: t.textMuted }]}>
-                            {h.date.slice(8)}/{h.date.slice(5, 7)}
-                          </Texte>
-                          <View style={[styles.barreFond, { backgroundColor: t.bgApp }]}>
-                            <View
-                              style={{
-                                width: `${(h.meilleure / max) * 100}%`,
-                                height: "100%",
-                                borderRadius: 4,
-                                backgroundColor: h.palier === ex.numero ? t.accent : t.border,
-                              }}
-                            />
-                          </View>
-                          <Texte style={[styles.histoTexte, { color: t.textSecondary }]}>
-                            {h.series.join(" · ")} {h.unite === "s" ? "s" : ""}
-                            {h.palier !== ex.numero ? ` (p. ${h.palier})` : ""}
-                          </Texte>
-                        </View>
-                      ));
-                    })()
-                  )}
-                  {ex.numero > 1 && (
-                    <TouchableOpacity
-                      onPress={async () => {
-                        await changerPalier(ex.famille, ex.numero - 1, "manuel");
-                        await charger();
-                      }}
-                      hitSlop={8}
-                      style={{ marginTop: spacing.sm }}
-                    >
-                      <Texte style={[styles.lien, { color: t.accentText }]}>
-                        Redescendre à « {palier(ex.famille, ex.numero - 1).nom} »
-                      </Texte>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
+                {JOURS_LONGS[new Date(b.date + "T00:00:00Z").getUTCDay()].slice(0, 1).toUpperCase()}
+              </Texte>
             </View>
           ))}
-        </>
-      ) : null}
+        </View>
+        <View style={styles.legende}>
+          <Texte style={[styles.legendeTexte, { color: t.textMuted }]}>21 h en haut · 11 h en bas</Texte>
+          <TouchableOpacity onPress={() => router.push("/sommeil")} hitSlop={8}>
+            <Texte style={[styles.lien, { color: t.accentText }]}>Noter une nuit</Texte>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── Méditer, Sport ── */}
+      <View style={styles.cartes}>
+        <TouchableOpacity
+          onPress={() => router.push("/mediter")}
+          style={[styles.petiteCarte, { backgroundColor: t.bgCard, borderColor: t.border }]}
+        >
+          <Flower2 color="#A78BFA" size={26} strokeWidth={1.8} />
+          <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>Méditer</Texte>
+          <Texte style={[styles.sous, { color: t.textMuted }]}>
+            {meditations > 0 ? `${meditations} cette semaine` : "1 min suffit"}
+          </Texte>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.push("/skills")}
+          style={[styles.petiteCarte, { backgroundColor: t.bgCard, borderColor: t.border }]}
+        >
+          <Dumbbell color={t.accent} size={26} strokeWidth={1.8} />
+          <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>Sport</Texte>
+          <Texte style={[styles.sous, { color: t.textMuted }]}>
+            {sportConfigure
+              ? `${seances} séance${seances > 1 ? "s" : ""} en 7 jours`
+              : "Où en es-tu ?"}
+          </Texte>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -306,35 +269,40 @@ export default function Suivi() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
   titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: spacing.lg },
-  section: {
-    fontSize: typography.h2,
-    fontWeight: "600",
-    marginTop: spacing.md,
+  centre: { alignItems: "center" },
+  anneau: { borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  bouton: { borderRadius: 999, alignItems: "center", justifyContent: "center", gap: spacing.sm },
+  boutonTexte: { fontSize: typography.h2, fontWeight: "600" },
+  phrase: { fontSize: typography.small, marginTop: spacing.md, textAlign: "center" },
+  lien: { fontSize: typography.small, fontWeight: "600", marginTop: spacing.xs },
+
+  surtitre: {
+    fontSize: typography.tiny,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
-  carte: { borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md },
-  ligneForte: { fontSize: typography.body, fontWeight: "600" },
-  ligne: { fontSize: typography.small, lineHeight: 19, marginTop: 4 },
-  famille: { fontSize: typography.tiny, fontWeight: "700", textTransform: "uppercase" },
-  bouton: {
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
+  carte: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, marginTop: spacing.md },
+  carteTitre: { fontSize: typography.body, fontWeight: "600" },
+  sous: { fontSize: typography.small },
+  demandeLigne: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginTop: spacing.md,
   },
-  boutonTexte: { fontSize: typography.body, fontWeight: "600" },
-  puces: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
-  puce: {
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-  },
-  puceTexte: { fontSize: typography.small, fontWeight: "600" },
-  montee: { borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
-  histo: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: 6 },
-  histoDate: { width: 40, fontSize: typography.tiny },
-  barreFond: { width: 70, height: 8, borderRadius: 4, overflow: "hidden" },
-  histoTexte: { flex: 1, fontSize: typography.small },
-  lien: { fontSize: typography.small, fontWeight: "600" },
+  valider: { borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+  validerTexte: { fontSize: typography.body, fontWeight: "700" },
+
+  semaine: { flexDirection: "row", gap: 8 },
+  colonne: { flex: 1, alignItems: "center" },
+  barre: { position: "absolute", width: 14, borderRadius: 7 },
+  vide: { width: 14, height: "100%", borderRadius: 7, borderWidth: 1, borderStyle: "dashed" },
+  jour: { fontSize: typography.tiny, fontWeight: "700", marginTop: 6 },
+  legende: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
+  legendeTexte: { fontSize: typography.tiny },
+
+  cartes: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xl },
+  petiteCarte: { flex: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 6 },
 });

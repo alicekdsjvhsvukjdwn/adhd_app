@@ -260,8 +260,9 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   meta: {
     table: "Valeurs diverses, clé → valeur.",
     colonnes: {
-      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite'",
-      valeur: "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1",
+      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour)",
+      valeur:
+        "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1 ; nuit_en_cours : jour et heure locaux du coucher, 'AAAA-MM-JJ HH:MM' ; nuit_reponses : JSON {qualite?, ecrans?}",
     },
   },
   sommeil: {
@@ -275,6 +276,8 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       ecrans: `écrans avant de dormir : ${BOOL}`,
       saisi_le: ISO,
       maj_le: ISO,
+      reponses:
+        "1 = qualité et écrans donnés ; 0 = nuit écrite au « Je me lève » sans les réponses du matin : qualite (2) et ecrans (0) sont alors des valeurs par défaut, à ignorer (filtrer reponses = 1)",
     },
   },
   sport_reglages: {
@@ -286,7 +289,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
     },
   },
   sport_paliers: {
-    table: "Palier actuel de chaque famille d'exercices.",
+    table: "Archive (plus écrite depuis la version 23, voir skills_etat) : palier de chaque famille d'exercices.",
     colonnes: {
       famille: "'pousser' | 'tirer' | 'jambes' | 'gainage'",
       palier: "1 = le plus facile",
@@ -308,18 +311,18 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
     colonnes: {
       id: "identifiant",
       seance_id: "séance (table seances)",
-      famille: "'pousser' | 'tirer' | 'jambes' | 'gainage'",
-      palier: "palier au moment de la série",
+      famille: "id du skill ('pompe', 'traction', 'dips', 'pistol', 'gainage', 'lsit', 'poirier', 'archer', 'muscleup', 'frontlever', 'planche') ; avant la version 23 : 'pousser' | 'tirer' | 'jambes' | 'gainage'",
+      palier: "étape du skill au moment de la série (1 = la première) ; avant la version 23 : palier de la famille",
       exercice: "nom de l'exercice au moment de la série",
-      numero: "1 à 3",
+      numero: "1 à 3 (1 pour une série d'entretien d'un skill maîtrisé)",
       unite: "'reps' (répétitions) | 's' (secondes)",
-      objectif_bas: "objectif bas, même unité",
+      objectif_bas: "objectif bas, même unité (= objectif_haut depuis la version 23 : objectif de l'étape)",
       objectif_haut: "objectif haut, même unité",
       realise: "réellement fait, même unité (0 possible seulement si la séance n'a pas été terminée)",
     },
   },
   paliers_historique: {
-    table: "Changements de palier.",
+    table: "Archive (plus écrite depuis la version 23, voir skills_historique) : changements de palier.",
     colonnes: {
       id: "identifiant",
       date: JOUR,
@@ -328,6 +331,41 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       de: "palier d'avant (vide au départ)",
       vers: "palier proposé ou choisi",
       origine: "'depart' | 'propose_accepte' | 'propose_refuse' (le palier ne change pas) | 'manuel'",
+    },
+  },
+  skills_etat: {
+    table: "Sport : étape en cours de chaque skill (sans ligne : étape 1, inactif).",
+    colonnes: {
+      skill: "id du skill (voir series.famille)",
+      etape: "étape en cours, 1 = la première ; nombre d'étapes + 1 = skill maîtrisé",
+      actif: `travaillé en ce moment (3 ou 4 à la fois) : ${BOOL}`,
+      maj_le: ISO,
+    },
+  },
+  skills_historique: {
+    table: "Sport : changements d'étape des skills.",
+    colonnes: {
+      id: "identifiant",
+      date: JOUR,
+      horodatage: ISO,
+      skill: "id du skill",
+      de: "étape d'avant (vide au départ)",
+      vers: "étape proposée ou choisie",
+      origine:
+        "'depart' (premier lancement ou reprise des anciens paliers) | 'valide' (proposée et acceptée) | 'refuse' (l'étape ne change pas) | 'manuel' (redescendre) | 'maitrise' (dernière étape validée, en plus de 'valide')",
+      points: "points donnés par ce changement (20 par étape, 50 pour la maîtrise, jamais deux fois)",
+    },
+  },
+  meditations: {
+    table: "Méditations faites (terminées, ou arrêtées après au moins 1 min).",
+    colonnes: {
+      id: "identifiant",
+      date: JOUR,
+      seance: "'pause' | 'carre' (respiration carrée) | 'corps' (scan du corps) | 'nuit' (avant de dormir)",
+      duree_s: "durée réelle, secondes",
+      terminee: `allée jusqu'au bout : ${BOOL}`,
+      points_donnes: "5 pour la première du jour, sinon 0",
+      horodatage: ISO,
     },
   },
 };

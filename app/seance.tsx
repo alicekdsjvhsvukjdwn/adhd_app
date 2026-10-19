@@ -16,17 +16,15 @@ import {
   terminerSeance,
   type ExerciceDuJour,
 } from "../lib/db/sport";
-import {
-  LIBELLES_FAMILLE,
-  POINTS_SEANCE,
-  SERIES_PAR_EXERCICE,
-} from "../lib/suivi-regles";
+import { critere } from "../lib/skills";
+import { POINTS_SEANCE } from "../lib/suivi-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
-const cle = (ex: ExerciceDuJour, n: number) => `${ex.famille}-${n}`;
+const cle = (ex: ExerciceDuJour, n: number) => `${ex.skill.id}-${n}`;
 
 /**
- * Séance guidée : un exercice par famille, 3 séries. On saisit ce qu'on a
+ * Séance : l'étape en cours de chaque skill actif, plus une série
+ * d'entretien pour au plus 2 skills maîtrisés. On saisit ce qu'on a
  * vraiment fait avec +/−. Chaque série est enregistrée au relâchement :
  * une séance faite en partie compte (et garde ce qui est fait).
  */
@@ -97,28 +95,35 @@ export default function Seance() {
         Note ce que tu as vraiment fait. Même une partie compte : +{POINTS_SEANCE} pts.
       </Texte>
 
+      {exercices.length === 0 && (
+        <Texte style={[styles.aide, { color: t.textSecondary }]}>
+          Aucun skill en cours : choisis-en 3 ou 4 dans Mes skills (« Travailler ce skill »).
+        </Texte>
+      )}
+
       {exercices.map((ex) => {
-        const u = ex.unite === "s" ? "s" : "rép.";
+        const u = ex.etape.unite === "s" ? "s" : "rép.";
         return (
-          <View key={ex.famille} style={[styles.carte, { backgroundColor: t.bgCard }]}>
+          <View key={ex.skill.id} style={[styles.carte, { backgroundColor: t.bgCard }]}>
             <Texte style={[styles.famille, { color: t.accentText }]}>
-              {LIBELLES_FAMILLE[ex.famille]} · palier {ex.numero}/{ex.max}
+              {ex.skill.nom} ·{" "}
+              {ex.entretien ? "entretien" : `étape ${ex.numero}/${ex.skill.etapes.length}`}
             </Texte>
-            <Texte style={[styles.exercice, { color: t.textPrimary }]}>{ex.palier.nom}</Texte>
+            <Texte style={[styles.exercice, { color: t.textPrimary }]}>{ex.etape.nom}</Texte>
             <Texte style={[styles.objectif, { color: t.textSecondary }]}>
-              Objectif : {SERIES_PAR_EXERCICE} × {ex.palier.bas}–{ex.palier.haut} {u}
+              Objectif : {critere(ex.etape)}
             </Texte>
-            {Array.from({ length: SERIES_PAR_EXERCICE }, (_, i) => i + 1).map((n) => {
+            {Array.from({ length: ex.etape.series }, (_, i) => i + 1).map((n) => {
               const v = realise[cle(ex, n)] ?? 0;
               return (
                 <View key={n} style={styles.serie}>
                   <Texte style={[styles.serieTexte, { color: t.textSecondary }]}>
                     Série {n}
-                    {v >= ex.palier.haut ? " ✓" : ""}
+                    {v >= ex.etape.objectif ? " ✓" : ""}
                   </Texte>
                   <PlusMoins
                     valeur={`${v} ${u}`}
-                    libelle={`${ex.palier.nom}, série ${n}`}
+                    libelle={`${ex.etape.nom}, série ${n}`}
                     onPas={(s) =>
                       setRealise((r) => ({
                         ...r,

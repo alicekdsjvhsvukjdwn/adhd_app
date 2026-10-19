@@ -357,7 +357,8 @@ export async function liensSommeilSport(): Promise<LiensSommeilSport> {
   const db = await getDatabase();
   const aujourdhui = getAujourdhui();
   const nuits = await db.getAllAsync<{ date: string; qualite: number; ecrans: number }>(
-    "SELECT date, qualite, ecrans FROM sommeil WHERE date <= ? ORDER BY date",
+    // Nuits sans réponses du matin (reponses = 0) : qualité et écrans par défaut, ignorés.
+    "SELECT date, qualite, ecrans FROM sommeil WHERE date <= ? AND reponses = 1 ORDER BY date",
     aujourdhui,
   );
 
