@@ -352,7 +352,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       de: "étape d'avant (vide au départ)",
       vers: "étape proposée ou choisie",
       origine:
-        "'depart' (premier lancement ou reprise des anciens paliers) | 'valide' (proposée et acceptée) | 'refuse' (l'étape ne change pas) | 'manuel' (redescendre) | 'maitrise' (dernière étape validée, en plus de 'valide')",
+        "'depart' (premier lancement, reprise des anciens paliers ou mise à jour du niveau) | 'valide' (proposée et acceptée) | 'refuse' (l'étape ne change pas) | 'manuel' (étape validée à la main, vers = de + 1 ; ou redescendre, vers = de - 1) | 'maitrise' (dernière étape validée, en plus de 'valide')",
       points: "points donnés par ce changement (20 par étape, 50 pour la maîtrise, jamais deux fois)",
     },
   },
@@ -379,6 +379,19 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       terminee: `allée jusqu'au bout : ${BOOL}`,
       points_donnes: "10 pour la première séance du jour, skills ou guidée ; sinon 0",
       horodatage: ISO,
+      origine: "'guidee' (faite dans le lecteur de l'appli) | 'notee' (faite ailleurs, notée après coup ; la seance vaut alors 'note')",
+      zones: "séance notée : zones travaillées ('haut', 'bas', 'abdos', 'mobilite', 'complet'), séparées par des virgules",
+      source: "séance notée : 'youtube' | 'salle' | 'dehors' | 'autre' ; vide sinon",
+      lien: "séance notée : lien de la vidéo ; vide sinon",
+      ressenti: "séance notée : 'facile' | 'ok' | 'dur' ; vide sinon",
+      note: "séance notée : note libre ; vide sinon",
+    },
+  },
+  sport_lien: {
+    table: "Une seule ligne : la routine cochée quand je fais du sport (sans ligne : aucune).",
+    colonnes: {
+      id: "toujours 1",
+      routine_id: "identifiant de la routine (table items)",
     },
   },
   seance_perso: {

@@ -113,3 +113,49 @@ export function faiteLe(derniere: string | null, aujourdhui: string, hier: strin
   if (derniere === hier) return "Faite hier";
   return null;
 }
+
+// ─── Séances notées après coup (faites ailleurs) ────────────────────────
+
+export const DUREES_NOTEES = [5, 10, 15, 20, 30, 45, 60] as const;
+
+export type Quand = "maintenant" | "plus_tot" | "hier";
+
+export const QUAND: { cle: Quand; nom: string }[] = [
+  { cle: "maintenant", nom: "Maintenant" },
+  { cle: "plus_tot", nom: "Plus tôt aujourd'hui" },
+  { cle: "hier", nom: "Hier" },
+];
+
+/** « Maintenant » et « Plus tôt aujourd'hui » : aujourd'hui ; « Hier » : la veille. */
+export const dateDeQuand = (quand: Quand, aujourdhui: string, hier: string) =>
+  quand === "hier" ? hier : aujourdhui;
+
+export const SOURCES = [
+  { cle: "youtube", nom: "YouTube" },
+  { cle: "salle", nom: "Salle" },
+  { cle: "dehors", nom: "Dehors" },
+  { cle: "autre", nom: "Autre" },
+] as const;
+
+export const RESSENTIS = [
+  { cle: "facile", nom: "Facile" },
+  { cle: "ok", nom: "OK" },
+  { cle: "dur", nom: "Dur" },
+] as const;
+
+/** Une séance notée, telle qu'on la saisit. */
+export type SeanceNotee = {
+  zones: Zone[];
+  duree_min: number;
+  source: string;
+  lien: string;
+  ressenti: string;
+  note: string;
+};
+
+/** Texte d'une pastille « Récentes » : « YouTube · 20 min · Haut du corps ». */
+export function etiquetteNotee(s: Pick<SeanceNotee, "zones" | "duree_min" | "source">): string {
+  const source = SOURCES.find((x) => x.cle === s.source)?.nom;
+  const zones = s.zones.map((z) => zone(z).nom).join(" + ");
+  return [source, `${s.duree_min} min`, zones].filter(Boolean).join(" · ");
+}

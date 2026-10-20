@@ -3,6 +3,7 @@ import { Check, Star } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { FigureSkill, GRIS, VERT } from "../components/FigureSkill";
+import { FeuilleAcquis, FeuilleEssai } from "../components/FeuillesSport";
 import { Texte } from "../components/Texte";
 import {
   basculerActif,
@@ -37,6 +38,8 @@ export default function SkillFiche() {
   const [fiche, setFiche] = useState<FicheSkill | null>(null);
   const [st, setSt] = useState<Statut>("en_cours");
   const [manque, setManque] = useState<{ prerequis: string[]; barre: boolean }>({ prerequis: [], barre: false });
+  const [essai, setEssai] = useState(false);
+  const [acquis, setAcquis] = useState(false);
 
   const charger = useCallback(async () => {
     const s = skillDe(id);
@@ -136,6 +139,24 @@ export default function SkillFiche() {
             </View>
           )}
 
+          {/* Noter ce qui a été fait ailleurs (YouTube, salle…) : sans passer par le lecteur */}
+          <View style={styles.boutons}>
+            <TouchableOpacity
+              style={[styles.petitBouton, { backgroundColor: t.accent }]}
+              onPress={() => setEssai(true)}
+              accessibilityRole="button"
+            >
+              <Texte style={[styles.petitBoutonTexte, { color: t.textOnAccent }]}>Noter un essai</Texte>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.petitBouton, { borderColor: VERT, borderWidth: 1 }]}
+              onPress={() => setAcquis(true)}
+              accessibilityRole="button"
+            >
+              <Texte style={[styles.petitBoutonTexte, { color: VERT }]}>✓ C&apos;est acquis</Texte>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.liens}>
             <TouchableOpacity
               onPress={async () => {
@@ -157,7 +178,7 @@ export default function SkillFiche() {
                 }}
                 hitSlop={8}
               >
-                <Texte style={[styles.lien, { color: t.textMuted }]}>Redescendre d&apos;une étape</Texte>
+                <Texte style={[styles.lien, { color: t.textMuted }]}>Revenir à l&apos;étape précédente</Texte>
               </TouchableOpacity>
             )}
           </View>
@@ -188,6 +209,9 @@ export default function SkillFiche() {
           </View>
         </View>
       )}
+
+      <FeuilleEssai skillId={essai ? s.id : null} onFermer={() => setEssai(false)} onFini={charger} />
+      <FeuilleAcquis skillId={acquis ? s.id : null} onFermer={() => setAcquis(false)} onFini={charger} />
 
       {/* L'échelle des étapes */}
       <Texte style={[styles.surtitre, { color: t.textMuted }]}>LES ÉTAPES</Texte>

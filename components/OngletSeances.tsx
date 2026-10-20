@@ -1,9 +1,19 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { ArrowUp, Play, X } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Linking, StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 import { getAujourdhui } from "../lib/db/completions";
-import { derniereFois, enregistrerSeancePerso, getSeancePerso, hier } from "../lib/db/seances-guidees";
+import {
+  derniereFois,
+  enregistrerSeanceGuidee,
+  enregistrerSeanceNotee,
+  enregistrerSeancePerso,
+  getSeancePerso,
+  hier,
+  seancesRecentes,
+  type RecenteNotee,
+} from "../lib/db/seances-guidees";
+import { FeuilleSeanceNotee } from "./FeuillesSport";
 import { exercice, EXERCICES } from "../lib/exercices";
 import {
   couleurSeance,
@@ -45,13 +55,30 @@ export function OngletSeances() {
   const [brouillon, setBrouillon] = useState<Seance | null>(null);
   const [filtreZone, setFiltreZone] = useState<Zone | null>(null);
   const [filtreDuree, setFiltreDuree] = useState<number | null>(null);
+  const [notee, setNotee] = useState(false);
+  const [recentes, setRecentes] = useState<RecenteNotee[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      getSeancePerso().then(setPerso);
-      derniereFois(ID_REVEIL).then(setDerniere);
-    }, []),
-  );
+  const charger = useCallback(() => {
+    getSeancePerso().then(setPerso);
+    derniereFois(ID_REVEIL).then(setDerniere);
+    seancesRecentes().then(setRecentes);
+  }, []);
+  useFocusEffect(charger);
+
+  /** Une séance récente refaite en 1 tap (aujourd'hui, sans note). */
+  const refaire = async (r: RecenteNotee) => {
+    const points = await enregistrerSeanceNotee(r);
+    charger();
+    Alert.alert("Séance notée", points > 0 ? `+${points} pts` : "Les points du sport sont déjà pris aujourd'hui.");
+  };
+
+  /** Ma routine du matin notée faite, sans lancer le lecteur. */
+  const noterMatin = async () => {
+    if (!perso) return;
+    const points = await enregistrerSeanceGuidee(ID_REVEIL, dureeSeance(perso), perso.exercices, true);
+    charger();
+    Alert.alert("Routine du matin faite", points > 0 ? `+${points} pts` : undefined);
+  };
 
   const lancer = (id: string) => router.push(`/seance-guidee?id=${id}`);
 
@@ -86,6 +113,23 @@ export function OngletSeances() {
 
   return (
     <View>
+      <TouchableOpacity
+        onPress={() => setNotee(true)}
+        style={[styles.noter, { backgroundColor: t.accent }]}
+        accessibilityRole="button"
+      >
+        <Texte style={[styles.noterTexte, { color: t.textOnAccent }]}>+ J&apos;ai fait une séance</Texte>
+      </TouchableOpacity>
+      {recentes.length > 0 && (
+        <View>
+          <Texte style={[styles.surtitre, { color: t.textMuted }]}>RÉCENTES · 1 TAP POUR REFAIRE</Texte>
+          <View style={styles.puces}>
+            {recentes.map((r) => puce(false, r.etiquette, () => refaire(r)))}
+          </View>
+        </View>
+      )}
+      <FeuilleSeanceNotee visible={notee} onFermer={() => setNotee(false)} onEnregistre={charger} />
+
       <Texte style={[styles.surtitre, { color: t.textMuted }]}>MA ROUTINE DU MATIN</Texte>
       {perso && !b && (
         <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent }]}>
@@ -113,6 +157,11 @@ export function OngletSeances() {
               {!!perso.lien && (
                 <TouchableOpacity onPress={() => Linking.openURL(perso.lien!).catch(() => {})} hitSlop={8}>
                   <Texte style={[styles.lien, { color: t.accentText }]}>voir la vidéo</Texte>
+                </TouchableOpacity>
+              )}
+              {derniere !== getAujourdhui() && perso.exercices.length > 0 && (
+                <TouchableOpacity onPress={noterMatin} hitSlop={8} accessibilityLabel="Noter la routine du matin comme faite">
+                  <Texte style={[styles.lien, { color: t.accentText }]}>✓ Faite</Texte>
                 </TouchableOpacity>
               )}
               <TouchableOpacity onPress={() => setBrouillon(perso)} hitSlop={8}>
@@ -218,6 +267,8 @@ export function OngletSeances() {
 }
 
 const styles = StyleSheet.create({
+  noter: { borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.lg },
+  noterTexte: { fontSize: typography.body, fontWeight: "700" },
   surtitre: {
     fontSize: typography.tiny,
     fontWeight: "700",

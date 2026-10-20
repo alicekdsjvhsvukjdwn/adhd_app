@@ -157,9 +157,11 @@ export async function completer(
   version?: string,
   /** Points de cette complétion, si ce n'est pas le barème du statut (routines à étapes). */
   points?: number,
+  /** Jour concerné, si ce n'est pas aujourd'hui (séance notée pour hier). */
+  jour?: string,
 ) {
   const db = await getDatabase();
-  const date = getAujourdhui();
+  const date = jour ?? getAujourdhui();
   const now = new Date();
   const heure = now.getHours();
 

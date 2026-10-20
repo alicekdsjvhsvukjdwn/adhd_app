@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { JOURS_LONGS } from "../../components/CalendrierMois";
+import { FeuilleSeanceNotee } from "../../components/FeuillesSport";
 import { SelecteurHeure } from "../../components/SelecteurHeure";
 import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
@@ -76,6 +77,7 @@ export default function Suivi() {
   const [seances, setSeances] = useState(0);
   const [sportConfigure, setSportConfigure] = useState(true);
   const [meditations, setMeditations] = useState(0);
+  const [seanceNotee, setSeanceNotee] = useState(false);
 
   const charger = useCallback(async () => {
     setEnCours(await getNuitEnCours());
@@ -338,8 +340,18 @@ export default function Suivi() {
               ? `${seances} séance${seances > 1 ? "s" : ""} en 7 jours`
               : "Où en es-tu ?"}
           </Texte>
+          <TouchableOpacity
+            onPress={() => setSeanceNotee(true)}
+            style={[styles.noterSeance, { backgroundColor: t.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="J'ai fait une séance"
+            hitSlop={4}
+          >
+            <Texte style={[styles.noterSeanceTexte, { color: t.textOnAccent }]}>+ J&apos;ai fait une séance</Texte>
+          </TouchableOpacity>
         </TouchableOpacity>
       </View>
+      <FeuilleSeanceNotee visible={seanceNotee} onFermer={() => setSeanceNotee(false)} onEnregistre={charger} />
     </ScrollView>
   );
 }
@@ -364,6 +376,8 @@ const styles = StyleSheet.create({
   carte: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, marginTop: spacing.md },
   carteTitre: { fontSize: typography.body, fontWeight: "600" },
   sous: { fontSize: typography.small },
+  noterSeance: { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6, alignSelf: "flex-start", marginTop: spacing.sm },
+  noterSeanceTexte: { fontSize: typography.tiny, fontWeight: "700" },
   liens: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
   discret: {
     flexDirection: "row",

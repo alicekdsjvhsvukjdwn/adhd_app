@@ -1,9 +1,10 @@
 import { decalerJours } from "../dates";
-import { ID_REVEIL, REVEIL_DEFAUT, type Seance } from "../seances";
+import { etiquetteNotee, ID_REVEIL, REVEIL_DEFAUT, type Seance, type SeanceNotee, type Zone } from "../seances";
 import { POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { completer, getAujourdhui, getRoutinesAvecStatutDuJour } from "./completions";
 import { getEtapes } from "./etapes";
+import { cocherRoutineLiee } from "./routine-liee";
 import { sportPayeLe } from "./sport";
 import { addPoints } from "./stats";
 
@@ -72,6 +73,7 @@ export async function enregistrerSeanceGuidee(
     new Date().toISOString(),
   );
   if (points > 0) await addPoints(points);
+  await cocherRoutineLiee(date);
 
   if (seance === ID_REVEIL && terminee) {
     const r = (await getRoutinesAvecStatutDuJour()).find(
@@ -83,4 +85,64 @@ export async function enregistrerSeanceGuidee(
     }
   }
   return points;
+}
+
+/**
+ * Note une séance faite ailleurs (YouTube, salle, dehors…) pour le jour
+ * `date`. Mêmes points que les autres séances : +10 une fois par jour, sans
+ * cumul. Coche la routine liée au sport pour ce jour.
+ */
+export async function enregistrerSeanceNotee(s: SeanceNotee, date: string = getAujourdhui()): Promise<number> {
+  const db = await getDatabase();
+  const points = (await sportPayeLe(date)) ? 0 : POINTS_SEANCE;
+  await db.runAsync(
+    `INSERT INTO seances_guidees
+       (date, seance, duree_s, exercices, terminee, points_donnes, horodatage, origine, zones, source, lien, ressenti, note)
+     VALUES (?, 'note', ?, '', 1, ?, ?, 'notee', ?, ?, ?, ?, ?)`,
+    date,
+    s.duree_min * 60,
+    points,
+    new Date().toISOString(),
+    s.zones.join(","),
+    s.source,
+    s.lien.trim(),
+    s.ressenti,
+    s.note.trim(),
+  );
+  if (points > 0) await addPoints(points);
+  await cocherRoutineLiee(date);
+  return points;
+}
+
+export type RecenteNotee = SeanceNotee & { etiquette: string };
+
+/** Séances notées récemment, une par vidéo (lien) ou par combinaison zones / durée / source, la plus récente d'abord. */
+export async function seancesRecentes(limite = 6): Promise<RecenteNotee[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    zones: string;
+    duree_s: number;
+    source: string;
+    lien: string;
+    ressenti: string;
+  }>(
+    `SELECT zones, duree_s, source, lien, ressenti FROM seances_guidees
+     WHERE origine = 'notee' AND id IN (
+       SELECT MAX(id) FROM seances_guidees WHERE origine = 'notee'
+       GROUP BY CASE WHEN lien <> '' THEN lien ELSE zones || '|' || duree_s || '|' || source END
+     )
+     ORDER BY id DESC LIMIT ?`,
+    limite,
+  );
+  return rows.map((r) => {
+    const s: SeanceNotee = {
+      zones: (r.zones ? r.zones.split(",") : []) as Zone[],
+      duree_min: Math.round(r.duree_s / 60),
+      source: r.source,
+      lien: r.lien,
+      ressenti: r.ressenti,
+      note: "",
+    };
+    return { ...s, etiquette: etiquetteNotee(s) };
+  });
 }

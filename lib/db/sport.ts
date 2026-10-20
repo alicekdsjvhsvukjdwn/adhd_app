@@ -16,6 +16,7 @@ import {
 import { POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
+import { cocherRoutineLiee } from "./routine-liee";
 import { addPoints } from "./stats";
 
 /**
@@ -44,13 +45,24 @@ export async function getEtats(): Promise<Record<string, EtatSkill>> {
 
 type Origine = "depart" | "valide" | "refuse" | "manuel" | "maitrise";
 
-async function journaliser(id: string, de: number | null, vers: number, origine: Origine, points = 0) {
+/** Horodatage d'un jour passé : midi, pour se ranger avant les séances d'aujourd'hui. */
+const horodatageDe = (date: string) =>
+  date === getAujourdhui() ? new Date().toISOString() : `${date}T12:00:00.000Z`;
+
+async function journaliser(
+  id: string,
+  de: number | null,
+  vers: number,
+  origine: Origine,
+  points = 0,
+  date: string = getAujourdhui(),
+) {
   const db = await getDatabase();
   await db.runAsync(
     `INSERT INTO skills_historique (date, horodatage, skill, de, vers, origine, points)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    getAujourdhui(),
-    new Date().toISOString(),
+    date,
+    horodatageDe(date),
     id,
     de,
     vers,
@@ -149,7 +161,7 @@ export async function ficheSkill(id: string): Promise<FicheSkill> {
     id,
   );
   const validees: Record<number, string> = {};
-  for (const h of hist) if (h.origine === "valide" && h.de !== null) validees[h.de] = h.date;
+  for (const h of hist) if (estValidation(h) && h.de !== null) validees[h.de] = h.date;
   const seances = maitrise(s, etat) ? [] : await seancesA(id, etat.etape);
   const refus = hist.filter((h) => h.origine === "refuse" && h.de === etat.etape).pop();
   return {
@@ -169,32 +181,115 @@ export async function ficheSkill(id: string): Promise<FicheSkill> {
 }
 
 /**
- * Valide l'étape en cours (proposée et acceptée). +20 la première fois
- * pour cette étape, +50 la première fois que le skill est maîtrisé.
+ * Une ligne de l'historique qui valide une étape : proposée et acceptée
+ * ('valide'), ou validée à la main ('manuel' qui monte ; un 'manuel' qui
+ * descend est un retour en arrière).
  */
-export async function validerEtape(id: string): Promise<{ points: number; maitrise: boolean }> {
+export const estValidation = (h: { origine: string; de: number | null; vers: number }) =>
+  h.origine === "valide" || (h.origine === "manuel" && h.de !== null && h.vers > h.de);
+
+/**
+ * Valide l'étape en cours. +20 la première fois pour cette étape, +50 la
+ * première fois que le skill est maîtrisé, jamais deux fois (même après un
+ * retour en arrière). `origine` : 'valide' (proposée par l'appli) ou
+ * 'manuel' (« C'est acquis ») ; `date` : le jour de la validation.
+ */
+export async function validerEtape(
+  id: string,
+  origine: "valide" | "manuel" = "valide",
+  date: string = getAujourdhui(),
+): Promise<{ points: number; maitrise: boolean }> {
   const s = skill(id)!;
   const etat = (await getEtats())[id] ?? { etape: 1, actif: false };
   if (maitrise(s, etat)) return { points: 0, maitrise: true };
   const db = await getDatabase();
-  const deja = await db.getAllAsync<{ de: number | null; origine: Origine }>(
-    "SELECT de, origine FROM skills_historique WHERE skill = ? AND origine IN ('valide', 'maitrise')",
+  const deja = await db.getAllAsync<{ de: number | null; vers: number; origine: Origine }>(
+    "SELECT de, vers, origine FROM skills_historique WHERE skill = ? AND origine IN ('valide', 'manuel', 'maitrise')",
     id,
   );
   const p = pointsValidation({
     n: etat.etape,
     nbEtapes: s.etapes.length,
-    dejaValidees: deja.filter((d) => d.origine === "valide").map((d) => d.de ?? 0),
+    dejaValidees: deja.filter(estValidation).map((d) => d.de ?? 0),
     dejaMaitrise: deja.some((d) => d.origine === "maitrise"),
   });
   const vers = etat.etape + 1;
   const fini = vers > s.etapes.length;
   // Maîtrisé : il quitte les actifs (place libre), l'entretien prend le relais.
   await ecrireEtat(id, { etape: vers, actif: fini ? false : etat.actif });
-  await journaliser(id, etat.etape, vers, "valide", p.etape);
-  if (fini) await journaliser(id, etat.etape, vers, "maitrise", p.maitrise);
+  await journaliser(id, etat.etape, vers, origine, p.etape, date);
+  if (fini) await journaliser(id, etat.etape, vers, "maitrise", p.maitrise, date);
   if (p.etape + p.maitrise > 0) await addPoints(p.etape + p.maitrise);
   return { points: p.etape + p.maitrise, maitrise: fini };
+}
+
+/** « C'est acquis » : valide l'étape en cours à la main, à la date donnée. */
+export const validerManuellement = (id: string, date: string = getAujourdhui()) =>
+  validerEtape(id, "manuel", date);
+
+/**
+ * Note un essai fait hors de l'appli à l'étape en cours : `series` séries de
+ * `valeur` (répétitions ou secondes). C'est une séance comme les autres : elle
+ * compte pour « 2 séances réussies », donne +10 si rien n'a rapporté ce
+ * jour-là, et coche la routine liée au sport. Renvoie les points et si la
+ * validation est maintenant proposée.
+ */
+export async function noterEssai(
+  id: string,
+  series: number,
+  valeur: number,
+  date: string = getAujourdhui(),
+): Promise<{ points: number; proposition: boolean }> {
+  const s = skill(id)!;
+  const etat = (await getEtats())[id] ?? { etape: 1, actif: false };
+  if (maitrise(s, etat) || series < 1 || valeur < 1) return { points: 0, proposition: false };
+  const etape = s.etapes[etat.etape - 1];
+  const db = await getDatabase();
+  const quand = horodatageDe(date);
+  const points = (await sportPayeLe(date)) ? 0 : POINTS_SEANCE;
+  const r = await db.runAsync(
+    "INSERT INTO seances (date, debut, fin, points_donnes) VALUES (?, ?, ?, ?)",
+    date,
+    quand,
+    quand,
+    points,
+  );
+  for (let n = 1; n <= series; n++) {
+    await db.runAsync(
+      `INSERT INTO series (seance_id, famille, palier, exercice, numero, unite, objectif_bas, objectif_haut, realise)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      r.lastInsertRowId,
+      id,
+      etat.etape,
+      etape.nom,
+      n,
+      etape.unite,
+      etape.objectif,
+      etape.objectif,
+      valeur,
+    );
+  }
+  if (points > 0) await addPoints(points);
+  await cocherRoutineLiee(date);
+  return { points, proposition: (await ficheSkill(id)).proposition };
+}
+
+/**
+ * « Mettre à jour mon niveau » : règle l'étape de plusieurs skills d'un coup
+ * (1 = la première, nombre d'étapes + 1 = maîtrisé). Aucun point ; les skills
+ * travaillés restent les mêmes, sauf un skill maîtrisé qui quitte les actifs.
+ */
+export async function mettreAJourNiveau(choix: Record<string, number>): Promise<void> {
+  const etats = await getEtats();
+  for (const [id, voulu] of Object.entries(choix)) {
+    const s = skill(id);
+    if (!s) continue;
+    const etape = etapeDepart(s, voulu);
+    const avant = etats[id] ?? { etape: 1, actif: false };
+    if (etape === avant.etape) continue;
+    await ecrireEtat(id, { etape, actif: etape > s.etapes.length ? false : avant.actif });
+    await journaliser(id, avant.etape, etape, "depart");
+  }
 }
 
 /** « Pas encore » : l'étape reste, la proposition revient après 2 nouvelles réussites. */
@@ -341,6 +436,8 @@ export async function terminerSeance(seanceId: number): Promise<void> {
     new Date().toISOString(),
     seanceId,
   );
+  const faite = await db.getFirstAsync<{ date: string }>("SELECT date FROM seances WHERE id = ?", seanceId);
+  if (faite) await cocherRoutineLiee(faite.date);
 }
 
 /** Séances faites sur les 7 derniers jours, skills et guidées. */

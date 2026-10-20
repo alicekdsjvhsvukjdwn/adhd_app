@@ -246,6 +246,29 @@ export const SQL_SKILLS_DEPUIS_PALIERS = `
 `;
 
 /**
+ * Migration 25 : séances de sport notées après coup (faites ailleurs, YouTube,
+ * salle…) dans la même table que les séances guidées, et la routine cochée
+ * quand je fais du sport (sans ligne : aucune).
+ */
+export const SQL_SEANCES_NOTEES = `
+  -- 'guidee' (lecteur de l'appli) | 'notee' (faite ailleurs)
+  ALTER TABLE seances_guidees ADD COLUMN origine TEXT NOT NULL DEFAULT 'guidee';
+  -- zones d'une séance notée, séparées par des virgules ('haut,abdos')
+  ALTER TABLE seances_guidees ADD COLUMN zones TEXT NOT NULL DEFAULT '';
+  -- 'youtube' | 'salle' | 'dehors' | 'autre' | ''
+  ALTER TABLE seances_guidees ADD COLUMN source TEXT NOT NULL DEFAULT '';
+  ALTER TABLE seances_guidees ADD COLUMN lien TEXT NOT NULL DEFAULT '';
+  -- 'facile' | 'ok' | 'dur' | ''
+  ALTER TABLE seances_guidees ADD COLUMN ressenti TEXT NOT NULL DEFAULT '';
+  ALTER TABLE seances_guidees ADD COLUMN note TEXT NOT NULL DEFAULT '';
+
+  CREATE TABLE IF NOT EXISTS sport_lien (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    routine_id INTEGER NOT NULL DEFAULT 0
+  );
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */

@@ -2,6 +2,7 @@ import {
   COLONNES_STATS,
   SQL_CATEGORIES_RECOMPENSES,
   SQL_COULEURS_LISTES,
+  SQL_SEANCES_NOTEES,
   SQL_SKILLS_DEPUIS_PALIERS,
   SQL_TABLES_LOT4,
   SQL_TABLES_SEANCES_GUIDEES,
@@ -717,6 +718,14 @@ const MIGRATIONS: Migration[] = [
     nom: "séances guidées",
     run: async (db) => {
       await db.execAsync(SQL_TABLES_SEANCES_GUIDEES);
+    },
+  },
+
+  {
+    version: 25,
+    nom: "séances de sport notées, routine liée au sport",
+    run: async (db) => {
+      await db.execAsync(SQL_SEANCES_NOTEES);
     },
   },
 ];
