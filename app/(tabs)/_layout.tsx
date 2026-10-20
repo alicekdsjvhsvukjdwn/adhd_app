@@ -1,18 +1,15 @@
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
-import { Texte } from "../../components/Texte";
+import { ChartColumn, Gift, Moon, Sun, SquareCheck, User, type LucideIcon } from "lucide-react-native";
+import { Platform, type ColorValue } from "react-native";
 import { policeDe, typography, useTheme } from "../../lib/theme";
 
-/** Emoji plutôt qu'une police d'icônes : aucune dépendance en plus. */
-function Icone({ symbole, actif }: { symbole: string; actif: boolean }) {
-  return (
-    <Texte
-      style={{ fontSize: 20, opacity: actif ? 1 : 0.45, ...(Platform.OS === "web" ? { lineHeight: 22 } : {}) }}
-    >
-      {symbole}
-    </Texte>
-  );
-}
+/** Gris des onglets inactifs (icône et libellé). */
+const GRIS = "#5E7775";
+
+/** Icône au trait d'un onglet : couleur d'accent du moment si actif, gris sinon (couleur donnée par la barre). */
+const icone =
+  (Icone: LucideIcon) =>
+  ({ color }: { color: ColorValue }) => <Icone color={color} size={Platform.OS === "web" ? 22 : 24} strokeWidth={1.75} />;
 
 export default function TabsLayout() {
   const t = useTheme();
@@ -22,7 +19,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: t.accent,
-        tabBarInactiveTintColor: t.textMuted,
+        tabBarInactiveTintColor: GRIS,
         tabBarStyle: {
           backgroundColor: t.bgApp,
           borderTopColor: t.border,
@@ -43,42 +40,42 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Routines",
-          tabBarIcon: ({ focused }) => <Icone symbole="☀️" actif={focused} />,
+          tabBarIcon: icone(Sun),
         }}
       />
       <Tabs.Screen
         name="taches"
         options={{
           title: "Tâches",
-          tabBarIcon: ({ focused }) => <Icone symbole="✅" actif={focused} />,
+          tabBarIcon: icone(SquareCheck),
         }}
       />
       <Tabs.Screen
         name="recompenses"
         options={{
           title: "Récompenses",
-          tabBarIcon: ({ focused }) => <Icone symbole="🎁" actif={focused} />,
+          tabBarIcon: icone(Gift),
         }}
       />
       <Tabs.Screen
         name="suivi"
         options={{
           title: "Suivi",
-          tabBarIcon: ({ focused }) => <Icone symbole="🌙" actif={focused} />,
+          tabBarIcon: icone(Moon),
         }}
       />
       <Tabs.Screen
         name="progression"
         options={{
           title: "Progression",
-          tabBarIcon: ({ focused }) => <Icone symbole="📈" actif={focused} />,
+          tabBarIcon: icone(ChartColumn),
         }}
       />
       <Tabs.Screen
         name="profil"
         options={{
           title: "Profil",
-          tabBarIcon: ({ focused }) => <Icone symbole="⚙️" actif={focused} />,
+          tabBarIcon: icone(User),
         }}
       />
     </Tabs>

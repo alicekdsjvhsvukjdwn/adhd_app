@@ -2,11 +2,13 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Texte } from "../../components/Texte";
 import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
 import { CarteSauvegarde } from "../../components/CarteSauvegarde";
@@ -35,6 +37,19 @@ const ENTREES: Entree[] = [
     route: "/rappels",
   },
 ];
+
+/** Web : les mesures de l'écran, pour comprendre un écart de mise en page sur l'iPhone. */
+function MesuresWeb() {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  if (Platform.OS !== "web") return null;
+  return (
+    <Texte style={[styles.version, { color: t.textMuted }]} selectable>
+      Mesures : fenêtre {window.innerWidth}×{window.innerHeight} · écran {screen.width}×{screen.height} ·
+      zone sûre haut {insets.top} bas {insets.bottom}
+    </Texte>
+  );
+}
 
 export default function Profil() {
   const router = useRouter();
@@ -78,6 +93,8 @@ export default function Profil() {
           Version {Constants.expoConfig?.version}
           {process.env.EXPO_PUBLIC_BUILD ? ` · publiée le ${process.env.EXPO_PUBLIC_BUILD}` : ""}
         </Texte>
+
+        <MesuresWeb />
 
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>

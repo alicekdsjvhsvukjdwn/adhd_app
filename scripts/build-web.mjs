@@ -23,7 +23,13 @@ const BALISES = `
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Routines" />
 <title>Routines</title>
-<style>html,body{background:#05080A;overscroll-behavior:none}</style>
+<style>
+html,body{background:#05080A;overscroll-behavior:none}
+/* iPhone, appli installée (barre d'état translucide) : 100%, 100vh et innerHeight ne couvrent pas tout
+   l'écran. On ancre la page aux quatre bords, sans hauteur calculée : la barre d'onglets colle au bas. */
+html,body{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:auto;overflow:hidden}
+#root{position:absolute;top:0;right:0;bottom:0;left:0;height:auto}
+</style>
 `;
 
 const fichier = "dist/index.html";
