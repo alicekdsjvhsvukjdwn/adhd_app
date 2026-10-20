@@ -1,22 +1,21 @@
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Texte } from "../../components/Texte";
 import { policeDe, typography, useTheme } from "../../lib/theme";
 
 /** Emoji plutôt qu'une police d'icônes : aucune dépendance en plus. */
 function Icone({ symbole, actif }: { symbole: string; actif: boolean }) {
   return (
-    <Texte style={{ fontSize: 20, opacity: actif ? 1 : 0.45 }}>{symbole}</Texte>
+    <Texte
+      style={{ fontSize: 20, opacity: actif ? 1 : 0.45, ...(Platform.OS === "web" ? { lineHeight: 22 } : {}) }}
+    >
+      {symbole}
+    </Texte>
   );
 }
 
 export default function TabsLayout() {
   const t = useTheme();
-  const { bottom } = useSafeAreaInsets();
-  // Web : la barre n'a pas de hauteur propre, les libellés étaient coupés ; on garde la marge du bas (iPhone).
-  const barreWeb =
-    Platform.OS === "web" ? { height: 68 + bottom, paddingBottom: 6 + bottom, paddingTop: 6 } : {};
 
   return (
     <Tabs
@@ -27,13 +26,16 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: t.bgApp,
           borderTopColor: t.border,
-          ...barreWeb,
         },
         tabBarLabelStyle: {
           fontSize: typography.tiny,
           fontFamily: policeDe("600", false),
-          ...(Platform.OS === "web" ? { lineHeight: 16 } : {}),
+          ...(Platform.OS === "web" ? { lineHeight: 14 } : {}),
         },
+        // Web : le conteneur d'icône fait 28 px ; avec les 5 px de marge de chaque côté de l'onglet
+        // (hauteur 49), il ne restait que 10 px au libellé, qui était coupé. La hauteur de la barre
+        // et la marge du bas (iPhone) restent celles d'origine : la marge n'est appliquée qu'une fois.
+        ...(Platform.OS === "web" ? { tabBarIconStyle: { height: 22 } } : {}),
         sceneStyle: { backgroundColor: t.bgApp },
       }}
     >
