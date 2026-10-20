@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
   Linking,
@@ -73,6 +74,11 @@ export default function Profil() {
           </Texte>
         </TouchableOpacity>
 
+        <Texte style={[styles.version, { color: t.textMuted }]}>
+          Version {Constants.expoConfig?.version}
+          {process.env.EXPO_PUBLIC_BUILD ? ` · publiée le ${process.env.EXPO_PUBLIC_BUILD}` : ""}
+        </Texte>
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </View>
@@ -97,6 +103,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   entreeTexte: { fontSize: typography.small, lineHeight: 19 },
+  version: { fontSize: typography.tiny, textAlign: "center", marginTop: spacing.lg },
   aide: { marginTop: spacing.xl, paddingVertical: spacing.sm },
   aideTexte: { fontSize: typography.tiny, lineHeight: 17, textAlign: "center" },
 });

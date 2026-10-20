@@ -1,8 +1,7 @@
-import * as DocumentPicker from "expo-document-picker";
-import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 import JSZip from "jszip";
 import { lisezmoi, versCsv } from "../csv";
+import { enregistrerFichier, lireFichierChoisi, noterSauvegardeFaite } from "../fichiers";
 import {
   APP,
   colonnesCommunes,
@@ -54,19 +53,15 @@ export async function lireSauvegarde(): Promise<Sauvegarde> {
 
 /** Écrit la sauvegarde dans un fichier et ouvre la feuille de partage. */
 export async function exporterSauvegarde(): Promise<void> {
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error("Le partage de fichiers n'est pas disponible sur cet appareil.");
-  }
   const sauvegarde = await lireSauvegarde();
-  const fichier = new File(Paths.cache, nomFichier(getAujourdhui()));
-  if (fichier.exists) fichier.delete();
-  fichier.create();
-  fichier.write(JSON.stringify(sauvegarde));
-  await Sharing.shareAsync(fichier.uri, {
-    mimeType: "application/json",
-    UTI: "public.json",
-    dialogTitle: "Enregistrer la sauvegarde",
-  });
+  await enregistrerFichier(
+    nomFichier(getAujourdhui()),
+    JSON.stringify(sauvegarde),
+    "application/json",
+    "public.json",
+    "Enregistrer la sauvegarde",
+  );
+  noterSauvegardeFaite();
 }
 
 /**
@@ -74,9 +69,6 @@ export async function exporterSauvegarde(): Promise<void> {
  * qui décrit chaque colonne, dans un zip partagé.
  */
 export async function exporterCsv(): Promise<void> {
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error("Le partage de fichiers n'est pas disponible sur cet appareil.");
-  }
   const { tables } = await lireSauvegarde();
   const db = await getDatabase();
   const zip = new JSZip();
@@ -92,15 +84,13 @@ export async function exporterCsv(): Promise<void> {
   }
   zip.file("LISEZMOI.txt", lisezmoi(resume, new Date().toISOString()));
 
-  const fichier = new File(Paths.cache, `${APP}-donnees-${getAujourdhui()}.zip`);
-  if (fichier.exists) fichier.delete();
-  fichier.create();
-  fichier.write(await zip.generateAsync({ type: "uint8array" }));
-  await Sharing.shareAsync(fichier.uri, {
-    mimeType: "application/zip",
-    UTI: "public.zip-archive",
-    dialogTitle: "Exporter mes données (CSV)",
-  });
+  await enregistrerFichier(
+    `${APP}-donnees-${getAujourdhui()}.zip`,
+    await zip.generateAsync({ type: "uint8array" }),
+    "application/zip",
+    "public.zip-archive",
+    "Exporter mes données (CSV)",
+  );
 }
 
 /**
@@ -108,14 +98,9 @@ export async function exporterCsv(): Promise<void> {
  * null si la personne a annulé.
  */
 export async function choisirSauvegarde(): Promise<Validation | null> {
-  // Tous types : selon d'où vient le fichier (Drive, mail…), son type annoncé varie.
-  // C'est la validation du contenu qui décide.
-  const choix = await DocumentPicker.getDocumentAsync({
-    type: "*/*",
-    copyToCacheDirectory: true,
-  });
-  if (choix.canceled) return null;
-  const texte = await new File(choix.assets[0].uri).text();
+  // C'est la validation du contenu qui décide, pas le type annoncé du fichier.
+  const texte = await lireFichierChoisi();
+  if (texte === null) return null;
   const db = await getDatabase();
   return validerSauvegarde(texte, await versionSchema(db));
 }
@@ -130,7 +115,12 @@ export async function restaurerSauvegarde(s: Sauvegarde): Promise<void> {
   const actuelles = await nomsTables(db);
 
   // Exclusive : aucune autre requête de l'appli ne s'intercale pendant le remplacement.
-  await db.withExclusiveTransactionAsync(async (txn) => {
+  // Le web ne connaît pas la transaction exclusive : une transaction simple, sur la même connexion.
+  const transaction = (travail: (txn: Db) => Promise<void>) =>
+    Platform.OS === "web"
+      ? db.withTransactionAsync(() => travail(db))
+      : db.withExclusiveTransactionAsync(travail as never);
+  await transaction(async (txn) => {
     for (const t of actuelles) await txn.runAsync(`DELETE FROM "${t}"`);
 
     for (const [t, lignes] of Object.entries(s.tables)) {

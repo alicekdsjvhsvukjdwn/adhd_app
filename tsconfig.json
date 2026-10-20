@@ -8,7 +8,7 @@
       ]
     }
   },
-  "exclude": ["node_modules", "app-example"],
+  "exclude": ["node_modules", "app-example", "push-worker"],
   "include": [
     "**/*.ts",
     "**/*.tsx",

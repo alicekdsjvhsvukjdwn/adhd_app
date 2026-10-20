@@ -1,0 +1,19 @@
+# Cloudflare Pages. COOP/COEP : nécessaires au moteur SQLite (wasm) de l'appli.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  X-Robots-Tag: noindex, nofollow
+
+# Le service worker et la page ne sont jamais gardés : une mise à jour se charge à l'ouverture.
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-store
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+/*.wasm
+  Content-Type: application/wasm
+
+/_expo/*
+  Cache-Control: public, max-age=31536000, immutable

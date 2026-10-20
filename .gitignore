@@ -41,3 +41,9 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Web / Cloudflare
+.env.local
+.dev.vars
+.wrangler/
+push-worker/node_modules/

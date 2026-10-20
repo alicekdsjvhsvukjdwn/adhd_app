@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { Texte, ChampTexte } from "../../components/Texte";
-import { Swipeable } from "react-native-gesture-handler";
+import { Glissable } from "../../components/Options";
 import { BarresObjectif } from "../../components/BarresObjectif";
 import { JOURS_LONGS, MOIS } from "../../components/CalendrierMois";
 import { PlusMoins } from "../../components/PlusMoins";
@@ -241,6 +241,12 @@ export default function Taches() {
 
   const historique = (p: Proposition) => router.push(`/historique?id=${p.itemId}`);
 
+  const optionsTache = (p: Proposition) => [
+    { libelle: "Historique", onPress: () => historique(p) },
+    { libelle: "Modifier", onPress: () => router.push(`/nouvelle-tache?id=${p.itemId}`) },
+    { libelle: "Supprimer", danger: true, onPress: () => onSupprimer(p) },
+  ];
+
   const actions = (p: Proposition) => (
     <View style={styles.actions}>
       <TouchableOpacity
@@ -335,7 +341,7 @@ export default function Taches() {
           const faites = liste.filter((e) => e.faite === 1).length;
           const suivante = liste.find((e) => e.faite === 0);
           return (
-            <Swipeable key={p.itemId} renderRightActions={() => actions(p)}>
+            <Glissable key={p.itemId} renderRightActions={() => actions(p)} options={optionsTache(p)} titre={p.nom}>
               <View
                 style={[
                   styles.carte,
@@ -465,7 +471,7 @@ export default function Taches() {
                 )}
                 {rang === 0 && boutonJeCommence(p)}
               </View>
-            </Swipeable>
+            </Glissable>
           );
           };
 
@@ -493,7 +499,7 @@ export default function Taches() {
       .filter(Boolean)
       .join(" · ");
     return (
-      <Swipeable key={p.itemId} renderRightActions={() => actions(p)}>
+      <Glissable key={p.itemId} renderRightActions={() => actions(p)} options={optionsTache(p)} titre={p.nom}>
         <View style={[styles.grande, { backgroundColor: t.bgCard }]}>
           <View style={styles.grandeLigne}>
             {rang !== null && (
@@ -544,7 +550,7 @@ export default function Taches() {
           </View>
           {rang === 0 && boutonJeCommence(p)}
         </View>
-      </Swipeable>
+      </Glissable>
     );
   };
 

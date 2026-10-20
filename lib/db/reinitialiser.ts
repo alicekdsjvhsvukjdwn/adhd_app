@@ -1,4 +1,4 @@
-import * as Notifications from "expo-notifications";
+import { annulerToutesLesNotifications } from "../notifications";
 import { getDatabase, supprimerBase } from "./client";
 import { initialiserBase } from "./demarrage";
 
@@ -9,7 +9,7 @@ import { initialiserBase } from "./demarrage";
 export async function toutReinitialiser(): Promise<void> {
   // Les rappels programmés vivent hors de la base : on les annule à part.
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await annulerToutesLesNotifications();
   } catch {
     // pas de permission, ou rien de programmé : sans importance
   }

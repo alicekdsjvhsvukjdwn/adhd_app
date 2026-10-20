@@ -97,6 +97,31 @@ export async function reprogrammerRappel(config: ConfigRappel) {
   await programmerRappelQuotidien(config.heure, config.minute);
 }
 
+/**
+ * Écoute les notifications reçues et touchées ; renvoie la fonction qui arrête l'écoute.
+ */
+export function ecouterNotifications(): () => void {
+  const reception = Notifications.addNotificationReceivedListener((notification) => {
+    logEvent("notification_recue", null, {
+      identifier: notification.request.identifier,
+    }).catch(() => {});
+  });
+  const reponse = Notifications.addNotificationResponseReceivedListener((response) => {
+    logEvent("notification_tapee", null, {
+      identifier: response.notification.request.identifier,
+    }).catch(() => {});
+  });
+  return () => {
+    reception.remove();
+    reponse.remove();
+  };
+}
+
+/** Annule tout ce qui est programmé (réinitialisation de l'appli). */
+export async function annulerToutesLesNotifications() {
+  await Notifications.cancelAllScheduledNotificationsAsync();
+}
+
 const ID_FIN_MINUTEUR = "fin-minuteur";
 
 /**

@@ -8,11 +8,11 @@ import { SpaceGrotesk_500Medium } from "@expo-google-fonts/space-grotesk/500Medi
 import { SpaceGrotesk_600SemiBold } from "@expo-google-fonts/space-grotesk/600SemiBold";
 import { SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk/700Bold";
 import { useFonts } from "expo-font";
-import * as Notifications from "expo-notifications";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
+  Platform,
   ScrollView,
   View,
 } from "react-native";
@@ -20,9 +20,10 @@ import { FournisseurTheme } from "../components/FournisseurTheme";
 import { Texte } from "../components/Texte";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { initialiserBase } from "../lib/db/demarrage";
-import { logEvent } from "../lib/db/events";
 import { getConfigRappel } from "../lib/db/stats";
-import { permissionAccordee, reprogrammerRappel } from "../lib/notifications";
+import "../lib/alerte-web";
+import { demarrerPwa } from "../lib/pwa-web";
+import { ecouterNotifications, permissionAccordee, reprogrammerRappel } from "../lib/notifications";
 import { spacing, typography, useTheme } from "../lib/theme";
 
 export default function RootLayout() {
@@ -35,6 +36,7 @@ export default function RootLayout() {
 }
 
 function Contenu() {
+  const router = useRouter();
   const t = useTheme();
   // Une erreur de police ne bloque rien : l'appli s'affiche avec la police du système.
   const [policesChargees, erreurPolices] = useFonts({
@@ -70,25 +72,11 @@ function Contenu() {
   }, []);
 
   useEffect(() => {
-    const subscriptionReception = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        logEvent("notification_recue", null, {
-          identifier: notification.request.identifier,
-        }).catch(() => {});
-      },
-    );
+    if (Platform.OS === "web") demarrerPwa((chemin) => router.navigate(chemin as never));
+  }, [router]);
 
-    const subscriptionReponse =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        logEvent("notification_tapee", null, {
-          identifier: response.notification.request.identifier,
-        }).catch(() => {});
-      });
-
-    return () => {
-      subscriptionReception.remove();
-      subscriptionReponse.remove();
-    };
+  useEffect(() => {
+    return ecouterNotifications();
   }, []);
 
   if (erreur) {

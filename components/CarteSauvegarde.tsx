@@ -1,12 +1,14 @@
 import { useState } from "react";
 import {
   Alert,
+  Platform,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Texte } from "./Texte";
 import { getConfigRappel } from "../lib/db";
+import { joursDepuisSauvegarde } from "../lib/fichiers";
 import {
   choisirSauvegarde,
   exporterCsv,
@@ -24,11 +26,15 @@ import { radius, spacing, typography, useTheme } from "../lib/theme";
 export function CarteSauvegarde() {
   const t = useTheme();
   const [enCours, setEnCours] = useState(false);
+  // Sur le web, les données vivent dans le navigateur : on rappelle la copie de secours.
+  const [jours, setJours] = useState(() => (Platform.OS === "web" ? joursDepuisSauvegarde() : -1));
+  const rappelAncien = Platform.OS === "web" && (jours === null || (jours ?? 0) > 7);
 
   const exporter = async () => {
     setEnCours(true);
     try {
       await exporterSauvegarde();
+      setJours(joursDepuisSauvegarde());
     } catch (e) {
       Alert.alert("L'export a échoué", String(e));
     } finally {
@@ -103,6 +109,13 @@ export function CarteSauvegarde() {
         Une copie de tout ce que tu as noté, à garder où tu veux (Fichiers,
         Drive, mail). Elle contient aussi ton carnet et ton sommeil : garde-la pour toi.
       </Texte>
+      {rappelAncien && (
+        <Texte style={[styles.texte, { color: t.accentText, marginTop: spacing.sm }]}>
+          {jours === null
+            ? "Pas encore de sauvegarde : exporte-en une."
+            : `Dernière sauvegarde il y a ${jours} jours : exporte-en une nouvelle.`}
+        </Texte>
+      )}
       <View style={styles.boutons}>
         <TouchableOpacity
           style={[styles.bouton, { backgroundColor: t.accent }]}

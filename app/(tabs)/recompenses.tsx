@@ -1,3 +1,4 @@
+import { BoutonOptions } from "../../components/Options";
 import { useFocusEffect } from "expo-router";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -240,7 +241,7 @@ export default function Recompenses() {
                     <TouchableOpacity
                       key={r.id}
                       onPress={() => onOffrir(r)}
-                      onLongPress={() => onOptions(r)}
+                      onLongPress={Platform.OS === "web" ? undefined : () => onOptions(r)}
                       accessibilityHint="Appui long : modifier ou supprimer"
                       accessibilityLabel={`${r.nom}, ${r.prix} points${accessible ? "" : ", pas encore"}`}
                       style={[
@@ -250,6 +251,21 @@ export default function Recompenses() {
                           : { backgroundColor: t.bgCard, borderColor: t.border, opacity: 0.7 },
                       ]}
                     >
+                      <BoutonOptions
+                        titre={r.nom}
+                        style={styles.options}
+                        options={[
+                          { libelle: "Modifier", onPress: () => modifier(r) },
+                          {
+                            libelle: "Supprimer",
+                            danger: true,
+                            onPress: async () => {
+                              await supprimerRecompense(r.id);
+                              await charger();
+                            },
+                          },
+                        ]}
+                      />
                       <IconeRecompense icone={r.icone} couleur={cat.couleur} taille={26} />
                       <Texte
                         style={[styles.nom, { color: t.textPrimary }]}
@@ -572,6 +588,7 @@ export default function Recompenses() {
 }
 
 const styles = StyleSheet.create({
+  options: { position: "absolute", top: 0, right: 0, zIndex: 1 },
   entete: {
     flexDirection: "row",
     justifyContent: "space-between",

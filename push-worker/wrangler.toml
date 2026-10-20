@@ -1,0 +1,18 @@
+name = "routines-push"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Toutes les 15 minutes.
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+# Une adresse à toi : les services de notification peuvent s'en servir pour te prévenir d'un souci.
+VAPID_SUBJECT = "mailto:REMPLACER@exemple.fr"
+# Adresse du site publié sur Cloudflare Pages (à corriger après la publication).
+ORIGINE = "https://routines.pages.dev"
+
+# Remplacer l'id par celui que donne : npx wrangler kv namespace create ABONNES
+[[kv_namespaces]]
+binding = "ABONNES"
+id = "REMPLACER_PAR_L_ID_DU_KV"

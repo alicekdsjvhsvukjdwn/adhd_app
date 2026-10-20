@@ -1,4 +1,6 @@
 import { Tabs } from "expo-router";
+import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Texte } from "../../components/Texte";
 import { policeDe, typography, useTheme } from "../../lib/theme";
 
@@ -11,6 +13,10 @@ function Icone({ symbole, actif }: { symbole: string; actif: boolean }) {
 
 export default function TabsLayout() {
   const t = useTheme();
+  const { bottom } = useSafeAreaInsets();
+  // Web : la barre n'a pas de hauteur propre, les libellés étaient coupés ; on garde la marge du bas (iPhone).
+  const barreWeb =
+    Platform.OS === "web" ? { height: 68 + bottom, paddingBottom: 6 + bottom, paddingTop: 6 } : {};
 
   return (
     <Tabs
@@ -21,8 +27,13 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: t.bgApp,
           borderTopColor: t.border,
+          ...barreWeb,
         },
-        tabBarLabelStyle: { fontSize: typography.tiny, fontFamily: policeDe("600", false) },
+        tabBarLabelStyle: {
+          fontSize: typography.tiny,
+          fontFamily: policeDe("600", false),
+          ...(Platform.OS === "web" ? { lineHeight: 16 } : {}),
+        },
         sceneStyle: { backgroundColor: t.bgApp },
       }}
     >

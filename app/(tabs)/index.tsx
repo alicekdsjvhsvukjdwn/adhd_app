@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Swipeable } from "react-native-gesture-handler";
+import { Glissable } from "../../components/Options";
 import { AnneauDomaines } from "../../components/AnneauDomaines";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { IconeMoment } from "../../components/IconeMoment";
@@ -193,6 +193,11 @@ export default function Routines() {
     </View>
   );
 
+  const optionsRoutine = (r: { id: number; nom: string }) => [
+    { libelle: "Modifier", onPress: () => router.push(`/nouvelle-tache?id=${r.id}`) },
+    { libelle: "Supprimer", danger: true, onPress: () => onSupprimer(r) },
+  ];
+
   // ── Calculs de l'anneau ──────────────────────────────────────────────
   const jourDifficile = energie === 1;
   const pourAnneau: RoutineAnneau[] = routines.map((r) => {
@@ -289,7 +294,7 @@ export default function Routines() {
     const ouverte = depliees.has(r.id);
     const couleur = couleurDe(r.categorie);
     return (
-      <Swipeable key={r.id} renderRightActions={() => actionsRoutine(r)}>
+      <Glissable key={r.id} renderRightActions={() => actionsRoutine(r)} options={optionsRoutine(r)} titre={r.nom}>
         <View
           style={[
             styles.ligne,
@@ -341,7 +346,7 @@ export default function Routines() {
           </TouchableOpacity>
           {aEtapes && ouverte && <View style={styles.ligneDepliee}>{pastillesEtapes(r, couleur)}</View>}
         </View>
-      </Swipeable>
+      </Glissable>
     );
   };
 
@@ -349,7 +354,7 @@ export default function Routines() {
     const etapesR = etapesRoutines[r.id] ?? [];
     const couleur = couleurDe(r.categorie);
     return (
-      <Swipeable key={r.id} renderRightActions={() => actionsRoutine(r)}>
+      <Glissable key={r.id} renderRightActions={() => actionsRoutine(r)} options={optionsRoutine(r)} titre={r.nom}>
         <TouchableOpacity
           style={[
             styles.carte,
@@ -398,7 +403,7 @@ export default function Routines() {
             {pastillesEtapes(r, couleur)}
           </View>
         </TouchableOpacity>
-      </Swipeable>
+      </Glissable>
     );
   };
 
@@ -557,7 +562,7 @@ export default function Routines() {
             </TouchableOpacity>
             {voirNonPrevues &&
               pasPrevues.map((r) => (
-                <Swipeable key={r.id} renderRightActions={() => actionsRoutine(r)}>
+                <Glissable key={r.id} renderRightActions={() => actionsRoutine(r)} options={optionsRoutine(r)} titre={r.nom}>
                   <TouchableOpacity
                     style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border }]}
                     onPress={() => router.push(`/nouvelle-tache?id=${r.id}`)}
@@ -566,7 +571,7 @@ export default function Routines() {
                     <Texte style={[styles.nom, { color: t.textSecondary, flex: 1 }]}>{r.nom}</Texte>
                     <Texte style={{ color: t.textMuted }}>›</Texte>
                   </TouchableOpacity>
-                </Swipeable>
+                </Glissable>
               ))}
           </>
         )}
