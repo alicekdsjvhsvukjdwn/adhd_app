@@ -26,18 +26,13 @@ const BALISES = `
 <style>
 html,body{background:#05080A;overscroll-behavior:none}
 /* iPhone, appli installée (barre d'état translucide) : la fenêtre est plus courte que l'écran de la
-   hauteur de la barre d'état, d'où une bande noire sous la barre d'onglets. Deux essais, au choix
-   dans Profil › Mesures (classe « mise2 » sur <html>, gardée dans localStorage). */
+   hauteur de la barre d'état, d'où une bande noire sous la barre d'onglets (mesuré : 797 pour 844).
+   La page déborde donc de cette hauteur. */
 @media (display-mode: standalone){
-  html{overflow:hidden}
-  /* Essai 1 (défaut) : la page déborde de la hauteur de la barre d'état. */
-  html:not(.mise2){height:calc(100% + env(safe-area-inset-top))}
-  html:not(.mise2) body,html:not(.mise2) #root{height:100%}
-  /* Essai 2 : 100vh partout. */
-  html.mise2,html.mise2 body,html.mise2 #root{height:100vh}
+  html{overflow:hidden;height:calc(100% + env(safe-area-inset-top))}
+  body,#root{height:100%}
 }
 </style>
-<script>try{if(localStorage.getItem("mise")==="2")document.documentElement.className="mise2"}catch(e){}</script>
 `;
 
 const fichier = "dist/index.html";
