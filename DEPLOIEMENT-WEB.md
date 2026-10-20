@@ -2,7 +2,7 @@
 
 Deux choses à publier sur Cloudflare, toutes deux gratuites :
 
-- **le site** (l'appli elle-même) : Cloudflare Pages ;
+- **le site** (l'appli elle-même) : un Worker Cloudflare avec fichiers statiques (config : `wrangler.toml` à la racine) ;
 - **le serveur de rappels** (`push-worker/`) : un Cloudflare Worker, qui garde seulement l'abonnement aux notifications et les heures choisies. Aucune donnée de l'appli ne lui est envoyée.
 
 Toutes les commandes se tapent dans un terminal, dans le dossier du projet. Expo Go reste ton outil de développement : rien ici ne le change.
@@ -23,13 +23,9 @@ Toutes les commandes se tapent dans un terminal, dans le dossier du projet. Expo
 
    Une page s'ouvre : autorise l'accès.
 
-## 2. Créer le projet du site (pour connaître son adresse)
+## 2. L'adresse du site
 
-```
-npx wrangler pages project create routines --production-branch main
-```
-
-Wrangler affiche l'adresse, par exemple `https://routines.pages.dev`. Si le nom `routines` est pris, choisis-en un autre (`routines-alice`) et remplace-le partout plus bas. **Note l'adresse.**
+Le site est publié comme un Worker avec fichiers statiques (config : `wrangler.toml` à la racine, nom `routines`). Son adresse est de la forme `https://routines.TON-SOUS-DOMAINE.workers.dev` ; elle s'affiche à la première publication (étape 4). Pour la connaître avant, regarde ton sous-domaine dans le tableau de bord Cloudflare › Workers & Pages. **Note l'adresse** : elle va dans `ORIGINE` à l'étape 3.
 
 ## 3. Publier le Worker de rappels
 
@@ -94,13 +90,13 @@ Puis reviens à la racine du projet : `cd ..`
    npm run build:web
    ```
 
-3. Publier :
+3. Publier (depuis la racine du projet) :
 
    ```
-   npx wrangler pages deploy dist --project-name routines
+   npx wrangler deploy
    ```
 
-   (Alternative : connecter le dépôt GitHub dans le tableau de bord Cloudflare Pages avec la commande de build `npm run build:web` et le dossier `dist`. Dans ce cas, mets les trois variables `EXPO_PUBLIC_…` dans les réglages du projet Pages.)
+   Wrangler affiche l'adresse du site. N'utilise pas `wrangler pages …` : Cloudflare le redirige vers ce mode et déploie sans demander.
 
 Ouvre l'adresse du site dans le navigateur de l'ordinateur pour vérifier qu'elle s'affiche.
 
@@ -124,7 +120,7 @@ Ensuite, exporte régulièrement (Profil › **Exporter**) : les données vivent
 
   ```
   npm run build:web
-  npx wrangler pages deploy dist --project-name routines
+  npx wrangler deploy
   ```
 
   Le téléphone charge la nouvelle version à la prochaine ouverture de l'appli. La date de publication est affichée en bas de Profil.

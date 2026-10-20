@@ -1,0 +1,9 @@
+# Site web de Routines : fichiers statiques de dist/ (npm run build:web).
+# Le Worker des rappels est à part, dans push-worker/.
+name = "routines"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "./dist"
+# /suivi, /profil… renvoient index.html : l'appli choisit l'écran elle-même.
+not_found_handling = "single-page-application"

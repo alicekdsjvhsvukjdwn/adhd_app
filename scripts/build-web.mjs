@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const maintenant = new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" });
-const r = spawnSync("npx", ["expo", "export", "--platform", "web"], {
+const r = spawnSync("npx", ["expo", "export", "--platform", "web", "--clear"], {
   stdio: "inherit",
   shell: true,
   env: { ...process.env, EXPO_PUBLIC_BUILD: maintenant },

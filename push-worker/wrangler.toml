@@ -8,11 +8,11 @@ crons = ["*/15 * * * *"]
 
 [vars]
 # Une adresse à toi : les services de notification peuvent s'en servir pour te prévenir d'un souci.
-VAPID_SUBJECT = "mailto:REMPLACER@exemple.fr"
+VAPID_SUBJECT = "https://routines.alice-tools-perso.workers.dev"
 # Adresse du site publié sur Cloudflare Pages (à corriger après la publication).
-ORIGINE = "https://routines.pages.dev"
+ORIGINE = "https://routines.alice-tools-perso.workers.dev"
 
 # Remplacer l'id par celui que donne : npx wrangler kv namespace create ABONNES
 [[kv_namespaces]]
 binding = "ABONNES"
-id = "REMPLACER_PAR_L_ID_DU_KV"
+id = "ece654fa1ade4698b8dcec06a17d0233"
