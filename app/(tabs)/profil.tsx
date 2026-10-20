@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Linking,
   Platform,
@@ -42,12 +43,43 @@ const ENTREES: Entree[] = [
 function MesuresWeb() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const [, rafraichir] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const id = setInterval(() => rafraichir((n) => n + 1), 700);
+    return () => clearInterval(id);
+  }, []);
   if (Platform.OS !== "web") return null;
+  const racine = document.getElementById("root")?.getBoundingClientRect();
+  const essai2 = document.documentElement.classList.contains("mise2");
+  const choisir = (deux: boolean) => {
+    document.documentElement.classList.toggle("mise2", deux);
+    try {
+      localStorage.setItem("mise", deux ? "2" : "1");
+    } catch {}
+  };
   return (
-    <Texte style={[styles.version, { color: t.textMuted }]} selectable>
-      Mesures : fenêtre {window.innerWidth}×{window.innerHeight} · écran {screen.width}×{screen.height} ·
-      zone sûre haut {insets.top} bas {insets.bottom}
-    </Texte>
+    <>
+      <Texte style={[styles.version, { color: t.textMuted }]} selectable>
+        Mesures : fenêtre {window.innerWidth}×{window.innerHeight} · écran {screen.width}×{screen.height} ·
+        zone sûre haut {insets.top} bas {insets.bottom} · page {Math.round(racine?.height ?? 0)} haut{" "}
+        {Math.round(racine?.top ?? 0)} bas {Math.round(racine?.bottom ?? 0)} · standalone{" "}
+        {window.matchMedia("(display-mode: standalone)").matches ? "oui" : "non"}
+      </Texte>
+      <View style={{ flexDirection: "row", justifyContent: "center", gap: spacing.md, marginTop: spacing.sm }}>
+        {[false, true].map((deux) => (
+          <TouchableOpacity
+            key={String(deux)}
+            onPress={() => choisir(deux)}
+            style={[styles.essai, { borderColor: essai2 === deux ? t.accent : t.border }]}
+          >
+            <Texte style={{ color: essai2 === deux ? t.accent : t.textMuted, fontSize: typography.small }}>
+              Mise en page : essai {deux ? 2 : 1}
+            </Texte>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </>
   );
 }
 
@@ -120,6 +152,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   entreeTexte: { fontSize: typography.small, lineHeight: 19 },
+  essai: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
   version: { fontSize: typography.tiny, textAlign: "center", marginTop: spacing.lg },
   aide: { marginTop: spacing.xl, paddingVertical: spacing.sm },
   aideTexte: { fontSize: typography.tiny, lineHeight: 17, textAlign: "center" },

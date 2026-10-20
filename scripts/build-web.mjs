@@ -25,11 +25,19 @@ const BALISES = `
 <title>Routines</title>
 <style>
 html,body{background:#05080A;overscroll-behavior:none}
-/* iPhone, appli installée (barre d'état translucide) : 100%, 100vh et innerHeight ne couvrent pas tout
-   l'écran. On ancre la page aux quatre bords, sans hauteur calculée : la barre d'onglets colle au bas. */
-html,body{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:auto;overflow:hidden}
-#root{position:absolute;top:0;right:0;bottom:0;left:0;height:auto}
+/* iPhone, appli installée (barre d'état translucide) : la fenêtre est plus courte que l'écran de la
+   hauteur de la barre d'état, d'où une bande noire sous la barre d'onglets. Deux essais, au choix
+   dans Profil › Mesures (classe « mise2 » sur <html>, gardée dans localStorage). */
+@media (display-mode: standalone){
+  html{overflow:hidden}
+  /* Essai 1 (défaut) : la page déborde de la hauteur de la barre d'état. */
+  html:not(.mise2){height:calc(100% + env(safe-area-inset-top))}
+  html:not(.mise2) body,html:not(.mise2) #root{height:100%}
+  /* Essai 2 : 100vh partout. */
+  html.mise2,html.mise2 body,html.mise2 #root{height:100vh}
+}
 </style>
+<script>try{if(localStorage.getItem("mise")==="2")document.documentElement.className="mise2"}catch(e){}</script>
 `;
 
 const fichier = "dist/index.html";
