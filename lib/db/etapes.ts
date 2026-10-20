@@ -7,6 +7,7 @@ import {
   pointsEtapesARetirer,
   pointsPalier,
   POINTS_ETAPE,
+  SQL_AJOUT_ETAPE,
   type Frequence,
 } from "../regles-taches";
 import { getDatabase } from "./client";
@@ -151,6 +152,14 @@ export async function enregistrerEtapes(
       );
     }
   }
+}
+
+/** Ajoute une étape en dernier, sans toucher aux autres. */
+export async function ajouterEtape(itemId: number, nom: string): Promise<void> {
+  const n = nom.trim();
+  if (!n) return;
+  const db = await getDatabase();
+  await db.runAsync(SQL_AJOUT_ETAPE, itemId, n, itemId);
 }
 
 /** Coche une étape de tâche. Renvoie true si c'était la dernière (tâche faite). */

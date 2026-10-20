@@ -80,6 +80,7 @@ export type Proposition = {
   /** Tâche « x fois par semaine / par mois » : où on en est sur la période. */
   compte: { fait: number; cible: number; periode: Periode } | null;
   nom: string;
+  importance: number;
   premiere_action: string | null;
   duree_min: number | null;
   echeance: string | null;
@@ -245,6 +246,7 @@ function construire(
     liste_id: n.c.liste_id,
     compte: n.c.compte ?? null,
     nom: n.c.nom,
+    importance: n.c.importance,
     premiere_action: n.c.premiere_action,
     duree_min: n.c.duree_min,
     echeance: n.c.echeance,

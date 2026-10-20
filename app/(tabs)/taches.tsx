@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -27,7 +28,9 @@ import {
   confirmationSuppression,
   deleteItem,
 } from "../../lib/db";
+import { FeuilleTache } from "../../components/FeuilleTache";
 import {
+  ajouterEtape,
   cocherEtape,
   decocherEtape,
   getEtapesPour,
@@ -103,6 +106,8 @@ export default function Taches() {
   const [jourChoisi, setJourChoisi] = useState<string | null>(null);
   /** Feuille du bouton « + ». */
   const [feuille, setFeuille] = useState(false);
+  /** Tâche dont la feuille « détail » est ouverte. */
+  const [detailId, setDetailId] = useState<number | null>(null);
   // iOS n'ouvre pas une modale pendant qu'une autre se ferme : la gestion des listes attend.
   const gestionApres = useRef(false);
   /** Objectif de chaque liste qui en a un : où en est la période en cours. */
@@ -181,12 +186,15 @@ export default function Taches() {
     await charger();
   };
 
-  const onEtape = async (p: Proposition, e: Etape) => {
+  /** Renvoie true si cocher cette étape a terminé la tâche. */
+  const onEtape = async (p: Proposition, e: Etape): Promise<boolean> => {
     setNoteOuverte(null);
+    Haptics.selectionAsync().catch(() => {});
+    let derniere = false;
     if (e.faite === 1) {
       await decocherEtape(e.id);
     } else {
-      const derniere = await cocherEtape(e.id);
+      derniere = await cocherEtape(e.id);
       if (derniere) setNoteOuverte({ itemId: p.itemId, nom: p.nom, date: getAujourdhui() });
       proposerAnnulation({
         type: "etape",
@@ -197,7 +205,13 @@ export default function Taches() {
       });
     }
     await charger();
+    return derniere;
   };
+
+  // Feuille « détail » d'une tâche : relue dans le classement à chaque rechargement.
+  const detail = classement.find((p) => p.itemId === detailId) ?? null;
+  const detailEtapes = detail ? (etapes[detail.itemId] ?? []) : [];
+  const ouvrirDetail = (p: Proposition) => setDetailId(p.itemId);
 
   const onAnnuler = async () => {
     if (!annulable) return;
@@ -351,18 +365,30 @@ export default function Taches() {
 
                 {liste.length === 0 ? (
                   <>
-                    <TouchableOpacity
-                      onPress={() => onTerminer(p)}
-                      onLongPress={() => historique(p)}
-                      accessibilityHint="Appui long : historique"
-                    >
-                      <Texte style={[styles.nom, { color: t.textPrimary }]}>○ {icone(p)}{p.nom}</Texte>
-                      {p.premiere_action ? (
-                        <Texte style={[styles.premiere, { color: t.textSecondary }]}>
-                          Commencer par : {p.premiere_action}
-                        </Texte>
-                      ) : null}
-                    </TouchableOpacity>
+                    <View style={styles.ligneNom}>
+                      <TouchableOpacity
+                        onPress={() => onTerminer(p)}
+                        hitSlop={8}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: false }}
+                        accessibilityLabel={`Cocher ${p.nom}`}
+                      >
+                        <Texte style={[styles.nom, { color: t.textPrimary }]}>○</Texte>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ flex: 1 }}
+                        onPress={() => ouvrirDetail(p)}
+                        onLongPress={() => historique(p)}
+                        accessibilityHint="Toucher : détail · appui long : historique"
+                      >
+                        <Texte style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Texte>
+                        {p.premiere_action ? (
+                          <Texte style={[styles.premiere, { color: t.textSecondary }]}>
+                            Commencer par : {p.premiere_action}
+                          </Texte>
+                        ) : null}
+                      </TouchableOpacity>
+                    </View>
                     <TouchableOpacity
                       onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
                       hitSlop={8}
@@ -375,8 +401,9 @@ export default function Taches() {
                 ) : (
                   <>
                     <TouchableOpacity
+                      onPress={() => ouvrirDetail(p)}
                       onLongPress={() => historique(p)}
-                      accessibilityHint="Appui long : historique"
+                      accessibilityHint="Toucher : détail · appui long : historique"
                     >
                       <Texte style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Texte>
                     </TouchableOpacity>
@@ -474,9 +501,9 @@ export default function Taches() {
             )}
             <TouchableOpacity
               style={{ flex: 1 }}
-              onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
+              onPress={() => ouvrirDetail(p)}
               onLongPress={() => historique(p)}
-              accessibilityHint="Toucher : modifier · appui long : historique"
+              accessibilityHint="Toucher : détail · appui long : historique"
             >
               <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={2}>
                 {p.nom}
@@ -926,6 +953,48 @@ export default function Taches() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <FeuilleTache
+        tache={detail}
+        etapes={detailEtapes}
+        liste={detail ? (nomListe(detail.liste_id)?.nom ?? null) : null}
+        couleur={detail ? couleurDe(detail.liste_id) : t.accent}
+        jour={jour}
+        onFermer={() => setDetailId(null)}
+        onEtape={async (e) => {
+          if (detail && (await onEtape(detail, e))) setDetailId(null);
+        }}
+        onTerminer={() => {
+          if (!detail) return;
+          setDetailId(null);
+          onTerminer(detail);
+        }}
+        onAjouter={async (nom) => {
+          if (!detail) return;
+          await ajouterEtape(detail.itemId, nom);
+          await charger();
+        }}
+        onModifier={() => {
+          if (!detail) return;
+          setDetailId(null);
+          router.push(`/nouvelle-tache?id=${detail.itemId}`);
+        }}
+        onCommence={() => {
+          if (!detail) return;
+          const prochaine = detailEtapes.find((e) => e.faite === 0);
+          setDetailId(null);
+          router.push(
+            prochaine
+              ? `/je-commence?id=${detail.itemId}&etape=${prochaine.id}`
+              : `/je-commence?id=${detail.itemId}`,
+          );
+        }}
+        onHistorique={() => {
+          if (!detail) return;
+          setDetailId(null);
+          historique(detail);
+        }}
+      />
+
       <Modal
         visible={gestion}
         transparent
@@ -1252,6 +1321,7 @@ const styles = StyleSheet.create({
   raisonTexte: { fontSize: typography.tiny, fontWeight: "700", textTransform: "uppercase" },
   duree: { fontSize: typography.small },
   nom: { fontSize: typography.h3, fontWeight: "600" },
+  ligneNom: { flexDirection: "row", gap: spacing.sm },
   premiere: { fontSize: typography.small, marginTop: 6, lineHeight: 19 },
   decouper: { fontSize: typography.small, fontWeight: "600", marginTop: spacing.sm },
 

@@ -81,6 +81,13 @@ export const BONUS_FIN = 10;
 /** Ce que rapporte la dernière étape : l'étape, la tâche terminée et le bonus. */
 export const POINTS_DERNIERE_ETAPE = POINTS_ETAPE + POINTS_COMPLETION + BONUS_FIN;
 
+/** Ajout d'une étape en fin de liste (params : item_id, nom, item_id). */
+export const SQL_AJOUT_ETAPE =
+  "INSERT INTO etapes (item_id, nom, ordre) VALUES (?, ?, (SELECT COALESCE(MAX(ordre), -1) + 1 FROM etapes WHERE item_id = ?))";
+
+/** items.importance : 3 haute, 2 normale, 1 basse. */
+export const LIBELLES_PRIORITE: Record<number, string> = { 3: "Haute", 2: "Normale", 1: "Basse" };
+
 /**
  * Points d'étapes à reprendre quand une tâche est remise à faire : chaque
  * étape cochée, et le bonus si elles l'étaient toutes (c'est la dernière
