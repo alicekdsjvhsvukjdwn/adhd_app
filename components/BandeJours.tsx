@@ -1,14 +1,18 @@
-import { useCallback, useRef, useState } from "react";
-import { FlatList, StyleSheet, TouchableOpacity, View, type LayoutChangeEvent } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, Platform, ScrollView, StyleSheet, TouchableOpacity, View, type LayoutChangeEvent } from "react-native";
 import { useJourReel } from "../hooks/useJourCourant";
 import { decalerJours } from "../lib/dates";
-import { semaineDe } from "../lib/regles-taches";
+import { moisDeSemaine, SEMAINES_BANDE, semaineDe } from "../lib/regles-taches";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { JOURS_LONGS } from "./CalendrierMois";
 import { Texte } from "./Texte";
 
 /** Semaines affichées de chaque côté de la semaine en cours (un an dans chaque sens). */
-const SEMAINES = 52;
+const SEMAINES = SEMAINES_BANDE;
+const WEB = Platform.OS === "web";
+/** Web : la semaine s'arrête net (scroll-snap CSS), jamais entre deux semaines. */
+const SNAP_CONTENEUR = { scrollSnapType: "x mandatory" } as object;
+const SNAP_PAGE = { scrollSnapAlign: "start", scrollSnapStop: "always" } as object;
 /** Vert d'eau fixe du jour réel (la couleur d'accent, elle, change avec l'heure). */
 const JOUR_REEL = "#2DD4BF";
 const PAGES = Array.from({ length: SEMAINES * 2 + 1 }, (_, i) => i);
@@ -29,19 +33,33 @@ export function BandeJours({ aujourdhui, choisi, points, rdv, onChoisir }: Props
   const t = useTheme();
   const reel = useJourReel();
   const liste = useRef<FlatList<number>>(null);
+  const defil = useRef<ScrollView>(null);
   const [largeur, setLargeur] = useState(0);
   const [page, setPage] = useState(SEMAINES);
 
   const onLayout = (e: LayoutChangeEvent) => setLargeur(Math.round(e.nativeEvent.layout.width));
+  /** Web : ScrollView à scroll-snap CSS ; natif : FlatList paginée. */
+  const aller = useCallback(
+    (index: number, animated: boolean) => {
+      if (WEB) defil.current?.scrollTo({ x: index * largeur, animated });
+      else liste.current?.scrollToIndex({ index, animated });
+    },
+    [largeur],
+  );
   const revenir = useCallback(() => {
-    liste.current?.scrollToIndex({ index: SEMAINES, animated: true });
+    aller(SEMAINES, true);
     setPage(SEMAINES);
     onChoisir(null);
-  }, [onChoisir]);
+  }, [aller, onChoisir]);
+
+  // Web : ouverture (et minuit passé) sur la semaine en cours. Natif : initialScrollIndex.
+  useEffect(() => {
+    if (WEB && largeur > 0) aller(SEMAINES, false);
+  }, [largeur, aujourdhui, aller]);
 
   const semaine = (p: number) => semaineDe(decalerJours(aujourdhui, (p - SEMAINES) * 7));
 
-  const rendre = ({ item: p }: { item: number }) => {
+  const rendreSemaine = (p: number) => {
     const jours = semaine(p);
     const pts = points(jours);
     return (
@@ -92,13 +110,33 @@ export function BandeJours({ aujourdhui, choisi, points, rdv, onChoisir }: Props
     );
   };
 
+  const rendre = ({ item: p }: { item: number }) => rendreSemaine(p);
   const semaineAffichee = semaine(page);
   const horsSemaine = page !== SEMAINES || choisi !== null;
 
   return (
     <View style={{ marginBottom: spacing.sm }}>
+      <Texte style={{ color: t.textSecondary, fontSize: typography.small, fontWeight: "600", marginBottom: 6 }}>
+        {moisDeSemaine(semaineAffichee)}
+      </Texte>
       <View onLayout={onLayout}>
-        {largeur > 0 && (
+        {largeur > 0 && WEB && (
+          <ScrollView
+            ref={defil}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / largeur))}
+            style={SNAP_CONTENEUR}
+          >
+            {PAGES.map((p) => (
+              <View key={p} style={SNAP_PAGE}>
+                {rendreSemaine(p)}
+              </View>
+            ))}
+          </ScrollView>
+        )}
+        {largeur > 0 && !WEB && (
           <FlatList
             ref={liste}
             data={PAGES}

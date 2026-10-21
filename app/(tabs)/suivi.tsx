@@ -1,3 +1,4 @@
+import { useCleReset } from "../../lib/reset-onglet";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Dumbbell, Moon, Sun } from "lucide-react-native";
 import { useCallback, useState } from "react";
@@ -409,11 +410,11 @@ const PARTIES = [
 ] as const;
 
 /** Suivi : trois parties, un sélecteur en haut. */
-export default function Suivi() {
+function SuiviContenu({ rappel }: { rappel: boolean }) {
   const t = useTheme();
   // ?partie=esprit : le rappel du soir ouvre directement l'Esprit.
   const { partie: demandee } = useLocalSearchParams<{ partie?: string }>();
-  const [partie, setPartie] = useState<(typeof PARTIES)[number]["cle"]>(demandee === "esprit" ? "esprit" : "corps");
+  const [partie, setPartie] = useState<(typeof PARTIES)[number]["cle"]>(rappel && demandee === "esprit" ? "esprit" : "corps");
   return (
     <View style={[styles.ecran, { backgroundColor: t.bgApp }]}>
       <View style={[styles.selecteur, { borderColor: t.border, backgroundColor: t.bgCard }]}>
@@ -437,4 +438,11 @@ export default function Suivi() {
       {partie === "corps" ? <Corps /> : partie === "esprit" ? <EspritEcran /> : <Progression />}
     </View>
   );
+}
+
+/** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
+export default function Suivi() {
+  const cle = useCleReset("suivi");
+  // Le ?partie=esprit du rappel ne vaut qu'à l'ouverture, pas après un retour à l'accueil.
+  return <SuiviContenu key={cle} rappel={cle === 0} />;
 }

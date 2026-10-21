@@ -1,3 +1,4 @@
+import { useCleReset } from "../../lib/reset-onglet";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
@@ -31,11 +32,6 @@ const ENTREES: Entree[] = [
     route: "/ancres",
   },
   {
-    titre: "Mes 3 tâches",
-    description: "Combien, comment elles sont choisies, ce qui compte.",
-    route: "/trois-reglages",
-  },
-  {
     titre: "Agenda",
     description: "Tes rendez-vous Google Agenda, en lecture seule.",
     route: "/agenda",
@@ -47,7 +43,7 @@ const ENTREES: Entree[] = [
   },
 ];
 
-export default function Profil() {
+function ProfilContenu() {
   const router = useRouter();
   const t = useTheme();
 
@@ -120,3 +116,8 @@ const styles = StyleSheet.create({
   aide: { marginTop: spacing.xl, paddingVertical: spacing.sm },
   aideTexte: { fontSize: typography.tiny, lineHeight: 17, textAlign: "center" },
 });
+
+/** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
+export default function Profil() {
+  return <ProfilContenu key={useCleReset("profil")} />;
+}

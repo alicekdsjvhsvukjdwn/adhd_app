@@ -160,10 +160,15 @@ test("catalogue d'idées : icônes connues, prix dans les fourchettes, rien d'aj
   const prix = Object.values(IDEES_RECOMPENSES).flat().map((i) => i.prix);
   assert.ok(prix.every((p) => p >= 20 && p <= 1000));
   for (const i of Object.values(IDEES_RECOMPENSES).flat()) assert.ok(ICONES_RECOMPENSES.includes(i.icone), i.nom);
-  assert.equal(IDEES_RECOMPENSES.mer.length, 7);
-  assert.equal(IDEES_RECOMPENSES.bouffe.length, 6);
-  assert.equal(IDEES_RECOMPENSES.temps.length, 6);
+  assert.equal(IDEES_RECOMPENSES.mer.length, 8);
+  assert.equal(IDEES_RECOMPENSES.bouffe.length, 7);
+  assert.equal(IDEES_RECOMPENSES.temps.length, 7);
   assert.equal(IDEES_RECOMPENSES.decouvertes.length, 6);
   const restantes = ideesRestantes("bouffe", ["glace", " RESTO "]).map((i) => i.nom);
-  assert.deepEqual(restantes, ["Pâtisserie", "Street food", "Brunch", "Soirée en ville"]);
+  // Gros objectifs : rien de proposé, on les crée soi-même ; chaque étagère est triée par prix.
+  assert.equal(IDEES_RECOMPENSES.gros.length, 0);
+  for (const l of Object.values(IDEES_RECOMPENSES)) assert.deepEqual(l.map((x) => x.prix), l.map((x) => x.prix).sort((a, b) => a - b));
+  const noms = Object.values(IDEES_RECOMPENSES).flat().map((x) => x.nom.toLowerCase());
+  assert.equal(new Set(noms).size, noms.length);
+  assert.deepEqual(restantes, ["Pâtisserie", "Street food", "Verre en terrasse", "Brunch", "Soirée en ville"]);
 });

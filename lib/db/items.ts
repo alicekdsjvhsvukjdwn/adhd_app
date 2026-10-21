@@ -38,6 +38,8 @@ export type Item = {
   cree_le: string;
   maj_le: string;
   liste_id: number | null;
+  /** Tâche régulière : jours de la semaine, « 1,3,5 » (0 = dimanche). */
+  jours: string | null;
 };
 
 export type NouvelItem = {
@@ -56,6 +58,7 @@ export type NouvelItem = {
   ancre_position?: Position | null;
   echeance?: string | null;
   liste_id?: number | null;
+  jours?: string | null;
 };
 
 const maintenant = () => new Date().toISOString();
@@ -87,9 +90,9 @@ export async function addItem(item: NouvelItem): Promise<number> {
       nom, type, statut, recurrence, template_id, variante_rang,
       categorie, moment, effort, duree_min, premiere_action, importance,
       ancre_id, ancre_position,
-      echeance, liste_id,
+      echeance, liste_id, jours,
       cree_le, maj_le
-    ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, 'actif', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.nom,
     item.type ?? "routine",
     item.recurrence ??
@@ -106,6 +109,7 @@ export async function addItem(item: NouvelItem): Promise<number> {
     item.ancre_position ?? null,
     item.echeance ?? null,
     item.liste_id ?? null,
+    item.jours ?? null,
     ts,
     ts,
   );

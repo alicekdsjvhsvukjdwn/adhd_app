@@ -69,6 +69,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       version_courte: "ancienne version courte écrite à la main ; devenue une étape essentielle à la version 20, plus écrite",
       version_longue: "ancienne version longue écrite à la main ; devenue une étape bonus à la version 20, plus écrite",
       liste_id: "tâches : liste (table listes)",
+      jours: "tâches régulières : jours de la semaine, ex. 1,3,5 (0 = dimanche)",
     },
   },
   completions: {
@@ -260,7 +261,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   meta: {
     table: "Valeurs diverses, clé → valeur.",
     colonnes: {
-      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' (réglages de Mes 3, JSON) | 'trois_compose:AAAA-MM-JJ' (les 3 du jour sont composés) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache)",
+      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' et 'trois_compose:AAAA-MM-JJ' (anciens réglages de Mes 3, plus lus) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache)",
       valeur:
         "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1 ; nuit_en_cours : jour et heure locaux du coucher, 'AAAA-MM-JJ HH:MM' ; nuit_reponses : JSON {qualite?, ecrans?}",
     },
@@ -289,8 +290,8 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
     colonnes: { tache_id: "tâche (table menage_taches)", echeance: `échéance honorée, ${JOUR}`, jour: `jour du cochage, ${JOUR}` },
   },
   trois: {
-    table: "Mes 3 : les tâches retenues pour un jour, dans l'ordre d'affichage.",
-    colonnes: { jour: JOUR, item_id: "tâche (table items)", rang: "position, 0 = première", source: "'choisi' (choisie la veille) | 'report' (pas faite la veille) | 'moteur' (proposée par l'appli)" },
+    table: "Mes 3 : les trois emplacements d'un jour.",
+    colonnes: { jour: JOUR, item_id: "tâche (table items)", rang: "emplacement, 0 à 2", source: "'choisi' (mon choix) | 'report' (pas faite la veille) | 'moteur' (proposée par l'appli) | 'vide' (emplacement vidé, item_id négatif)" },
   },
   humeurs: {
     table: "Esprit : une ligne par humeur notée (plusieurs par jour possibles). Données sensibles : elles restent sur l'appareil.",

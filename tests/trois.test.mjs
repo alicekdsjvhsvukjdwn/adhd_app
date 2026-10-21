@@ -11,86 +11,46 @@ import { basculerEtapeRoutine, enregistrerEtapes, getEtapesRoutines } from "../l
 import { addItem, placerTache } from "../lib/db/items.ts";
 import { genererPropositions } from "../lib/db/moteur.ts";
 import { getStats } from "../lib/db/stats.ts";
-import {
-  ajouterUneAutre,
-  choisirPourJour,
-  ecrirePrefsTrois,
-  lesTroisDuJour,
-  lirePrefsTrois,
-} from "../lib/db/trois.ts";
-import { ordreManuel } from "../lib/regles-taches.ts";
-import { POIDS } from "../lib/moteur-regles.ts";
-import { bonusCharge, composerTrois, ordreTrois, PREFS_DEFAUT, poidsTrois, prefsValides } from "../lib/trois-regles.ts";
-
-const C = (o = {}) => ({ urgence: 0, importance: 0.5, moment: 0.5, equilibre: 0.5, etat: 0.5, negligence: 0, ...o });
+import { basculerEtoile, emplacementsDuJour, placerDansTrois, retirerDesTrois } from "../lib/db/trois.ts";
+import { lireJours, ordreManuel, prevueLe } from "../lib/regles-taches.ts";
+import { composerTrois, estPropose, idVide } from "../lib/trois-regles.ts";
 
 // ─── Règles pures ───
 
-test("composition : choix de la veille, report des non faites, moteur pour compléter", () => {
-  const base = { nombre: 3, ordre: [5, 6, 7, 8, 9], veille: [], choisis: [] };
-  // Rien choisi, rien de la veille : le moteur.
-  assert.deepEqual(composerTrois({ ...base, mode: "melange" }).map((x) => x.itemId), [5, 6, 7]);
-  // Rien choisi : d'abord les non faites de la veille (4, faite, ne revient pas), puis le moteur.
-  assert.deepEqual(composerTrois({ ...base, mode: "melange", veille: [8, 4, 9] }), [
-    { itemId: 8, source: "report" },
-    { itemId: 9, source: "report" },
-    { itemId: 5, source: "moteur" },
-  ]);
-  // « Je choisis » : seulement ce que j'ai choisi, une tâche faite en moins, sans remplacement.
-  assert.deepEqual(composerTrois({ ...base, mode: "choisis", choisis: [9, 4, 6] }).map((x) => x.itemId), [9, 6]);
-  // « Mélange » : mes choix, puis le moteur complète.
-  assert.deepEqual(composerTrois({ ...base, mode: "melange", choisis: [9] }).map((x) => x.itemId), [9, 5, 6]);
-  // « L'appli choisit » : le moteur seul, mes choix ignorés ; le nombre est respecté.
-  assert.deepEqual(composerTrois({ ...base, mode: "appli", nombre: 2, choisis: [9], veille: [8] }).map((x) => x.itemId), [5, 6]);
-});
-
-test("préférences : valeurs hors limites remplacées par les défauts", () => {
-  assert.deepEqual(prefsValides(null), PREFS_DEFAUT);
-  const p = prefsValides({ mode: "x", nombre: 9, curseurs: { echeance: 2, priorite: 7 } });
-  assert.equal(p.mode, "melange");
-  assert.equal(p.nombre, 3);
-  assert.deepEqual(p.curseurs, { echeance: 2, priorite: 1, varier: 1 });
-  assert.equal(prefsValides({ nombre: 5 }).nombre, 5);
-});
-
-test("curseurs : poids remis à 1, échéance et priorité déplacées", () => {
-  const n = poidsTrois({ echeance: 1, priorite: 1, varier: 1 });
-  for (const k of Object.keys(POIDS)) assert.ok(Math.abs(n[k] - POIDS[k]) < 1e-9);
-  const fort = poidsTrois({ echeance: 2, priorite: 0, varier: 1 });
-  assert.ok(Math.abs(Object.values(fort).reduce((s, x) => s + x, 0) - 1) < 1e-9);
-  assert.ok(fort.urgence > POIDS.urgence && fort.importance < POIDS.importance);
-});
-
-test("ordre : listes exclues ce jour-là, échéance qui monte avec le curseur, variété des listes", () => {
-  const travail = { itemId: 1, liste_id: 10, duree_min: 30, composantes: C({ urgence: 1 }) };
-  const maison = { itemId: 2, liste_id: 20, duree_min: 30, composantes: C({ importance: 1 }) };
-  const maison2 = { itemId: 3, liste_id: 20, duree_min: 30, composantes: C({ importance: 0.95 }) };
-  const perso = { itemId: 4, liste_id: 30, duree_min: 30, composantes: C({ importance: 0.75 }) };
+test("composition : mes choix prennent leur place, le reste est proposé (prévues, veille, moteur)", () => {
+  const base = { stockes: [], dus: [], veille: [], ordre: [5, 6, 7, 8, 9] };
   const ids = (l) => l.map((x) => x.itemId);
-  const prefs = (extra = {}) => ({ ...PREFS_DEFAUT, ...extra });
-
-  // Samedi (6) : pas de Travail ; un lundi (1), oui.
-  assert.deepEqual(ids(ordreTrois([travail, maison], prefs({ exclusions: { 10: [0, 6] } }), 6, 0)), [2]);
-  assert.deepEqual(ids(ordreTrois([travail, maison], prefs({ exclusions: { 10: [0, 6] } }), 1, 0)).sort(), [1, 2]);
-  // Échéance : de « moins » à « plus », l'échéance passe devant.
-  const echeance = (n) => ids(ordreTrois([travail, maison], prefs({ curseurs: { echeance: n, priorite: 1, varier: 1 } }), 1, 0))[0];
-  assert.equal(echeance(0), 2);
-  assert.equal(echeance(2), 1);
-  // Varier : sans, deux tâches de la même liste se suivent ; avec, une autre liste s'intercale.
-  const varier = (n) => ids(ordreTrois([maison, maison2, perso], prefs({ curseurs: { echeance: 1, priorite: 1, varier: n } }), 1, 0));
-  assert.deepEqual(varier(0), [2, 3, 4]);
-  assert.deepEqual(varier(2), [2, 4, 3]);
+  // Rien de choisi : le moteur.
+  assert.deepEqual(ids(composerTrois(base)), [5, 6, 7]);
+  // Veille non faite d'abord (4 est faite : elle ne revient pas), puis le moteur.
+  assert.deepEqual(composerTrois({ ...base, veille: [8, 4, 9] }).map((e) => [e.itemId, e.source]), [[8, "report"], [9, "report"], [5, "moteur"]]);
+  // Tâche prévue ce jour-là : devant la veille et le moteur.
+  assert.deepEqual(ids(composerTrois({ ...base, dus: [7], veille: [8] })), [7, 8, 5]);
+  // Mon choix garde son rang, le reste complète sans doublon.
+  const e = composerTrois({ ...base, stockes: [{ rang: 1, itemId: 9, source: "choisi" }] });
+  assert.deepEqual(ids(e), [5, 9, 6]);
+  assert.equal(estPropose(e[0]), true);
+  assert.equal(estPropose(e[1]), false);
+  // Tâche choisie qui est faite : son emplacement reste libre, sans remplacement.
+  assert.deepEqual(ids(composerTrois({ ...base, stockes: [{ rang: 0, itemId: 4, source: "choisi" }] })), [null, 5, 6]);
+  // Emplacement vidé : il ne se remplit pas tout seul.
+  assert.deepEqual(ids(composerTrois({ ...base, stockes: [{ rang: 0, itemId: idVide(0), source: "vide" }] })), [null, 5, 6]);
+  // Peu de tâches : emplacements libres.
+  assert.deepEqual(ids(composerTrois({ ...base, ordre: [5] })), [5, null, null]);
 });
 
-test("journée chargée en rendez-vous : tâches courtes favorisées", () => {
-  assert.equal(bonusCharge(10, 60), 0);
-  assert.ok(bonusCharge(10, 300) > bonusCharge(10, 150) && bonusCharge(10, 150) > 0);
-  assert.ok(bonusCharge(90, 300) < 0);
-  assert.equal(bonusCharge(null, 300), 0);
-  const longue = { itemId: 1, liste_id: null, duree_min: 90, composantes: C({ importance: 1 }) };
-  const courte = { itemId: 2, liste_id: null, duree_min: 10, composantes: C({ importance: 0.8 }) };
-  assert.equal(ordreTrois([longue, courte], PREFS_DEFAUT, 1, 0)[0].itemId, 1);
-  assert.equal(ordreTrois([longue, courte], PREFS_DEFAUT, 1, 300)[0].itemId, 2);
+test("tâche régulière : due les bons jours (lundi → dimanche, changement d'année)", () => {
+  assert.deepEqual(lireJours("5,1,1,9,x,3"), [1, 3, 5]);
+  assert.deepEqual(lireJours(null), []);
+  const lun_mer_ven = lireJours("1,3,5");
+  // 2026-10-19 est un lundi
+  const attendu = [true, false, true, false, true, false, false];
+  for (let i = 0; i < 7; i++) assert.equal(prevueLe(lun_mer_ven, `2026-10-${19 + i}`), attendu[i], `jour ${i}`);
+  // Dimanche (0) autour du nouvel an : 2026-12-27 et 2027-01-03
+  assert.equal(prevueLe([0], "2026-12-27"), true);
+  assert.equal(prevueLe([0], "2027-01-03"), true);
+  assert.equal(prevueLe([0], "2027-01-01"), false);
+  assert.equal(prevueLe([], "2026-10-19"), false);
 });
 
 test("rendez-vous : du jour, charge (journées entières exclues), jours marqués", () => {
@@ -140,52 +100,83 @@ test("revenir à hier : étapes d'une routine cochées pour hier, pas pour aujou
   assert.equal((await getStats()).points, avant);
 });
 
-test("préférences enregistrées et relues", async () => {
-  assert.deepEqual(await lirePrefsTrois(), PREFS_DEFAUT);
-  await ecrirePrefsTrois({ ...PREFS_DEFAUT, nombre: 4, mode: "choisis", exclusions: { 1: [0, 6] } });
-  const p = await lirePrefsTrois();
-  assert.equal(p.nombre, 4);
-  assert.equal(p.mode, "choisis");
-  assert.deepEqual(p.exclusions, { 1: [0, 6] });
-  await ecrirePrefsTrois(PREFS_DEFAUT);
-});
-
-test("choix pour demain, report des non faites, tâche faite qui disparaît, « Une autre »", async () => {
+test("Mes 3 : proposition figée, choix, remplacement, retrait, étoile, report, tâche faite", async () => {
   await addItem({ nom: "A", type: "tache", importance: 3 });
   await addItem({ nom: "B", type: "tache", importance: 2 });
   const c = await addItem({ nom: "C", type: "tache", importance: 1 });
   const d = await addItem({ nom: "D", type: "tache", importance: 1 });
   const e = await addItem({ nom: "E", type: "tache", importance: 1 });
-  const prefs = { ...PREFS_DEFAUT, nombre: 3, mode: "choisis" };
+  const nom = (cl, id) => cl.find((p) => p.itemId === id)?.nom ?? null;
+  const noms = async (j, cl, figer = false) => (await emplacementsDuJour(j, cl, figer)).map((x) => (x.itemId ? nom(cl, x.itemId) : null));
 
-  // Hier : j'avais choisi C, D et E ; elles sont composées une fois, E est faite, C et D non.
-  await choisirPourJour(HIER, [c, d, e]);
+  // Hier : je choisis C, D et E (emplacements 0, 1, 2) ; E est faite, C et D non.
   let classement = await genererPropositions();
-  const hier = await lesTroisDuJour(HIER, classement, prefs, 0);
-  assert.deepEqual(hier.map((p) => p.nom), ["C", "D", "E"]);
+  await placerDansTrois(HIER, 0, c);
+  await placerDansTrois(HIER, 1, d);
+  await placerDansTrois(HIER, 2, e);
+  assert.deepEqual(await noms(HIER, classement), ["C", "D", "E"]);
   await completer(e, "complet");
   classement = await genererPropositions();
 
-  // Aujourd'hui, rien de choisi : C et D reviennent d'abord (E est faite), puis le moteur complète.
-  const jour = await lesTroisDuJour(AUJ, classement, prefs, 0);
-  assert.deepEqual(jour.map((p) => p.nom).slice(0, 2), ["C", "D"]);
-  assert.equal(jour.length, 3);
-  assert.ok(["A", "B"].includes(jour[2].nom));
+  // Aujourd'hui, rien de choisi : C et D reviennent d'abord (report), puis le moteur ; figé à l'ouverture.
+  const auj = await emplacementsDuJour(AUJ, classement, true);
+  assert.deepEqual(auj.slice(0, 2).map((x) => [nom(classement, x.itemId), x.source]), [["C", "report"], ["D", "report"]]);
+  assert.ok(["A", "B"].includes(nom(classement, auj[2].itemId)));
+  assert.ok(auj.every((x) => x.stocke));
+  const figee = await noms(AUJ, classement);
 
-  // Faite : elle disparaît, sans remplacement automatique.
-  await completer(c, "complet");
+  // Mon choix : remplacer l'emplacement 2 par B ; c'est un choix, plus une proposition.
+  const b = classement.find((p) => p.nom === "B").itemId;
+  await placerDansTrois(AUJ, 2, b);
+  assert.equal((await emplacementsDuJour(AUJ, classement, false))[2].source, "choisi");
+  assert.equal((await noms(AUJ, classement))[2], "B");
+
+  // Déplacer une tâche déjà dans les 3 vers un autre emplacement libère l'ancien.
+  await placerDansTrois(AUJ, 0, b);
+  assert.deepEqual(await noms(AUJ, classement), ["B", "D", null]);
+  await placerDansTrois(AUJ, 2, c);
+  assert.deepEqual(await noms(AUJ, classement), ["B", "D", "C"]);
+
+  // Retirer : l'emplacement reste libre, la proposition ne revient pas.
+  await retirerDesTrois(AUJ, 1);
+  assert.deepEqual(await noms(AUJ, classement, true), ["B", null, "C"]);
+
+  // Étoile : sur une tâche des 3, elle la retire ; sur une autre, elle va dans le premier emplacement libre ; si tout est pris, false.
+  const empl = () => emplacementsDuJour(AUJ, classement, false);
+  assert.equal(await basculerEtoile(AUJ, await empl(), d), true);
+  assert.deepEqual(await noms(AUJ, classement), ["B", "D", "C"]);
+  assert.equal(await basculerEtoile(AUJ, await empl(), classement.find((p) => p.nom === "A").itemId), false);
+  assert.equal(await basculerEtoile(AUJ, await empl(), c), true);
+  assert.deepEqual(await noms(AUJ, classement), ["B", "D", null]);
+
+  // Tâche faite : elle disparaît, sans remplacement automatique.
+  await completer(d, "complet");
   classement = await genererPropositions();
-  const apres = await lesTroisDuJour(AUJ, classement, prefs, 0);
-  assert.deepEqual(apres.map((p) => p.nom), jour.map((p) => p.nom).filter((n) => n !== "C"));
-  // « Une autre ? » en ajoute une.
-  assert.equal(await ajouterUneAutre(AUJ, classement, prefs, 0), true);
-  assert.equal((await lesTroisDuJour(AUJ, classement, prefs, 0)).length, apres.length + 1);
+  assert.deepEqual(await noms(AUJ, classement), ["B", null, null]);
 
-  // decision_log garde les poids utilisés.
-  const db = await getDatabase();
-  const ligne = await db.getFirstAsync("SELECT composantes, raison FROM decision_log WHERE raison LIKE 'Mes 3%' ORDER BY id DESC LIMIT 1");
-  assert.match(ligne.raison, /^Mes 3 \(/);
-  assert.ok(JSON.parse(ligne.composantes).poids_trois.urgence > 0);
+  // Demain, rien de choisi, sans rien enregistrer : proposé en direct (B de ce soir en tête : elle reste à faire).
+  const demain = decalerJours(AUJ, 1);
+  const dem = await emplacementsDuJour(demain, classement, false);
+  assert.equal(nom(classement, dem[0].itemId), "B");
+  assert.equal(dem[0].source, "report");
+  assert.ok(dem.every((x) => !x.stocke));
+  assert.equal((await (await getDatabase()).getFirstAsync("SELECT COUNT(*) AS n FROM trois WHERE jour = ?", demain)).n, 0);
+  void figee;
+});
+
+test("tâche régulière aux jours choisis : proposée en priorité ces jours-là", async () => {
+  const jour = new Date(AUJ + "T00:00:00Z").getUTCDay();
+  const id = await addItem({ nom: "Courir", type: "tache", importance: 1, recurrence: "semaine:2", jours: String(jour) });
+  const autre = await addItem({ nom: "Ranger", type: "tache", importance: 3, recurrence: "semaine:2", jours: String((jour + 3) % 7) });
+  const classement = await genererPropositions();
+  const p = classement.find((x) => x.itemId === id);
+  assert.deepEqual(p.jours, [jour]);
+  assert.equal(p.raison, "Prévue aujourd'hui");
+  assert.notEqual(classement.find((x) => x.itemId === autre).raison, "Prévue aujourd'hui");
+  assert.equal(classement.filter((x) => x.raison === "Prévue aujourd'hui").length >= 1, true);
+  // Elle ouvre les 3 d'un jour sans choix (avant les tâches plus importantes).
+  const j = await emplacementsDuJour(decalerJours(AUJ, 7), classement, false);
+  assert.equal(j[0].itemId, id);
 });
 
 // ─── Place choisie à la main ───

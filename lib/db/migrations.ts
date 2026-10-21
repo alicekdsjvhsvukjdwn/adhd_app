@@ -12,6 +12,7 @@ import {
   SQL_TABLES_SEANCES_GUIDEES,
   SQL_MOMENTS,
   SQL_RANG_MANUEL,
+  SQL_JOURS_TACHE,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
@@ -771,6 +772,14 @@ const MIGRATIONS: Migration[] = [
     nom: "esprit : humeur, journal de pensées, TCC, vision",
     run: async (db) => {
       await db.execAsync(SQL_TABLES_ESPRIT);
+    },
+  },
+
+  {
+    version: 31,
+    nom: "jours de la semaine d'une tâche régulière",
+    run: async (db) => {
+      await db.execAsync(SQL_JOURS_TACHE);
     },
   },
 ];

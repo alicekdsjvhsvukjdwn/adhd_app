@@ -292,6 +292,14 @@ export const SQL_RANG_MANUEL = `
 `;
 
 /**
+ * Migration 31 : jours de la semaine d'une tâche régulière (« 1,3,5 », 0 = dimanche).
+ * Ces jours-là elle est due et proposée en priorité pour Mes 3. Vide = pas de jour précis.
+ */
+export const SQL_JOURS_TACHE = `
+  ALTER TABLE items ADD COLUMN jours TEXT;
+`;
+
+/**
  * Migration 28 : les cinq étagères pensées pour moi (mer, bouffe, temps, découvertes, gros).
  * Les anciennes clés sont rangées d'après le nom ; les nouvelles ne bougent pas, donc rejouable.
  * (lower() de SQLite ne touche pas aux accents, d'où les deux orthographes.)

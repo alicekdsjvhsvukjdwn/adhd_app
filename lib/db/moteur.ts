@@ -3,6 +3,8 @@ import {
   debutPeriode,
   finPeriode,
   lireFrequence,
+  lireJours,
+  prevueLe,
   retardObjectif,
   urgenceAvecRetard,
   type Periode,
@@ -69,8 +71,11 @@ type CandidatRow = {
   liste_id: number | null;
   recurrence: string | null;
   rang_manuel: number | null;
+  jours: string | null;
   /** Calculé après la requête, pour les tâches « x fois par période ». */
   compte?: Proposition["compte"];
+  /** Tâche régulière dont c'est un des jours. */
+  prevue?: boolean;
   /** Nom de la liste quand son retard sur l'objectif fait l'urgence de la tâche. */
   pourObjectif?: string;
 };
@@ -80,6 +85,8 @@ export type Proposition = {
   liste_id: number | null;
   /** Place choisie à la main dans la liste (négatif : en haut, positif : en bas). */
   rang_manuel: number | null;
+  /** Jours de la semaine d'une tâche régulière (0 = dimanche) ; vide = pas de jour précis. */
+  jours: number[];
   /** Tâche « x fois par semaine / par mois » : où on en est sur la période. */
   compte: { fait: number; cible: number; periode: Periode } | null;
   nom: string;
@@ -136,7 +143,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
             i.importance, i.duree_min,
             i.premiere_action, i.echeance, i.heure_reelle_moy,
             i.nb_propositions_sans_action,
-            i.liste_id, i.recurrence, i.rang_manuel,
+            i.liste_id, i.recurrence, i.rang_manuel, i.jours,
             COALESCE(a.moment, i.moment) AS moment_effectif
      FROM items i
      LEFT JOIN ancres a ON a.id = i.ancre_id
@@ -173,10 +180,13 @@ export async function genererPropositions(): Promise<Proposition[]> {
     const cat = categorieEffectiveLocale(c);
     const urgenceEcheance = scoreUrgence(c.echeance);
     const liste = c.liste_id !== null ? retards.get(c.liste_id) : undefined;
-    const urgence = liste && !jourDifficile
-      ? urgenceAvecRetard(urgenceEcheance, liste.retard)
-      : urgenceEcheance;
-    if (urgence > urgenceEcheance) c.pourObjectif = liste?.nom;
+    c.prevue = prevueLe(lireJours(c.jours), date);
+    const urgence = c.prevue
+      ? 1 // jour prévu : due aujourd'hui
+      : liste && !jourDifficile
+        ? urgenceAvecRetard(urgenceEcheance, liste.retard)
+        : urgenceEcheance;
+    if (!c.prevue && urgence > urgenceEcheance) c.pourObjectif = liste?.nom;
     const composantes: Composantes = {
       urgence,
       importance: clamp01((c.importance - 1) / 2), // 1..3 => 0, .5, 1
@@ -248,6 +258,7 @@ function construire(
     itemId: n.c.id,
     liste_id: n.c.liste_id,
     rang_manuel: n.c.rang_manuel,
+    jours: lireJours(n.c.jours),
     compte: n.c.compte ?? null,
     nom: n.c.nom,
     importance: n.c.importance,
@@ -259,7 +270,7 @@ function construire(
     rang,
     propose,
     exploration,
-    raison: raisonAvecObjectif(n),
+    raison: n.c.prevue ? "Prévue aujourd'hui" : raisonAvecObjectif(n),
   };
 }
 

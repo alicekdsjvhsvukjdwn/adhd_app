@@ -27,6 +27,8 @@ import { PlusMoins } from "../components/PlusMoins";
 import {
   ecrireFrequence,
   lireFrequence,
+  lireJours,
+  ecrireJours,
   POINTS_DERNIERE_ETAPE,
   POINTS_ESSENTIELLES,
   POINTS_ETAPE,
@@ -126,6 +128,8 @@ function joursDe(recurrence: string | null, creeLe: string): number[] {
 }
 
 /** Lundi en premier à l'écran ; valeurs en convention JavaScript (0 = dimanche). */
+const JOURS_COMPLETS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
 const JOURS: { valeur: number; libelle: string }[] = [
   { valeur: 1, libelle: "L" },
   { valeur: 2, libelle: "M" },
@@ -234,6 +238,8 @@ export default function Ajouter() {
   const [echeance, setEcheance] = useState<string | null>(null);
   const [rythme, setRythme] = useState<Rythme>("une_fois");
   const [cible, setCible] = useState(3);
+  /** Tâche « x fois par semaine » : jours précis (facultatif) ; ces jours-là elle est due. */
+  const [joursTache, setJoursTache] = useState<number[]>([]);
 
   // Routine
   const [moment, setMoment] = useState<Moment | null>("matin");
@@ -277,6 +283,7 @@ export default function Ajouter() {
         if (freq) {
           setRythme(freq.periode);
           setCible(freq.cible);
+          setJoursTache(lireJours(item.jours));
         }
         setNom(item.nom);
         setCategorie(
@@ -326,6 +333,12 @@ export default function Ajouter() {
   const valide =
     nom.trim().length > 0 && (typeEffectif === "tache" || jours.length > 0);
 
+  /** Jours précis : le nombre de fois suit les jours choisis (modifiable ensuite). */
+  const basculerJourTache = (j: number) => {
+    const suite = joursTache.includes(j) ? joursTache.filter((x) => x !== j) : [...joursTache, j];
+    setJoursTache(suite);
+    if (suite.length > 0) setCible(suite.length);
+  };
   const basculerJour = (j: number) =>
     setJours((actuels) =>
       actuels.includes(j) ? actuels.filter((x) => x !== j) : [...actuels, j],
@@ -369,6 +382,7 @@ export default function Ajouter() {
                 recurrence: periodique
                   ? ecrireFrequence({ periode: rythme as Periode, cible })
                   : null,
+                jours: periodique && rythme === "semaine" ? ecrireJours(joursTache) : null,
                 liste_id: listeId,
               }
             : {
@@ -388,6 +402,7 @@ export default function Ajouter() {
           recurrence: periodique
             ? ecrireFrequence({ periode: rythme as Periode, cible })
             : null,
+          jours: periodique && rythme === "semaine" ? ecrireJours(joursTache) : null,
           liste_id: listeId,
         });
         if (etapes.length > 0) await enregistrerEtapes(id, etapes);
@@ -677,6 +692,40 @@ export default function Ajouter() {
                   fois par {rythme}
                 </Texte>
               </View>
+            )}
+            {periodique && rythme === "semaine" && (
+              <>
+                <Texte style={[styles.label, { color: t.textSecondary }]}>
+                  Jours précis (facultatif)
+                </Texte>
+                <View style={styles.ligneJours}>
+                  {JOURS.map((j) => {
+                    const actif = joursTache.includes(j.valeur);
+                    return (
+                      <TouchableOpacity
+                        key={j.valeur}
+                        style={[
+                          styles.jour,
+                          { backgroundColor: actif ? t.accent : t.bgCard, borderColor: actif ? t.accent : t.border },
+                        ]}
+                        onPress={() => basculerJourTache(j.valeur)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: actif }}
+                        accessibilityLabel={JOURS_COMPLETS[j.valeur]}
+                      >
+                        <Texte style={[styles.jourTexte, { color: actif ? t.textOnAccent : t.textSecondary }]}>
+                          {j.libelle}
+                        </Texte>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Texte style={[styles.aide, { color: t.textMuted }]}>
+                  {joursTache.length === 0
+                    ? "Sans jour précis, la tâche est proposée quand l'appli le juge utile."
+                    : "Ces jours-là, la tâche est due et proposée en priorité pour tes 3."}
+                </Texte>
+              </>
             )}
 
             {!periodique && (

@@ -295,3 +295,37 @@ export function ordreManuel<T extends { rang_manuel: number | null }>(taches: T[
   const parRang = (a: T, b: T) => a.rang_manuel! - b.rang_manuel!;
   return [...haut.sort(parRang), ...milieu, ...bas.sort(parRang)];
 }
+
+/** Semaines de chaque côté de la semaine en cours dans la bande des jours (un an). */
+export const SEMAINES_BANDE = 52;
+
+/** Position (0 … 2×52) de la semaine qui contient `jour` dans la bande ouverte autour d'`aujourdhui` : lundi → dimanche, d'une même semaine, donnent le même index. */
+export function indexSemaine(aujourdhui: string, jour: string): number {
+  const ms = (iso: string) => Date.parse(semaineDe(iso)[0] + "T00:00:00Z");
+  return SEMAINES_BANDE + Math.round((ms(jour) - ms(aujourdhui)) / (7 * 86_400_000));
+}
+
+const MOIS_LONGS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+/** « octobre 2026 » : le mois du jeudi de la semaine (celui où elle passe le plus de jours). */
+export function moisDeSemaine(semaine: string[]): string {
+  const d = new Date(semaine[3] + "T00:00:00Z");
+  return `${MOIS_LONGS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+// ─── Tâches régulières : jours de la semaine ────────────────────────────
+
+/** items.jours : "1,3,5" (0 = dimanche, convention JS). Vide ou absent = pas de jour précis. */
+export function lireJours(brut: string | null | undefined): number[] {
+  return (brut ?? "")
+    .split(",")
+    .filter((x) => x.trim() !== "")
+    .map(Number)
+    .filter((n, i, a) => Number.isInteger(n) && n >= 0 && n <= 6 && a.indexOf(n) === i)
+    .sort((a, b) => a - b);
+}
+
+export const ecrireJours = (jours: number[]): string | null => (jours.length ? lireJours(jours.join(",")).join(",") : null);
+
+/** Une tâche à jours précis est prévue ce jour-là. */
+export const prevueLe = (jours: number[], iso: string): boolean => jours.includes(new Date(iso + "T00:00:00Z").getUTCDay());

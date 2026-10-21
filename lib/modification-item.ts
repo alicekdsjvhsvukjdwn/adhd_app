@@ -22,6 +22,7 @@ export const CHAMPS_MODIFIABLES = [
   "ancre_id",
   "ancre_position",
   "liste_id",
+  "jours",
 ] as const;
 
 export type ChampModifiable = (typeof CHAMPS_MODIFIABLES)[number];

@@ -1,3 +1,4 @@
+import { useCleReset } from "../../lib/reset-onglet";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -62,7 +63,7 @@ const CINQ_MINUTES = 5 * 60_000;
  * Routines : tout tient sur un écran. L'anneau des domaines, la rangée des
  * domaines, puis les routines du domaine choisi (seule zone qui défile).
  */
-export default function Routines() {
+function RoutinesContenu() {
   const router = useRouter();
   const t = useTheme();
   const { width, height } = useWindowDimensions();
@@ -779,3 +780,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
 });
+
+/** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
+export default function Routines() {
+  return <RoutinesContenu key={useCleReset("index")} />;
+}

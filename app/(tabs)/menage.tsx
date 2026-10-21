@@ -1,3 +1,4 @@
+import { useCleReset } from "../../lib/reset-onglet";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -45,7 +46,7 @@ function etat(t: TacheMenage, auj: string): string {
   return d === 1 ? "demain" : `dans ${d} jours`;
 }
 
-export default function Menage() {
+function MenageContenu() {
   const t = useTheme();
   const auj = useJourCourant();
   const [pieces, setPieces] = useState<Piece[]>([]);
@@ -296,3 +297,8 @@ const styles = StyleSheet.create({
   feuille: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   ajout: { paddingVertical: spacing.md },
 });
+
+/** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
+export default function Menage() {
+  return <MenageContenu key={useCleReset("menage")} />;
+}

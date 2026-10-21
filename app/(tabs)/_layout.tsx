@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Gift, Moon, SprayCan, Sun, SquareCheck, User, type LucideIcon } from "lucide-react-native";
 import { Platform, type ColorValue } from "react-native";
+import { resetOnglet } from "../../lib/reset-onglet";
 import { policeDe, typography, useTheme } from "../../lib/theme";
 
 /** Gris des onglets inactifs (icône et libellé). */
@@ -16,6 +17,12 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      // Appui sur l'onglet déjà ouvert : retour à son accueil.
+      screenListeners={({ route, navigation }) => ({
+        tabPress: () => {
+          if (navigation.isFocused()) resetOnglet(route.name);
+        },
+      })}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: t.accent,

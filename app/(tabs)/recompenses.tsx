@@ -1,3 +1,4 @@
+import { useCleReset } from "../../lib/reset-onglet";
 import { BoutonOptions } from "../../components/Options";
 import { useFocusEffect } from "expo-router";
 import { useJourCourant } from "../../hooks/useJourCourant";
@@ -13,7 +14,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { MenuOptions } from "../../components/MenuOptions";
 import { Texte, ChampTexte } from "../../components/Texte";
 import { IconeRecompense } from "../../components/IconeRecompense";
 import {
@@ -39,7 +39,7 @@ import {
   type CategorieRecompense,
 } from "../../lib/recompenses-regles";
 import { niveauDePoints, totalAffiche } from "../../lib/regles-taches";
-import { ideesRestantes } from "../../lib/catalogue-recompenses";
+import { FeuilleAjoutRecompense } from "../../components/FeuilleAjoutRecompense";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../../lib/theme";
 
 const PRIX = [25, 50, 100, 150, 300, 500];
@@ -73,7 +73,7 @@ type Formulaire = {
   categorie: CategorieRecompense;
 };
 
-export default function Recompenses() {
+function RecompensesContenu() {
   const t = useTheme();
   const aujourdhui = useJourCourant();
 
@@ -85,8 +85,8 @@ export default function Recompenses() {
   const [voirRegles, setVoirRegles] = useState(false);
   const [voirAchats, setVoirAchats] = useState(false);
   const [bravo, setBravo] = useState<string | null>(null);
-  /** Étagère dont le menu « Idées » est ouvert. */
-  const [ideesDe, setIdeesDe] = useState<CategorieRecompense | null>(null);
+  /** Feuille « + Ajouter » ouverte, avec l'étagère d'où l'on vient. */
+  const [ajoutDe, setAjoutDe] = useState<CategorieRecompense | null>(null);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -224,6 +224,15 @@ export default function Recompenses() {
           </View>
         </View>
 
+        <TouchableOpacity
+          onPress={() => setAjoutDe("mer")}
+          style={[styles.ajoutHaut, { borderColor: t.accent }]}
+          accessibilityRole="button"
+          accessibilityLabel="Ajouter une récompense"
+        >
+          <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>+ Ajouter</Texte>
+        </TouchableOpacity>
+
         {/* Une étagère par catégorie */}
         {etageres().map((cle) => {
           const cat = categorieRecompense(cle);
@@ -233,17 +242,6 @@ export default function Recompenses() {
               <View style={styles.etagereTitre}>
                 <View style={[styles.point, { backgroundColor: cat.couleur }]} />
                 <Texte style={[styles.section, { color: t.textPrimary, flex: 1 }]}>{cat.nom}</Texte>
-                {ideesRestantes(cle, dedans.map((r) => r.nom)).length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setIdeesDe(cle)}
-                    hitSlop={8}
-                    style={[styles.idees, { borderColor: cat.couleur }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Idées de récompenses : ${cat.nom}`}
-                  >
-                    <Texte style={{ color: cat.couleur, fontSize: typography.small, fontWeight: "600" }}>Idées</Texte>
-                  </TouchableOpacity>
-                )}
               </View>
               <ScrollView
                 horizontal
@@ -300,9 +298,7 @@ export default function Recompenses() {
                   );
                 })}
                 <TouchableOpacity
-                  onPress={() =>
-                    setFormulaire({ nom: "", icone: "cadeau", prix: "50", categorie: cle })
-                  }
+                  onPress={() => setAjoutDe(cle)}
                   style={[styles.carte, styles.ajouter, { borderColor: t.border }]}
                   accessibilityLabel={`Ajouter une récompense dans ${cat.nom}`}
                 >
@@ -406,20 +402,19 @@ export default function Recompenses() {
       )}
 
       {/* Créer / modifier une récompense */}
-      <MenuOptions
-        titre={ideesDe ? `Idées · ${categorieRecompense(ideesDe).nom}` : ""}
-        options={
-          ideesDe
-            ? ideesRestantes(ideesDe, liste.map((r) => r.nom)).map((i) => ({
-                libelle: `${i.nom} · ${i.prix} pts`,
-                onPress: async () => {
-                  await ajouterRecompense({ nom: i.nom, icone: i.icone, prix: i.prix, categorie: ideesDe });
-                  await charger();
-                },
-              }))
-            : []
-        }
-        onFermer={() => setIdeesDe(null)}
+      <FeuilleAjoutRecompense
+        categorie={ajoutDe}
+        existantes={liste.map((r) => r.nom)}
+        onCreer={(cat) => {
+          setAjoutDe(null);
+          // iOS n'ouvre pas une modale pendant qu'une autre se ferme.
+          setTimeout(() => setFormulaire({ nom: "", icone: "cadeau", prix: "50", categorie: cat }), 350);
+        }}
+        onAjouter={async (i, cat) => {
+          await ajouterRecompense({ nom: i.nom, icone: i.icone, prix: i.prix, categorie: cat });
+          await charger();
+        }}
+        onFermer={() => setAjoutDe(null)}
       />
 
       <Modal
@@ -641,7 +636,15 @@ const styles = StyleSheet.create({
   soldeTexte: { fontSize: typography.small, fontWeight: "600" },
 
   etagere: { marginBottom: spacing.lg },
-  idees: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 4 },
+  ajoutHaut: {
+    alignSelf: "flex-start",
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 6,
+  },
   etagereTitre: {
     flexDirection: "row",
     alignItems: "center",
@@ -789,3 +792,8 @@ const styles = StyleSheet.create({
   annulerForm: { alignItems: "center", paddingTop: spacing.md },
   annulerFormTexte: { fontSize: typography.bodySmall, fontWeight: "600" },
 });
+
+/** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
+export default function Recompenses() {
+  return <RecompensesContenu key={useCleReset("recompenses")} />;
+}

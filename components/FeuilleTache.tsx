@@ -13,6 +13,7 @@ import type { Etape } from "../lib/db/etapes";
 import type { Proposition } from "../lib/db/moteur";
 import { LIBELLES_PRIORITE, libelleEcheance } from "../lib/regles-taches";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
+import { Etoile } from "./Etoile";
 import { ChampTexte, Texte } from "./Texte";
 
 type Props = {
@@ -24,6 +25,10 @@ type Props = {
   couleur: string;
   /** Aujourd'hui, pour dire « demain », « dans 3 jours ». */
   jour: string;
+  /** Dans les 3 du jour (« aujourd'hui » ou « demain »), et le nom de ce jour. */
+  enTrois: boolean;
+  nomJourTrois: string;
+  onEtoile: () => void;
   onFermer: () => void;
   onEtape: (e: Etape) => void;
   onTerminer: () => void;
@@ -63,7 +68,10 @@ export function FeuilleTache(p: Props) {
               style={[styles.feuille, { backgroundColor: t.bgCard, borderColor: t.border }]}
             >
               <ScrollView keyboardShouldPersistTaps="handled">
-                <Texte style={[styles.titre, { color: t.textPrimary }]}>{tache.nom}</Texte>
+                <View style={styles.enteteTitre}>
+                  <Texte style={[styles.titre, { color: t.textPrimary, flex: 1 }]}>{tache.nom}</Texte>
+                  <Etoile active={p.enTrois} jour={p.nomJourTrois} onPress={p.onEtoile} />
+                </View>
                 <View style={styles.infos}>
                   {p.liste && (
                     <View style={styles.info}>
@@ -182,6 +190,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingBottom: spacing.xxxl,
   },
+  enteteTitre: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   titre: { fontSize: typography.h2, fontWeight: "700" },
   infos: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.sm },
   info: { flexDirection: "row", alignItems: "center", gap: 6 },
