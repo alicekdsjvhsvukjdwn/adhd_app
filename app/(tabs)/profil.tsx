@@ -32,6 +32,11 @@ const ENTREES: Entree[] = [
     route: "/ancres",
   },
   {
+    titre: "Mes listes",
+    description: "Les catégories de tes tâches : noms, icônes, couleurs.",
+    route: "/listes",
+  },
+  {
     titre: "Agenda",
     description: "Tes rendez-vous Google Agenda, en lecture seule.",
     route: "/agenda",

@@ -44,12 +44,7 @@ import {
 } from "../../lib/db/etapes";
 import { estJourDifficile } from "../../lib/db/jour-difficile";
 import {
-  ajouterListe,
-  compterTaches,
   getListes,
-  listeDeRepli,
-  modifierListe,
-  supprimerListe,
   type Liste,
   definirObjectif,
   suiviObjectif,
@@ -74,7 +69,7 @@ import { basculerEtoile, emplacementsDuJour, placerDansTrois, retirerDesTrois } 
 import { candidatsOrdonnes, estPropose, rangDe, type Emplacement } from "../../lib/trois-regles";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { avecAlpha, melanger, radius, spacing, typography, useTheme } from "../../lib/theme";
-import { CLES_COULEURS, useCouleurListe } from "../../lib/theme-listes";
+import { useCouleurListe } from "../../lib/theme-listes";
 
 type Annulable =
   | { type: "tache"; id: number; texte: string }
@@ -94,10 +89,6 @@ function TachesContenu() {
   const [listes, setListes] = useState<Liste[]>([]);
   /** null = toutes les listes */
   const [filtre, setFiltre] = useState<number | null>(null);
-  const [gestion, setGestion] = useState(false);
-  const [noms, setNoms] = useState<Record<number, string>>({});
-  const [icones, setIcones] = useState<Record<number, string>>({});
-  const [nouvelleListe, setNouvelleListe] = useState("");
   // Carnet : zone de note ouverte après avoir coché une tâche.
   const [noteOuverte, setNoteOuverte] = useState<{
     itemId: number;
@@ -132,8 +123,6 @@ function TachesContenu() {
   const [feuille, setFeuille] = useState(false);
   /** Tâche dont la feuille « détail » est ouverte. */
   const [detailId, setDetailId] = useState<number | null>(null);
-  // iOS n'ouvre pas une modale pendant qu'une autre se ferme : la gestion des listes attend.
-  const gestionApres = useRef(false);
   /** Objectif de chaque liste qui en a un : où en est la période en cours. */
   const [objectifs, setObjectifs] = useState<Record<number, { fait: number; cible: number }>>({});
   const minuteurNotee = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,8 +162,6 @@ function TachesContenu() {
     setEtapes(await getEtapesPour(toutes.map((p) => p.itemId)));
     const l = await getListes();
     setListes(l);
-    setNoms(Object.fromEntries(l.map((x) => [x.id, x.nom])));
-    setIcones(Object.fromEntries(l.map((x) => [x.id, x.icone ?? ""])));
     setFiltre((f) => (f !== null && !l.some((x) => x.id === f) ? null : f));
     const suivis = await Promise.all(l.map((x) => suiviObjectif(x)));
     setObjectifs(
@@ -1000,13 +987,6 @@ function TachesContenu() {
                   </TouchableOpacity>
                 );
               })}
-              <TouchableOpacity
-                onPress={() => setGestion(true)}
-                style={[styles.tuile, styles.tuileNouvelle, { borderColor: t.border }]}
-                accessibilityRole="button"
-              >
-                <Texte style={[styles.lien, { color: t.textMuted }]}>+ Nouvelle liste</Texte>
-              </TouchableOpacity>
             </View>
           </>
         )}
@@ -1053,11 +1033,6 @@ function TachesContenu() {
         transparent
         animationType="slide"
         onRequestClose={() => setFeuille(false)}
-        onDismiss={() => {
-          if (!gestionApres.current) return;
-          gestionApres.current = false;
-          setGestion(true);
-        }}
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -1111,19 +1086,6 @@ function TachesContenu() {
                   étapes, échéance, moment…
                 </Texte>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.feuilleLigne, { borderTopColor: t.border }]}
-                onPress={() => {
-                  setFeuille(false);
-                  if (Platform.OS === "ios") gestionApres.current = true;
-                  else setGestion(true);
-                }}
-              >
-                <Texte style={[styles.feuilleTexte, { color: t.textPrimary }]}>Gérer mes listes</Texte>
-                <Texte style={[styles.feuilleAide, { color: t.textMuted }]}>
-                  noms, icônes, couleurs
-                </Texte>
-              </TouchableOpacity>
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
@@ -1173,146 +1135,6 @@ function TachesContenu() {
           historique(detail);
         }}
       />
-
-      <Modal
-        visible={gestion}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setGestion(false)}
-      >
-        <Pressable style={styles.fond} onPress={() => setGestion(false)}>
-          <Pressable style={[styles.gestion, { backgroundColor: t.bgCard, borderColor: t.border, borderWidth: 1 }]}>
-            <Texte style={[styles.gestionTitre, { color: t.textPrimary }]}>Mes listes</Texte>
-            {listes.map((l) => (
-              <View key={l.id} style={styles.gestionBloc}>
-              <View style={styles.gestionLigne}>
-                <ChampTexte
-                  style={[
-                    styles.gestionIcone,
-                    { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
-                  ]}
-                  value={icones[l.id] ?? ""}
-                  onChangeText={(v) => setIcones({ ...icones, [l.id]: v })}
-                  onEndEditing={async () => {
-                    const v = (icones[l.id] ?? "").trim();
-                    if (v !== (l.icone ?? "")) await modifierListe(l.id, l.nom, v || null, l.couleur);
-                    await charger();
-                  }}
-                  placeholder="•"
-                  placeholderTextColor={t.textMuted}
-                  maxLength={8}
-                  accessibilityLabel={`Icône de ${l.nom}`}
-                />
-                <ChampTexte
-                  style={[
-                    styles.gestionChamp,
-                    { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
-                  ]}
-                  value={noms[l.id] ?? l.nom}
-                  onChangeText={(v) => setNoms({ ...noms, [l.id]: v })}
-                  onEndEditing={async () => {
-                    const v = (noms[l.id] ?? "").trim();
-                    if (v && v !== l.nom) await modifierListe(l.id, v, l.icone, l.couleur);
-                    await charger();
-                  }}
-                />
-                <TouchableOpacity
-                  hitSlop={10}
-                  onPress={async () => {
-                    if (listes.length <= 1) {
-                      Alert.alert("Il faut garder au moins une liste.");
-                      return;
-                    }
-                    const n = await compterTaches(l.id);
-                    const repli = await listeDeRepli(l.id);
-                    Alert.alert(
-                      `Supprimer « ${l.nom} » ?`,
-                      n > 0
-                        ? `Ses ${n} tâche${n > 1 ? "s" : ""} passeront dans « ${repli?.nom} ».`
-                        : "Elle est vide.",
-                      [
-                        { text: "Garder", style: "cancel" },
-                        {
-                          text: "Supprimer",
-                          style: "destructive",
-                          onPress: async () => {
-                            await supprimerListe(l.id);
-                            if (filtre === l.id) setFiltre(null);
-                            await charger();
-                          },
-                        },
-                      ],
-                    );
-                  }}
-                >
-                  <Texte style={[styles.gestionSupprimer, { color: t.danger }]}>✕</Texte>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.gestionCouleurs}>
-                {CLES_COULEURS.map((cle) => {
-                  const choisie = l.couleur === cle;
-                  return (
-                    <TouchableOpacity
-                      key={cle}
-                      onPress={async () => {
-                        await modifierListe(l.id, l.nom, l.icone, cle);
-                        await charger();
-                      }}
-                      style={[
-                        styles.gestionCouleur,
-                        {
-                          backgroundColor: couleurListe(cle).fond,
-                          borderColor: choisie ? t.textPrimary : "transparent",
-                        },
-                      ]}
-                      hitSlop={4}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: choisie }}
-                      accessibilityLabel={`Couleur ${cle} pour ${l.nom}`}
-                    />
-                  );
-                })}
-              </View>
-              </View>
-            ))}
-            <View style={styles.gestionLigne}>
-              <Texte style={{ fontSize: 18 }}>＋</Texte>
-              <ChampTexte
-                style={[
-                  styles.gestionChamp,
-                  { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary },
-                ]}
-                placeholder="Nouvelle liste (ex : Projet musique)"
-                placeholderTextColor={t.textMuted}
-                value={nouvelleListe}
-                onChangeText={setNouvelleListe}
-                onSubmitEditing={async () => {
-                  if (!nouvelleListe.trim()) return;
-                  await ajouterListe(nouvelleListe, "📁");
-                  setNouvelleListe("");
-                  await charger();
-                }}
-                returnKeyType="done"
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.gestionFermer, { backgroundColor: t.accent }]}
-              onPress={async () => {
-                if (nouvelleListe.trim()) {
-                  await ajouterListe(nouvelleListe, "📁");
-                  setNouvelleListe("");
-                }
-                setGestion(false);
-                await charger();
-              }}
-            >
-              <Texte style={[styles.gestionFermerTexte, { color: t.textOnAccent }]}>
-                Terminé
-              </Texte>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {annulable && (
         <View style={[styles.bandeau, { backgroundColor: t.textPrimary }]}>
