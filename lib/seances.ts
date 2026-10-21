@@ -1,10 +1,9 @@
 /**
- * Séances guidées : une liste d'exercices (lib/exercices.ts) enchaînés au
- * minuteur, effort puis repos, sur un ou plusieurs tours. Sans accès à la
- * base : testable seul (tests/seances.test.mjs).
+ * Séance guidée au minuteur (ma routine du matin, « Réveil du corps ») : une liste d'exercices
+ * (lib/exercices.ts) enchaînés, effort puis repos. Les zones servent aussi aux séances notées après coup.
+ * Les séances construites et proposées sont dans lib/seances-sport.ts. Sans accès à la base :
+ * testable seul (tests/seances.test.mjs).
  */
-
-import { exercice } from "./exercices";
 
 export type Zone = "haut" | "bas" | "abdos" | "mobilite" | "complet";
 
@@ -31,40 +30,6 @@ export type Seance = {
   lien?: string;
 };
 
-export const DUREES = [5, 10, 20, 30] as const;
-
-/** Format de chaque durée : exercices par tour, tours, effort / repos. */
-const FORMATS: Record<(typeof DUREES)[number], { n: number; tours: number; effort: number; repos: number }> = {
-  5: { n: 5, tours: 1, effort: 45, repos: 15 },
-  10: { n: 5, tours: 2, effort: 40, repos: 20 },
-  20: { n: 5, tours: 4, effort: 40, repos: 20 },
-  30: { n: 6, tours: 5, effort: 30, repos: 30 },
-};
-
-/** Exercices de chaque zone, dans l'ordre ; les courtes séances prennent les premiers. */
-const LISTES: Record<Zone, string[]> = {
-  haut: ["pompes_genoux", "snow_angels", "pike_taps", "dips_banc", "pompes_inclinees", "pike_pushups"],
-  bas: ["squat", "pont", "fente", "chaise", "squat_bulgare", "squat_tenu"],
-  abdos: ["planche", "dead_bug", "planche_laterale", "mountain", "hollow", "pont"],
-  mobilite: ["chat_vache", "snow_angels", "squat_tenu", "pont", "fente_basse", "dead_bug"],
-  complet: ["squat", "pompes_genoux", "pont", "mountain", "fente", "planche"],
-};
-
-export const SEANCES: Seance[] = ZONES.flatMap((z) =>
-  DUREES.map((d) => {
-    const f = FORMATS[d];
-    return {
-      id: `${z.cle}-${d}`,
-      nom: `${z.nom} · ${d} min`,
-      zone: z.cle,
-      exercices: LISTES[z.cle].slice(0, f.n),
-      effort_s: f.effort,
-      repos_s: f.repos,
-      tours: f.tours,
-    };
-  }),
-);
-
 export const ID_REVEIL = "reveil";
 
 /** Ma routine du matin, tant qu'elle n'a pas été modifiée. */
@@ -78,14 +43,6 @@ export const REVEIL_DEFAUT: Seance = {
   tours: 1,
   lien: "",
 };
-
-export const seance = (id: string) => SEANCES.find((s) => s.id === id);
-
-/** « Faire maintenant » depuis la fiche d'un exercice : 3 tours de 40 s d'effort et 20 s de repos (id « ex-<exercice> »). */
-export function seanceExercice(idSeance: string): Seance | null {
-  const e = idSeance.startsWith("ex-") ? exercice(idSeance.slice(3)) : undefined;
-  return e ? { id: idSeance, nom: e.nom, zone: e.zones[0] ?? null, exercices: [e.id], effort_s: 40, repos_s: 20, tours: 3 } : null;
-}
 
 export const couleurSeance = (s: Seance, accent: string) => (s.zone ? zone(s.zone).couleur : accent);
 

@@ -11,7 +11,7 @@ import { Texte } from "../components/Texte";
 import { enregistrerSeanceGuidee, getSeancePerso } from "../lib/db/seances-guidees";
 import { exercice } from "../lib/exercices";
 import { formatRestant } from "../lib/minuteur";
-import { deroule, ID_REVEIL, seance, seanceExercice, type Seance } from "../lib/seances";
+import { deroule, ID_REVEIL, type Seance } from "../lib/seances";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
 
 const ANNEAU = 240;
@@ -50,7 +50,7 @@ export default function SeanceGuidee() {
   const segments = useMemo(() => (s ? deroule(s) : []), [s]);
 
   useEffect(() => {
-    (id === ID_REVEIL ? getSeancePerso() : Promise.resolve(seance(id) ?? seanceExercice(id))).then((x) => {
+    (id === ID_REVEIL ? getSeancePerso() : Promise.resolve(null)).then((x) => {
       if (!x || x.exercices.length === 0) return router.back();
       const n = Date.now();
       suivi.current.seance = x;

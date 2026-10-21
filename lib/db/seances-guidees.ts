@@ -57,9 +57,9 @@ export async function enregistrerSeanceGuidee(
   duree_s: number,
   exercices: string[],
   terminee: boolean,
+  date: string = getAujourdhui(),
 ): Promise<number> {
   const db = await getDatabase();
-  const date = getAujourdhui();
   const points = (await sportPayeLe(date)) ? 0 : POINTS_SEANCE;
   await db.runAsync(
     `INSERT INTO seances_guidees (date, seance, duree_s, exercices, terminee, points_donnes, horodatage)
@@ -75,7 +75,7 @@ export async function enregistrerSeanceGuidee(
   if (points > 0) await addPoints(points);
   await cocherRoutineLiee(date);
 
-  if (seance === ID_REVEIL && terminee) {
+  if (seance === ID_REVEIL && terminee && date === getAujourdhui()) {
     const r = (await getRoutinesAvecStatutDuJour()).find(
       (x) => x.nom.trim().toLowerCase() === REVEIL_DEFAUT.nom.toLowerCase(),
     );

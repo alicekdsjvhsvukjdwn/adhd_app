@@ -14,21 +14,14 @@ import {
   type RecenteNotee,
 } from "../lib/db/seances-guidees";
 import { FeuilleSeanceNotee } from "./FeuillesSport";
-import { exercice, EXERCICES } from "../lib/exercices";
-import {
-  couleurSeance,
-  DUREES,
-  dureeSeance,
-  faiteLe,
-  ID_REVEIL,
-  minutes,
-  SEANCES,
-  ZONES,
-  type Seance,
-  type Zone,
-} from "../lib/seances";
+import { exercice } from "../lib/exercices";
+import type { Materiel } from "../lib/materiel";
+import { dureeSeance, faiteLe, ID_REVEIL, minutes, type Seance } from "../lib/seances";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
+import { ChoixExercices } from "./ChoixExercices";
 import { FigureSkill } from "./FigureSkill";
+import { MesSeances } from "./MesSeances";
+import { SeancesProposees } from "./SeancesProposees";
 import { PlusMoins } from "./PlusMoins";
 import { Texte } from "./Texte";
 
@@ -44,17 +37,16 @@ function Figures({ s, couleur, taille }: { s: Seance; couleur: string; taille: n
 }
 
 /**
- * Onglet « Séances » de l'écran Sport : Ma routine du matin (modifiable),
- * puis les séances guidées par zone et par durée.
+ * Sport › Workout : « J'ai fait une séance », Réveil du corps (ma routine du matin, modifiable), Mes séances
+ * (construites avec la bibliothèque) et les séances proposées par zone et durée, filtrées par mon matériel.
  */
-export function OngletSeances() {
+export function OngletSeances({ materiel }: { materiel: Materiel }) {
   const router = useRouter();
   const t = useTheme();
   const [perso, setPerso] = useState<Seance | null>(null);
   const [derniere, setDerniere] = useState<string | null>(null);
   const [brouillon, setBrouillon] = useState<Seance | null>(null);
-  const [filtreZone, setFiltreZone] = useState<Zone | null>(null);
-  const [filtreDuree, setFiltreDuree] = useState<number | null>(null);
+  const [choix, setChoix] = useState(false);
   const [notee, setNotee] = useState(false);
   const [recentes, setRecentes] = useState<RecenteNotee[]>([]);
 
@@ -106,9 +98,6 @@ export function OngletSeances() {
     majB({ exercices: ex });
   };
 
-  const liste = SEANCES.filter(
-    (s) => (!filtreZone || s.zone === filtreZone) && (!filtreDuree || dureeSeance(s) === filtreDuree * 60),
-  );
   const faite = faiteLe(derniere, getAujourdhui(), hier());
 
   return (
@@ -130,7 +119,7 @@ export function OngletSeances() {
       )}
       <FeuilleSeanceNotee visible={notee} onFermer={() => setNotee(false)} onEnregistre={charger} />
 
-      <Texte style={[styles.surtitre, { color: t.textMuted }]}>MA ROUTINE DU MATIN</Texte>
+      <Texte style={[styles.surtitre, { color: t.textMuted }]}>RÉVEIL DU CORPS · MA ROUTINE DU MATIN</Texte>
       {perso && !b && (
         <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent }]}>
           <View style={styles.ligne}>
@@ -192,10 +181,18 @@ export function OngletSeances() {
               </TouchableOpacity>
             </View>
           ))}
-          <Texte style={[styles.sousTitre, { color: t.textMuted }]}>Ajouter</Texte>
-          <View style={styles.puces}>
-            {EXERCICES.map((x) => puce(false, x.nom, () => majB({ exercices: [...b.exercices, x.id] })))}
-          </View>
+          <TouchableOpacity onPress={() => setChoix(true)} style={[styles.ajoutEx, { borderColor: t.accent }]} accessibilityRole="button">
+            <Texte style={[styles.lien, { color: t.accentText }]}>＋ Ajouter un exercice</Texte>
+          </TouchableOpacity>
+          <ChoixExercices
+            visible={choix}
+            materiel={materiel}
+            onChoisir={(id) => {
+              majB({ exercices: [...b.exercices, id] });
+              setChoix(false);
+            }}
+            onFermer={() => setChoix(false)}
+          />
           <View style={[styles.ligne, styles.reglage]}>
             <Texte style={[styles.nomEx, { color: t.textSecondary }]}>Effort</Texte>
             <PlusMoins
@@ -232,36 +229,8 @@ export function OngletSeances() {
         </View>
       )}
 
-      <Texte style={[styles.surtitre, { color: t.textMuted }]}>SÉANCES GUIDÉES</Texte>
-      <View style={styles.puces}>
-        {puce(!filtreZone, "Toutes", () => setFiltreZone(null))}
-        {ZONES.map((z) => puce(filtreZone === z.cle, z.nom, () => setFiltreZone(z.cle), z.couleur))}
-      </View>
-      <View style={[styles.puces, { marginBottom: spacing.sm }]}>
-        {puce(!filtreDuree, "Toutes durées", () => setFiltreDuree(null))}
-        {DUREES.map((d) => puce(filtreDuree === d, `${d} min`, () => setFiltreDuree(d)))}
-      </View>
-      {liste.map((s) => {
-        const c = couleurSeance(s, t.accent);
-        return (
-          <TouchableOpacity
-            key={s.id}
-            onPress={() => lancer(s.id)}
-            style={[styles.carte, styles.rangee, { backgroundColor: t.bgCard, borderColor: t.border }]}
-          >
-            <View style={[styles.pastille, { backgroundColor: c }]} />
-            <View style={{ flex: 1 }}>
-              <Texte style={[styles.nomEx, { color: t.textPrimary }]}>{s.nom}</Texte>
-              <Texte style={[styles.sous, { color: t.textMuted }]}>
-                {s.exercices.length} exercices · {s.tours > 1 ? `${s.tours} tours · ` : ""}
-                {s.effort_s} s / {s.repos_s} s
-              </Texte>
-              <Figures s={s} couleur={c} taille={26} />
-            </View>
-            <Play color={c} size={20} fill={c} />
-          </TouchableOpacity>
-        );
-      })}
+      <MesSeances onChange={charger} />
+      <SeancesProposees materiel={materiel} onChange={charger} />
     </View>
   );
 }
@@ -286,7 +255,7 @@ const styles = StyleSheet.create({
   lien: { fontSize: typography.small, fontWeight: "600" },
   ligneEx: { paddingVertical: 4 },
   nomEx: { flex: 1, fontSize: typography.body, fontWeight: "600" },
-  sousTitre: { fontSize: typography.tiny, fontWeight: "700", marginTop: spacing.md },
+  ajoutEx: { borderWidth: 1, borderStyle: "dashed", borderRadius: radius.md, alignItems: "center", paddingVertical: spacing.md, marginTop: spacing.md },
   reglage: { marginTop: spacing.sm },
   champ: {
     borderWidth: 1,

@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { exercice, EXERCICES } from "../lib/exercices.ts";
 import { SQL_TABLES_SEANCES_GUIDEES } from "../lib/schema.ts";
-import { deroule, dureeSeance, faiteLe, REVEIL_DEFAUT, SEANCES, ZONES } from "../lib/seances.ts";
+import { deroule, faiteLe, REVEIL_DEFAUT, ZONES } from "../lib/seances.ts";
 import { SKILLS } from "../lib/skills.ts";
 
 // FigureSkill.tsx dépend de react-native : on lit le source.
@@ -28,13 +28,9 @@ test("les étapes des skills portent le nom de l'exercice quand c'est le même m
   }
 });
 
-test("séances : 5 zones × 4 durées, exercices existants, durée annoncée juste", () => {
-  assert.equal(SEANCES.length, 20);
-  for (const s of [...SEANCES, REVEIL_DEFAUT]) {
-    for (const id of s.exercices) assert.ok(exercice(id), `${s.id} → ${id}`);
-    assert.equal(new Set(s.exercices).size, s.exercices.length, s.id);
-  }
-  for (const s of SEANCES) assert.equal(dureeSeance(s), Number(s.id.split("-")[1]) * 60, s.id);
+test("routine du matin : exercices existants, sans doublon", () => {
+  for (const id of REVEIL_DEFAUT.exercices) assert.ok(exercice(id), id);
+  assert.equal(new Set(REVEIL_DEFAUT.exercices).size, REVEIL_DEFAUT.exercices.length);
 });
 
 test("routine du matin : 6 exercices, 45 s / 15 s", () => {

@@ -443,6 +443,38 @@ export const SQL_TABLES_ESPRIT = `
 `;
 
 /**
+ * Migration 34 : séances de sport construites sur la bibliothèque (lot 2 du Sport). Une séance faite reste dans
+ * `seances` (nom, origine, ressenti en plus) et chaque série dans `series` avec son exercice de la bibliothèque et
+ * son poids : on voit ce qu'on a vraiment fait, série par série. « Mes séances » vivent dans sport_seances.
+ */
+export const SQL_SEANCES_SPORT = `
+  ALTER TABLE seances ADD COLUMN nom TEXT NOT NULL DEFAULT '';
+  -- '' (skills) | 'perso' | 'proposee' | 'exercice' | 'notee'
+  ALTER TABLE seances ADD COLUMN origine TEXT NOT NULL DEFAULT '';
+  ALTER TABLE seances ADD COLUMN ressenti TEXT NOT NULL DEFAULT '';
+  ALTER TABLE series ADD COLUMN exercice_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE series ADD COLUMN poids REAL;
+  CREATE INDEX IF NOT EXISTS idx_series_exercice ON series(exercice_id);
+
+  CREATE TABLE IF NOT EXISTS sport_seances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS sport_seances_ex (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_id INTEGER NOT NULL DEFAULT 0,
+    rang INTEGER NOT NULL DEFAULT 0,
+    exercice_id TEXT NOT NULL DEFAULT '',
+    series INTEGER NOT NULL DEFAULT 3,
+    cible INTEGER NOT NULL DEFAULT 10,
+    poids REAL,
+    repos_s INTEGER NOT NULL DEFAULT 45
+  );
+  CREATE INDEX IF NOT EXISTS idx_sport_seances_ex ON sport_seances_ex(seance_id, rang);
+`;
+
+/**
  * Migration 33 : TCC en autonomie (anxiété sociale, confiance en soi). Données sensibles : elles restent
  * sur l'appareil. Les anciennes tables de la TCC avec un thérapeute (tcc_seances, tcc_exercices,
  * tcc_exercices_faits, a_dire) restent telles quelles : l'appli ne les lit plus, la sauvegarde et le CSV les gardent.

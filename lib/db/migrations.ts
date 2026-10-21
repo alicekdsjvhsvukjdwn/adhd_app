@@ -15,6 +15,7 @@ import {
   SQL_JOURS_TACHE,
   SQL_MENAGE_V2,
   SQL_TCC_AUTONOME,
+  SQL_SEANCES_SPORT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
@@ -798,6 +799,14 @@ const MIGRATIONS: Migration[] = [
     nom: "TCC en autonomie : échelle d'exposition, journal de confiance, séances avec moi-même",
     run: async (db) => {
       await db.execAsync(SQL_TCC_AUTONOME);
+    },
+  },
+
+  {
+    version: 34,
+    nom: "sport : séances construites, séries par exercice avec poids",
+    run: async (db) => {
+      await db.execAsync(SQL_SEANCES_SPORT);
     },
   },
 ];

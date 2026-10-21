@@ -1,4 +1,4 @@
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Alert,
@@ -19,15 +19,19 @@ import {
   routineProposee,
   routinesDisponibles,
 } from "../lib/db/routine-liee";
-import { enregistrerSeanceNotee } from "../lib/db/seances-guidees";
+import { enregistrerSeanceGuidee, enregistrerSeanceNotee, getSeancePerso } from "../lib/db/seances-guidees";
+import { listerMesSeances, noterSeanceCommePrevu, type MaSeance } from "../lib/db/seances-sport";
 import { ficheSkill, noterEssai, validerManuellement } from "../lib/db/sport";
 import {
   DUREES_NOTEES,
+  dureeSeance,
+  ID_REVEIL,
   QUAND,
   RESSENTIS,
   SOURCES,
   dateDeQuand,
   type Quand,
+  type Seance,
   type SeanceNotee,
   type Zone,
   ZONES,
@@ -137,7 +141,10 @@ export function FeuilleSeanceNotee({
   onEnregistre: () => void;
 }) {
   const t = useTheme();
+  const router = useRouter();
   const [zones, setZones] = useState<Zone[]>([]);
+  const [reveil, setReveil] = useState<Seance | null>(null);
+  const [mes, setMes] = useState<MaSeance[]>([]);
   const [duree, setDuree] = useState<number | null>(null);
   const [autre, setAutre] = useState(false);
   const [autreMin, setAutreMin] = useState(25);
@@ -162,7 +169,26 @@ export function FeuilleSeanceNotee({
     setLien(depart?.lien ?? "");
     setRessenti(depart?.ressenti ?? "");
     setNote("");
+    getSeancePerso().then(setReveil);
+    listerMesSeances().then((l) => setMes(l.filter((s) => s.lignes.length > 0)));
   }, [visible, depart]);
+
+  const jour = dateDeQuand(quand, getAujourdhui(), hier());
+  const termine = (points: number, titre: string) => {
+    onFermer();
+    onEnregistre();
+    Alert.alert(titre, points > 0 ? `+${points} pts` : "Les points du sport sont déjà pris ce jour-là.");
+  };
+  /** Raccourcis : ma routine du matin ou une de mes séances, notées en 1 tap (ou détaillées série par série). */
+  const noterReveil = async () => {
+    if (!reveil) return;
+    termine(await enregistrerSeanceGuidee(ID_REVEIL, dureeSeance(reveil), reveil.exercices, true, jour), "Réveil du corps noté");
+  };
+  const noterMienne = async (s: MaSeance) => termine((await noterSeanceCommePrevu(s.nom, "perso", s.lignes, jour)).points, `${s.nom} notée`);
+  const detailler = (s: MaSeance) => {
+    onFermer();
+    router.push(`/seance-sport?source=perso&id=${s.id}&liste=1&date=${jour}` as never);
+  };
 
   const minutes = autre ? autreMin : duree;
 
@@ -200,6 +226,33 @@ export function FeuilleSeanceNotee({
         </TouchableOpacity>
       }
     >
+      {!depart && (reveil !== null || mes.length > 0) && (
+        <View>
+          <Surtitre>EN 1 TAP</Surtitre>
+          {reveil && reveil.exercices.length > 0 && (
+            <TouchableOpacity
+              onPress={noterReveil}
+              style={[styles.raccourci, { borderColor: t.accent, backgroundColor: t.bgHighlight }]}
+              accessibilityRole="button"
+            >
+              <Texte style={[styles.boutonTexte, { color: t.textPrimary }]}>✓ Réveil du corps</Texte>
+            </TouchableOpacity>
+          )}
+          {mes.map((s) => (
+            <View key={s.id} style={[styles.raccourci, { borderColor: t.border, backgroundColor: t.bgCard, flexDirection: "row", alignItems: "center", gap: spacing.md }]}>
+              <TouchableOpacity onPress={() => noterMienne(s)} style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={`Noter ${s.nom} comme prévu`}>
+                <Texte style={{ color: t.textPrimary, fontSize: typography.body, fontWeight: "600" }}>✓ {s.nom}</Texte>
+                <Texte style={{ color: t.textMuted, fontSize: typography.small }}>comme prévu</Texte>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => detailler(s)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Détailler ${s.nom}`}>
+                <Texte style={[styles.lien, { color: t.accentText }]}>Détailler</Texte>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <Texte style={{ color: t.textMuted, fontSize: typography.tiny, marginTop: spacing.xs }}>Ou ailleurs : choisis ci-dessous.</Texte>
+        </View>
+      )}
+
       <Surtitre>ZONES</Surtitre>
       <View style={styles.pastilles}>
         {ZONES.map((z) => {
@@ -589,6 +642,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   pastilleTexte: { fontSize: typography.small, fontWeight: "600" },
+  raccourci: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   lien: { fontSize: typography.small, fontWeight: "600" },
   champ: {
     borderWidth: 1,

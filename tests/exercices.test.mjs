@@ -10,7 +10,7 @@ import { configurerSport, getReglages, noterEssai } from "../lib/db/sport.ts";
 import { ecrireMateriel, getMateriel, materielConfigure } from "../lib/db/sport-materiel.ts";
 import { alternativeA, EXERCICES, exercice, faisable, filtrer, uniteDe } from "../lib/exercices.ts";
 import { manquants, MATERIEL_DEFAUT, MATERIELS, materielValide } from "../lib/materiel.ts";
-import { seanceExercice, ZONES } from "../lib/seances.ts";
+import { ZONES } from "../lib/seances.ts";
 
 // FigureSkill.tsx dépend de react-native : on lit le source.
 const figures = readFileSync(new URL("../components/FigureSkill.tsx", import.meta.url), "utf8");
@@ -115,13 +115,6 @@ test("recherche et filtres : sans accents, par zone, par niveau, matériel dispo
   assert.equal(filtrer({ texte: "zzz" }, m).length, 0);
 });
 
-test("« Faire maintenant » : une séance guidée d'un seul exercice, 3 tours", () => {
-  const s = seanceExercice("ex-pompes");
-  assert.deepEqual([s.nom, s.exercices, s.tours, s.effort_s, s.repos_s], ["Pompes", ["pompes"], 3, 40, 20]);
-  assert.equal(seanceExercice("ex-nimporte"), null);
-  assert.equal(seanceExercice("haut-10"), null);
-});
-
 // ─── Base en mémoire ───
 
 await initialiserBase();
@@ -151,7 +144,7 @@ test("historique d'un exercice : meilleur résultat, dernières séances, courbe
   await noterEssai("pompe", 3, 12, "2026-10-01");
   await noterEssai("pompe", 2, 15, "2026-10-08");
   const h = await historiqueExercice(exercice("pompes_mur"));
-  assert.deepEqual(h.record, { valeur: 15, date: "2026-10-08" });
+  assert.deepEqual(h.record, { valeur: 15, poids: null, date: "2026-10-08" });
   assert.deepEqual(h.dernieres.map((s) => [s.date, s.series, s.meilleure]), [["2026-10-08", 2, 15], ["2026-10-01", 3, 12]]);
   assert.deepEqual(h.courbe.map((c) => c.valeur), [12, 15]); // de la plus ancienne à la plus récente
   assert.equal(h.unite, "reps");

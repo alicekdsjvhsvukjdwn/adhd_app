@@ -154,7 +154,7 @@ export default function FicheExercice() {
       )}
 
       <TouchableOpacity
-        onPress={() => router.push(`/seance-guidee?id=ex-${e.id}` as never)}
+        onPress={() => router.push(`/seance-sport?source=exercice&id=${e.id}` as never)}
         disabled={!ok}
         style={[styles.faire, { backgroundColor: ok ? t.accent : t.bgCard, borderColor: t.border }]}
         accessibilityRole="button"
@@ -164,7 +164,7 @@ export default function FicheExercice() {
           {ok ? "Faire maintenant" : "Matériel manquant"}
         </Texte>
       </TouchableOpacity>
-      {ok && <Texte style={{ color: t.textMuted, fontSize: typography.tiny, textAlign: "center", marginTop: 6 }}>3 tours : 40 s d&apos;effort, 20 s de repos.</Texte>}
+      {ok && <Texte style={{ color: t.textMuted, fontSize: typography.tiny, textAlign: "center", marginTop: 6 }}>3 séries, ce que tu fais est noté dans ton historique.</Texte>}
     </ScrollView>
   );
 }

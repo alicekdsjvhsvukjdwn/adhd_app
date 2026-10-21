@@ -169,7 +169,7 @@ export default function Skills() {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
         {entete}
-        <OngletSeances />
+        <OngletSeances materiel={materiel} />
         <CarteRoutineLiee />
         {feuilleMateriel}
       </ScrollView>
