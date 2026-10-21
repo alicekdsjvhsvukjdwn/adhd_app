@@ -315,12 +315,14 @@ test("skills : les séries notées dans n'importe quelle séance valident les é
   await seanceDe("pompes_genoux", [12, 12, 12]);
   await pause();
   await validerEtape("pompe"); // → étape 2
+  await pause();
   assert.deepEqual((await ficheSkill("pompe")).seances, []); // les pompes au mur ne valident pas les pompes inclinées
   await seanceDe("pompes_inclinees", [12, 12, 12]);
   await seanceDe("pompes_inclinees", [13, 12, 12]);
   assert.equal((await ficheSkill("pompe")).proposition, true);
   await pause();
   await validerEtape("pompe"); // → étape 3 : pompes sur les genoux
+  await pause();
   assert.deepEqual((await ficheSkill("pompe")).seances, []); // les deux séances d'avant l'arrivée sont écartées
   assert.equal((await ficheSkill("pompe")).proposition, false);
   await seanceDe("pompes_genoux", [12, 12, 12]);
@@ -328,6 +330,7 @@ test("skills : les séries notées dans n'importe quelle séance valident les é
   assert.equal((await ficheSkill("pompe")).proposition, true);
   await pause();
   await validerEtape("pompe"); // → étape 4 : Pompes 3 × 5
+  await pause();
 
   // Même exercice sur deux étapes d'affilée (Pompes 3 × 5 puis 3 × 10) : ce qui précède l'arrivée ne compte pas.
   await seanceDe("pompes", [5, 5, 5]);
@@ -336,6 +339,7 @@ test("skills : les séries notées dans n'importe quelle séance valident les é
   assert.equal((await ficheSkill("pompe")).proposition, true);
   await pause();
   await validerEtape("pompe"); // → étape 5 : Pompes 3 × 10
+  await pause();
   assert.equal((await ficheSkill("pompe")).proposition, false); // les 3 × 10 d'avant ne comptent pas
   await seanceDe("pompes", [10, 11, 10]);
   assert.equal((await ficheSkill("pompe")).proposition, false);
@@ -360,6 +364,7 @@ test("séance de skills : l'étape en cours des skills actifs, l'entretien des m
   // Pompe maîtrisée : elle quitte les skills actifs, une série d'entretien la remplace.
   await pause();
   await validerEtape("pompe");
+  await pause();
   assert.equal((await ficheSkill("pompe")).etat.etape, 6);
   const apres = await seanceSkills(MATERIEL_DEFAUT);
   const entretien = apres.lignes.find((l) => l.exercice === "pompes");
