@@ -24,9 +24,12 @@ export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
 export type ComposantesScore = Record<keyof typeof POIDS, number>;
 
-export function scoreTotal(c: ComposantesScore): number {
+export function scoreTotal(
+  c: ComposantesScore,
+  poids: Record<keyof typeof POIDS, number> = POIDS,
+): number {
   return (Object.keys(POIDS) as (keyof typeof POIDS)[]).reduce(
-    (s, k) => s + c[k] * POIDS[k],
+    (s, k) => s + c[k] * poids[k],
     0,
   );
 }

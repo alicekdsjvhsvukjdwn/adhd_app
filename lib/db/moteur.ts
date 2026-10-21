@@ -68,6 +68,7 @@ type CandidatRow = {
   moment_effectif: string | null;
   liste_id: number | null;
   recurrence: string | null;
+  rang_manuel: number | null;
   /** Calculé après la requête, pour les tâches « x fois par période ». */
   compte?: Proposition["compte"];
   /** Nom de la liste quand son retard sur l'objectif fait l'urgence de la tâche. */
@@ -77,6 +78,8 @@ type CandidatRow = {
 export type Proposition = {
   itemId: number;
   liste_id: number | null;
+  /** Place choisie à la main dans la liste (négatif : en haut, positif : en bas). */
+  rang_manuel: number | null;
   /** Tâche « x fois par semaine / par mois » : où on en est sur la période. */
   compte: { fait: number; cible: number; periode: Periode } | null;
   nom: string;
@@ -133,7 +136,7 @@ export async function genererPropositions(): Promise<Proposition[]> {
             i.importance, i.duree_min,
             i.premiere_action, i.echeance, i.heure_reelle_moy,
             i.nb_propositions_sans_action,
-            i.liste_id, i.recurrence,
+            i.liste_id, i.recurrence, i.rang_manuel,
             COALESCE(a.moment, i.moment) AS moment_effectif
      FROM items i
      LEFT JOIN ancres a ON a.id = i.ancre_id
@@ -244,6 +247,7 @@ function construire(
   return {
     itemId: n.c.id,
     liste_id: n.c.liste_id,
+    rang_manuel: n.c.rang_manuel,
     compte: n.c.compte ?? null,
     nom: n.c.nom,
     importance: n.c.importance,

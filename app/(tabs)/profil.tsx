@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Texte } from "../../components/Texte";
 import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
+import { CarteDebutJour } from "../../components/CarteDebutJour";
 import { CarteSauvegarde } from "../../components/CarteSauvegarde";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
@@ -28,6 +29,16 @@ const ENTREES: Entree[] = [
     titre: "Mes moments repères",
     description: "Les ancres auxquelles rattacher les routines.",
     route: "/ancres",
+  },
+  {
+    titre: "Mes 3 tâches",
+    description: "Combien, comment elles sont choisies, ce qui compte.",
+    route: "/trois-reglages",
+  },
+  {
+    titre: "Agenda",
+    description: "Tes rendez-vous Google Agenda, en lecture seule.",
+    route: "/agenda",
   },
   {
     titre: "Rappels quotidiens",
@@ -59,6 +70,8 @@ export default function Profil() {
             </Texte>
           </TouchableOpacity>
         ))}
+
+        <CarteDebutJour />
 
         <CarteSauvegarde />
 

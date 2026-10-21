@@ -282,3 +282,16 @@ export function idees(texte: string | null): string[] {
     .map((l) => l.trim())
     .filter(Boolean);
 }
+
+/**
+ * Ordre d'une liste de tâches avec les places choisies à la main :
+ * « en haut » (rang négatif, le plus petit d'abord), puis l'ordre de l'appli,
+ * puis « en bas » (rang positif). Ne modifie pas la liste reçue.
+ */
+export function ordreManuel<T extends { rang_manuel: number | null }>(taches: T[]): T[] {
+  const haut = taches.filter((t) => t.rang_manuel !== null && t.rang_manuel < 0);
+  const bas = taches.filter((t) => t.rang_manuel !== null && t.rang_manuel > 0);
+  const milieu = taches.filter((t) => !t.rang_manuel);
+  const parRang = (a: T, b: T) => a.rang_manuel! - b.rang_manuel!;
+  return [...haut.sort(parRang), ...milieu, ...bas.sort(parRang)];
+}

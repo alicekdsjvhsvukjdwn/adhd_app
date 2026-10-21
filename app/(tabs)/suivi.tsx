@@ -1,5 +1,5 @@
-import { useFocusEffect, useRouter } from "expo-router";
-import { Dumbbell, Flower2, Moon, Sun } from "lucide-react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Dumbbell, Moon, Sun } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   ScrollView,
@@ -8,12 +8,11 @@ import {
   View,
 } from "react-native";
 import { JOURS_LONGS } from "../../components/CalendrierMois";
+import { EspritEcran } from "../../components/EspritEcran";
 import { FeuilleSeanceNotee } from "../../components/FeuillesSport";
 import { SelecteurHeure } from "../../components/SelecteurHeure";
 import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
-import { decalerJours } from "../../lib/dates";
-import { meditationsRecentes } from "../../lib/db/meditations";
 import {
   ajusterCoucher,
   annulerNuitEnCours,
@@ -28,6 +27,7 @@ import {
 } from "../../lib/db/sommeil";
 import { getReglages, seancesCetteSemaine } from "../../lib/db/sport";
 import { semaineDe } from "../../lib/regles-taches";
+import Progression from "./progression";
 import {
   barresSemaine,
   coucherPour,
@@ -64,7 +64,7 @@ type Saisie = { coucher: Coucher; lever: string; ecrite: string | null; demander
  * semaine en barres, et l'entrée vers Méditer et Sport. Rien ici ne change
  * le tri des tâches ni les routines.
  */
-export default function Suivi() {
+function Corps() {
   const router = useRouter();
   const t = useTheme();
   const aujourdhui = useJourCourant();
@@ -76,7 +76,6 @@ export default function Suivi() {
   const [feuille, setFeuille] = useState<"lever" | "coucher" | "couchee" | null>(null);
   const [seances, setSeances] = useState(0);
   const [sportConfigure, setSportConfigure] = useState(true);
-  const [meditations, setMeditations] = useState(0);
   const [seanceNotee, setSeanceNotee] = useState(false);
 
   const charger = useCallback(async () => {
@@ -86,7 +85,6 @@ export default function Suivi() {
     setBarres(barresSemaine(await nuitsEntre(semaine[0], semaine[6]), semaine));
     setSeances(await seancesCetteSemaine());
     setSportConfigure((await getReglages()).configure);
-    setMeditations(await meditationsRecentes(decalerJours(aujourdhui, -6)));
   }, [aujourdhui]);
 
   useFocusEffect(
@@ -317,18 +315,8 @@ export default function Suivi() {
         </View>
       </View>
 
-      {/* ── Méditer, Sport ── */}
+      {/* ── Sport ── */}
       <View style={styles.cartes}>
-        <TouchableOpacity
-          onPress={() => router.push("/mediter")}
-          style={[styles.petiteCarte, { backgroundColor: t.bgCard, borderColor: t.border }]}
-        >
-          <Flower2 color="#A78BFA" size={26} strokeWidth={1.8} />
-          <Texte style={[styles.carteTitre, { color: t.textPrimary }]}>Méditer</Texte>
-          <Texte style={[styles.sous, { color: t.textMuted }]}>
-            {meditations > 0 ? `${meditations} cette semaine` : "1 min suffit"}
-          </Texte>
-        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => router.push("/skills")}
           style={[styles.petiteCarte, { backgroundColor: t.bgCard, borderColor: t.border }]}
@@ -357,7 +345,17 @@ export default function Suivi() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
+  container: { flex: 1, paddingTop: spacing.md, paddingHorizontal: spacing.xl },
+  ecran: { flex: 1 },
+  selecteur: {
+    flexDirection: "row",
+    marginTop: 56,
+    marginHorizontal: spacing.xl,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    padding: 2,
+  },
+  segment: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: radius.pill },
   titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: spacing.lg },
   centre: { alignItems: "center" },
   anneau: { borderRadius: 999, alignItems: "center", justifyContent: "center" },
@@ -403,3 +401,40 @@ const styles = StyleSheet.create({
   cartes: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xl },
   petiteCarte: { flex: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 6 },
 });
+
+const PARTIES = [
+  { cle: "corps", libelle: "Corps" },
+  { cle: "esprit", libelle: "Esprit" },
+  { cle: "progres", libelle: "Progrès" },
+] as const;
+
+/** Suivi : trois parties, un sélecteur en haut. */
+export default function Suivi() {
+  const t = useTheme();
+  // ?partie=esprit : le rappel du soir ouvre directement l'Esprit.
+  const { partie: demandee } = useLocalSearchParams<{ partie?: string }>();
+  const [partie, setPartie] = useState<(typeof PARTIES)[number]["cle"]>(demandee === "esprit" ? "esprit" : "corps");
+  return (
+    <View style={[styles.ecran, { backgroundColor: t.bgApp }]}>
+      <View style={[styles.selecteur, { borderColor: t.border, backgroundColor: t.bgCard }]}>
+        {PARTIES.map((p) => {
+          const actif = p.cle === partie;
+          return (
+            <TouchableOpacity
+              key={p.cle}
+              onPress={() => setPartie(p.cle)}
+              style={[styles.segment, actif && { backgroundColor: t.accentFonce }]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: actif }}
+            >
+              <Texte style={{ color: actif ? t.textOnAccentFonce : t.textSecondary, fontWeight: "600", fontSize: typography.small }}>
+                {p.libelle}
+              </Texte>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {partie === "corps" ? <Corps /> : partie === "esprit" ? <EspritEcran /> : <Progression />}
+    </View>
+  );
+}

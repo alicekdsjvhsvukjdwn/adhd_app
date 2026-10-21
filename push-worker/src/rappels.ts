@@ -1,11 +1,13 @@
 // Choix des rappels à envoyer. Fonction pure : aucun accès réseau ni KV,
 // utilisée par le Worker et testée dans tests/rappels-web.test.mjs.
 
-export type TypeRappel = "quotidien" | "soir";
+export type TypeRappel = "quotidien" | "soir" | "esprit";
 
 export type Reglages = {
   quotidien: { actif: boolean; heure: string };
   soir: { actif: boolean; heure: string };
+  /** « 30 secondes pour toi » : seule l'heure est envoyée au serveur, jamais ce qui est noté. Absent des abonnements d'avant (voir rappelsDus). */
+  esprit: { actif: boolean; heure: string };
 };
 
 /** Date locale (AAAA-MM-JJ) du dernier envoi de chaque rappel. */
@@ -24,6 +26,11 @@ export const TEXTES: Record<TypeRappel, { title: string; body: string; url: stri
     title: "C'est l'heure de Je vais dormir ?",
     body: "Un geste pour noter ton coucher.",
     url: "/suivi",
+  },
+  esprit: {
+    title: "30 secondes pour toi ?",
+    body: "Un tap pour dire comment ça va.",
+    url: "/suivi?partie=esprit",
   },
 };
 
@@ -56,7 +63,7 @@ export function rappelsDus(
   envoyes: Envoyes,
 ): TypeRappel[] {
   const { date, minutes } = heureLocale(maintenant, fuseau);
-  return (["quotidien", "soir"] as const).filter((type) => {
+  return (["quotidien", "soir", "esprit"] as const).filter((type) => {
     const r = reglages[type];
     if (!r?.actif || envoyes[type] === date) return false;
     const [h, m] = r.heure.split(":").map(Number);

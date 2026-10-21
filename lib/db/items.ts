@@ -245,3 +245,27 @@ export async function reinitialiserPropositionSansAction(id: number) {
   );
 }
 
+
+/**
+ * Place une tâche en haut ou en bas de sa liste, ou la remet dans l'ordre de l'appli (null).
+ * Le rang va juste au-delà des places déjà choisies dans la même liste.
+ */
+export async function placerTache(id: number, ou: "haut" | "bas" | null): Promise<void> {
+  const db = await getDatabase();
+  if (ou === null) {
+    await db.runAsync("UPDATE items SET rang_manuel = NULL WHERE id = ?", id);
+    return;
+  }
+  const r = await db.getFirstAsync<{ pris: number | null }>(
+    `SELECT ${ou === "haut" ? "MIN" : "MAX"}(j.rang_manuel) AS pris
+     FROM items i JOIN items j ON j.liste_id IS i.liste_id AND j.type = 'tache' AND j.id <> i.id
+     WHERE i.id = ?`,
+    id,
+  );
+  const pris = r?.pris ?? 0;
+  await db.runAsync(
+    "UPDATE items SET rang_manuel = ? WHERE id = ?",
+    ou === "haut" ? Math.min(pris, 0) - 1 : Math.max(pris, 0) + 1,
+    id,
+  );
+}

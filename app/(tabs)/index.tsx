@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { Glissable } from "../../components/Options";
+import { decalerJours } from "../../lib/dates";
 import { AnneauDomaines } from "../../components/AnneauDomaines";
 import { CarteSuggestion } from "../../components/CarteSuggestion";
 import { IconeMoment } from "../../components/IconeMoment";
@@ -62,12 +63,16 @@ const CINQ_MINUTES = 5 * 60_000;
  * domaines, puis les routines du domaine choisi (seule zone qui défile).
  */
 export default function Routines() {
-  const { routines, supprimer, recharger } = useRoutines();
   const router = useRouter();
   const t = useTheme();
   const { width, height } = useWindowDimensions();
-  // Passage de minuit appli ouverte : tout se recharge pour le nouveau jour.
+  // Changement de jour appli ouverte : tout se recharge pour le nouveau jour.
   const jour = useJourCourant();
+  /** 0 = aujourd'hui, 1 = hier, 2 = avant-hier : cocher ou décocher après coup. */
+  const [retour, setRetour] = useState(0);
+  const jourVu = decalerJours(jour, -retour);
+  const passe = retour > 0;
+  const { routines, supprimer, recharger } = useRoutines(passe ? jourVu : undefined);
 
   const [energie, setEnergie] = useState<Niveau | null>(null);
   const [nonPrevues, setNonPrevues] = useState<{
@@ -107,13 +112,16 @@ export default function Routines() {
   // Étapes du jour des routines affichées (essentielles et bonus).
   useEffect(() => {
     let actif = true;
-    getEtapesRoutines(routines.map((r) => r.id)).then((e) => {
+    getEtapesRoutines(
+      routines.map((r) => r.id),
+      jourVu,
+    ).then((e) => {
       if (actif) setEtapesRoutines(e);
     });
     return () => {
       actif = false;
     };
-  }, [routines]);
+  }, [routines, jourVu]);
 
   const chargerAnnexes = useCallback(async () => {
     setEnergie((await energieDuJour()).niveau);
@@ -148,7 +156,7 @@ export default function Routines() {
 
   const onEtapeRoutine = async (e: EtapeRoutine) => {
     Haptics.selectionAsync().catch(() => {});
-    await basculerEtapeRoutine(e.id);
+    await basculerEtapeRoutine(e.id, jourVu);
     await recharger();
   };
 
@@ -156,8 +164,8 @@ export default function Routines() {
     // Routine à étapes : ce sont les étapes qui se cochent.
     if (etapesRoutines[r.id]?.length) return;
     Haptics.selectionAsync().catch(() => {});
-    if (r.faitAujourdhui) await annulerCompletion(r.id);
-    else await completer(r.id, "complet", undefined, "normale");
+    if (r.faitAujourdhui) await annulerCompletion(r.id, jourVu);
+    else await completer(r.id, "complet", undefined, "normale", undefined, jourVu);
     await recharger();
   };
 
@@ -199,7 +207,7 @@ export default function Routines() {
   ];
 
   // ── Calculs de l'anneau ──────────────────────────────────────────────
-  const jourDifficile = energie === 1;
+  const jourDifficile = !passe && energie === 1;
   const pourAnneau: RoutineAnneau[] = routines.map((r) => {
     const etapes = etapesRoutines[r.id] ?? [];
     return {
@@ -411,8 +419,20 @@ export default function Routines() {
     <View style={[styles.ecran, { backgroundColor: t.bgApp }]}>
       {/* Titre et énergie du jour */}
       <View style={styles.entete}>
-        <Texte style={[styles.titre, { color: t.textPrimary }]}>Routines</Texte>
-        <View style={[styles.energie, { borderColor: t.border, backgroundColor: t.bgCard }]}>
+        <View style={styles.titreLigne}>
+          <Texte style={[styles.titre, { color: t.textPrimary }]}>Routines</Texte>
+          {retour < 2 && (
+            <TouchableOpacity
+              onPress={() => setRetour(retour + 1)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={retour === 0 ? "Voir hier" : "Voir avant-hier"}
+            >
+              <Texte style={[styles.fleche, { color: t.textSecondary }]}>‹</Texte>
+            </TouchableOpacity>
+          )}
+        </View>
+        {!passe && <View style={[styles.energie, { borderColor: t.border, backgroundColor: t.bgCard }]}>
           {NIVEAUX.map((n) => {
             // Rien de sélectionné tant que rien n'est choisi.
             const actif = energie === n.niveau;
@@ -435,8 +455,19 @@ export default function Routines() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </View>}
       </View>
+      {passe && (
+        <TouchableOpacity
+          onPress={() => setRetour(0)}
+          style={[styles.bandeau, { backgroundColor: t.bgCard, borderColor: t.accent }]}
+          accessibilityRole="button"
+        >
+          <Texte style={[styles.bandeauTexte, { color: t.textPrimary }]}>
+            Tu regardes {retour === 1 ? "hier" : "avant-hier"} · <Texte style={{ color: t.accent }}>revenir à aujourd&apos;hui</Texte>
+          </Texte>
+        </TouchableOpacity>
+      )}
 
       {/* L'anneau */}
       <View style={styles.anneau}>
@@ -625,6 +656,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   titre: { fontSize: typography.h1, fontWeight: "600" },
+  titreLigne: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  fleche: { fontSize: 30, lineHeight: 32 },
+  bandeau: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  bandeauTexte: { fontSize: typography.small, textAlign: "center" },
   energie: {
     flexDirection: "row",
     borderWidth: 1,

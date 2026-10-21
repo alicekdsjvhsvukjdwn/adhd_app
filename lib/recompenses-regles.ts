@@ -4,23 +4,22 @@
  */
 
 export const CATEGORIES_RECOMPENSES = [
-  { cle: "plaisirs", nom: "Petits plaisirs", couleur: "#F87171" },
-  { cle: "sorties", nom: "Sorties", couleur: "#FB923C" },
-  { cle: "musique", nom: "Musique", couleur: "#FACC15" },
+  { cle: "mer", nom: "Mer & dehors", couleur: "#22D3EE" },
+  { cle: "bouffe", nom: "Bouffe & sorties", couleur: "#FB923C" },
   { cle: "temps", nom: "Temps pour moi", couleur: "#A78BFA" },
+  { cle: "decouvertes", nom: "Activités & découvertes", couleur: "#FACC15" },
   { cle: "gros", nom: "Gros objectifs", couleur: "#60A5FA" },
 ] as const;
 
 export type CategorieRecompense = (typeof CATEGORIES_RECOMPENSES)[number]["cle"];
 
+/** Une clé inconnue (ancienne version, sauvegarde) tombe dans « Temps pour moi ». */
 export const categorieRecompense = (cle: string) =>
-  CATEGORIES_RECOMPENSES.find((c) => c.cle === cle) ?? CATEGORIES_RECOMPENSES[0];
+  CATEGORIES_RECOMPENSES.find((c) => c.cle === cle) ?? CATEGORIES_RECOMPENSES[2];
 
-/** Étagères affichées : celles qui ont des récompenses, et Petits plaisirs toujours. */
-export function etageres(cles: string[]): CategorieRecompense[] {
-  return CATEGORIES_RECOMPENSES.filter((c) => c.cle === "plaisirs" || cles.includes(c.cle)).map(
-    (c) => c.cle,
-  );
+/** Étagères affichées : les cinq, toujours, pour que « Idées » soit accessible même vide. */
+export function etageres(): CategorieRecompense[] {
+  return CATEGORIES_RECOMPENSES.map((c) => c.cle);
 }
 
 /** Carte allumée : le solde suffit. Sinon, part de la barre (0 à 1). */
@@ -45,6 +44,19 @@ export const ICONES_RECOMPENSES = [
   "etoile",
   "avion",
   "manette",
+  "vague",
+  "soleil",
+  "glace",
+  "couverts",
+  "lune",
+  "musee",
+  "carte",
+  "bateau",
+  "film",
+  "bain",
+  "sandwich",
+  "palette",
+  "ville",
 ] as const;
 
 export type IconeRecompense = (typeof ICONES_RECOMPENSES)[number];

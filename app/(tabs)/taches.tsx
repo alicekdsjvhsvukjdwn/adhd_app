@@ -17,6 +17,9 @@ import { Texte, ChampTexte } from "../../components/Texte";
 import { Glissable } from "../../components/Options";
 import { BarresObjectif } from "../../components/BarresObjectif";
 import { JOURS_LONGS, MOIS } from "../../components/CalendrierMois";
+import { BandeJours } from "../../components/BandeJours";
+import { FeuilleChoixTrois } from "../../components/FeuilleChoixTrois";
+import { MenuOptions } from "../../components/MenuOptions";
 import { PlusMoins } from "../../components/PlusMoins";
 import { ZoneNote } from "../../components/ZoneNote";
 import { useJourCourant } from "../../hooks/useJourCourant";
@@ -27,6 +30,7 @@ import {
   completer,
   confirmationSuppression,
   deleteItem,
+  placerTache,
 } from "../../lib/db";
 import { FeuilleTache } from "../../components/FeuilleTache";
 import {
@@ -55,11 +59,16 @@ import {
   libelleEcheance,
   pointsEcheance,
   POINTS_DERNIERE_ETAPE,
+  ordreManuel,
   POINTS_ETAPE,
-  semaineDe,
   type Periode,
 } from "../../lib/regles-taches";
+import { chargeDuJour, joursAvecRdv, rdvDuJour, type Evenement } from "../../lib/agenda-regles";
+import { agendaEnCache, chargerAgenda } from "../../lib/agenda";
+import { decalerJours } from "../../lib/dates";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
+import { ajouterUneAutre, choisirPourJour, choixDuJour, lesTroisDuJour, lirePrefsTrois, ordrePourJour } from "../../lib/db/trois";
+import { PREFS_DEFAUT, type PrefsTrois } from "../../lib/trois-regles";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { avecAlpha, melanger, radius, spacing, typography, useTheme } from "../../lib/theme";
 import { CLES_COULEURS, useCouleurListe } from "../../lib/theme-listes";
@@ -104,6 +113,15 @@ export default function Taches() {
   const [annulable, setAnnulable] = useState<Annulable | null>(null);
   /** Jour de la bande de la semaine choisi ; null = aujourd'hui (« Mes 3 »). */
   const [jourChoisi, setJourChoisi] = useState<string | null>(null);
+  /** Les 3 du jour (voir lib/db/trois.ts), préférences, rendez-vous et choix pour demain. */
+  const [trois, setTrois] = useState<Proposition[]>([]);
+  const [prefs, setPrefs] = useState<PrefsTrois>(PREFS_DEFAUT);
+  const [rdv, setRdv] = useState<Evenement[]>([]);
+  const [rdvHorsLigne, setRdvHorsLigne] = useState(false);
+  const [choixDemain, setChoixDemain] = useState<number[]>([]);
+  const [feuilleTrois, setFeuilleTrois] = useState(false);
+  /** Tâche dont le menu d'appui long est ouvert. */
+  const [menuTache, setMenuTache] = useState<Proposition | null>(null);
   /** Feuille du bouton « + ». */
   const [feuille, setFeuille] = useState(false);
   /** Tâche dont la feuille « détail » est ouverte. */
@@ -131,6 +149,24 @@ export default function Taches() {
     setRangUneAutre(0);
     const toutes = await genererPropositions();
     setClassement(toutes);
+    const p = await lirePrefsTrois();
+    setPrefs(p);
+    // Rendez-vous : le cache d'abord (rapide, sert à la charge du jour), le serveur ensuite.
+    const cache = await agendaEnCache();
+    const evenements = cache?.evenements ?? [];
+    setRdv(evenements);
+    setRdvHorsLigne(false);
+    if (!(await estJourDifficile())) {
+      setTrois(await lesTroisDuJour(jour, toutes, p, chargeDuJour(evenements, jour)));
+    }
+    setChoixDemain(await choixDuJour(decalerJours(jour, 1)));
+    chargerAgenda()
+      .then((a) => {
+        if (!a) return;
+        setRdv(a.evenements);
+        setRdvHorsLigne(a.horsLigne);
+      })
+      .catch(() => {});
     setEtapes(await getEtapesPour(toutes.map((p) => p.itemId)));
     const l = await getListes();
     setListes(l);
@@ -146,7 +182,7 @@ export default function Taches() {
         }),
       ),
     );
-  }, []);
+  }, [jour]);
 
   useFocusEffect(
     useCallback(() => {
@@ -384,8 +420,8 @@ export default function Taches() {
                       <TouchableOpacity
                         style={{ flex: 1 }}
                         onPress={() => ouvrirDetail(p)}
-                        onLongPress={() => historique(p)}
-                        accessibilityHint="Toucher : détail · appui long : historique"
+                        onLongPress={() => setMenuTache(p)}
+                        accessibilityHint="Toucher : détail · appui long : actions"
                       >
                         <Texte style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Texte>
                         {p.premiere_action ? (
@@ -408,8 +444,8 @@ export default function Taches() {
                   <>
                     <TouchableOpacity
                       onPress={() => ouvrirDetail(p)}
-                      onLongPress={() => historique(p)}
-                      accessibilityHint="Toucher : détail · appui long : historique"
+                      onLongPress={() => setMenuTache(p)}
+                      accessibilityHint="Toucher : détail · appui long : actions"
                     >
                       <Texte style={[styles.nom, { color: t.textPrimary }]}>{icone(p)}{p.nom}</Texte>
                     </TouchableOpacity>
@@ -508,8 +544,8 @@ export default function Taches() {
             <TouchableOpacity
               style={{ flex: 1 }}
               onPress={() => ouvrirDetail(p)}
-              onLongPress={() => historique(p)}
-              accessibilityHint="Toucher : détail · appui long : historique"
+              onLongPress={() => setMenuTache(p)}
+              accessibilityHint="Toucher : détail · appui long : actions"
             >
               <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={2}>
                 {p.nom}
@@ -561,14 +597,70 @@ export default function Taches() {
       )
     : [];
   const unique = ordre.length > 0 ? ordre[rangUneAutre % ordre.length] : null;
-  const maintenant = jourDifficile ? [] : classement.filter((p) => p.propose);
-  const dansListe = filtre === null ? [] : classement.filter((p) => p.liste_id === filtre);
-
-  const semaine = semaineDe(jour);
-  const points = pointsEcheance(
-    classement.map((p) => ({ echeance: p.echeance, couleur: couleurDe(p.liste_id) })),
-    semaine,
+  const maintenant = jourDifficile ? [] : trois;
+  const demain = decalerJours(jour, 1);
+  const jourVu = jourChoisi ?? jour;
+  const rdvVus = rdvDuJour(rdv, jourVu);
+  const troisDemain = choixDemain.flatMap((id) => classement.filter((p) => p.itemId === id));
+  const candidatsDemain = ordrePourJour(classement, prefs, demain, chargeDuJour(rdv, demain)).map((o) => ({
+    itemId: o.itemId,
+    nom: o.nom,
+    couleur: couleurDe(o.liste_id),
+    listeNom: nomListe(o.liste_id)?.nom ?? null,
+    duree_min: o.duree_min,
+  }));
+  const onChoisirDemain = async (ids: number[]) => {
+    setFeuilleTrois(false);
+    await choisirPourJour(demain, ids);
+    setChoixDemain(ids);
+  };
+  const onUneAutre = async () => {
+    await ajouterUneAutre(jour, classement, prefs, chargeDuJour(rdv, jour));
+    await charger();
+  };
+  const carteDemain = (
+    <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent, borderWidth: 1 }]}>
+      <Texte style={[styles.nom, { color: t.textPrimary }]}>Choisis tes {prefs.nombre} pour demain</Texte>
+      <Texte style={[styles.premiere, { color: t.textSecondary }]}>
+        Ce soir, tu décides. Demain matin, tout est prêt.
+      </Texte>
+      <TouchableOpacity
+        onPress={() => setFeuilleTrois(true)}
+        style={[styles.boutonTrois, { backgroundColor: t.accent }]}
+        accessibilityRole="button"
+      >
+        <Texte style={{ color: t.textOnAccent, fontWeight: "700" }}>Choisir</Texte>
+      </TouchableOpacity>
+    </View>
   );
+  const blocRdv = rdvVus.length > 0 && (
+    <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
+      <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: 0 }]}>
+        RENDEZ-VOUS{rdvHorsLigne ? " · derniers connus" : ""}
+      </Texte>
+      {rdvVus.map((e) => (
+        <View key={e.id} style={styles.rdvLigne}>
+          <View style={styles.rdvPastille} />
+          <Texte style={[styles.rdvHeure, { color: t.textSecondary }]}>{e.journee ? "Journée" : e.debut}</Texte>
+          <Texte style={[styles.rdvTitre, { color: t.textPrimary }]} numberOfLines={1}>
+            {e.titre}
+          </Texte>
+        </View>
+      ))}
+    </View>
+  );
+  const dansListe = filtre === null ? [] : ordreManuel(classement.filter((p) => p.liste_id === filtre));
+  const placer = async (p: Proposition, ou: "haut" | "bas" | null) => {
+    await placerTache(p.itemId, ou);
+    await charger();
+  };
+  const optionsAppui = (p: Proposition) => [
+    { libelle: "Mettre en haut de la liste", onPress: () => placer(p, "haut") },
+    { libelle: "Mettre en bas de la liste", onPress: () => placer(p, "bas") },
+    ...(p.rang_manuel ? [{ libelle: "Remettre dans l'ordre de l'appli", onPress: () => placer(p, null) }] : []),
+    ...optionsTache(p),
+  ];
+
   const duJour = jourChoisi ? classement.filter((p) => p.echeance === jourChoisi) : [];
   const dateDe = (iso: string) => new Date(iso + "T00:00:00Z");
   const aujourdhuiDate = dateDe(jour);
@@ -721,59 +813,46 @@ export default function Taches() {
               </Texte>
             )}
 
-            {/* La semaine : points des échéances */}
-            <View style={styles.semaine}>
-              {semaine.map((d) => {
-                const estAujourdhui = d === jour;
-                const choisi = d === jourChoisi;
-                const date = dateDe(d);
-                return (
-                  <TouchableOpacity
-                    key={d}
-                    onPress={() => setJourChoisi(estAujourdhui || choisi ? null : d)}
-                    style={[
-                      styles.jour,
-                      estAujourdhui
-                        ? { backgroundColor: t.accent, borderColor: t.accent }
-                        : { backgroundColor: t.bgCard, borderColor: choisi ? t.accent : t.border },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: choisi || (estAujourdhui && !jourChoisi) }}
-                    accessibilityLabel={`${JOURS_LONGS[date.getUTCDay()]} ${date.getUTCDate()}, ${points[d].length} échéance${points[d].length > 1 ? "s" : ""}`}
-                  >
-                    <Texte
-                      style={[
-                        styles.jourNom,
-                        { color: estAujourdhui ? t.textOnAccent : t.textMuted },
-                      ]}
-                    >
-                      {JOURS_LONGS[date.getUTCDay()].slice(0, 3)}
-                    </Texte>
-                    <Texte
-                      style={[
-                        styles.jourNumero,
-                        { color: estAujourdhui ? t.textOnAccent : t.textPrimary },
-                      ]}
-                    >
-                      {date.getUTCDate()}
-                    </Texte>
-                    <View style={styles.jourPoints}>
-                      {points[d].slice(0, 4).map((c, i) => (
-                        <View
-                          key={i}
-                          style={[
-                            styles.jourPoint,
-                            { backgroundColor: c, borderColor: estAujourdhui ? t.textOnAccent : c },
-                          ]}
-                        />
-                      ))}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {/* La semaine : défile de semaine en semaine, passé et futur */}
+            <BandeJours
+              aujourdhui={jour}
+              choisi={jourChoisi}
+              points={(jours) =>
+                pointsEcheance(
+                  classement.map((p) => ({ echeance: p.echeance, couleur: couleurDe(p.liste_id) })),
+                  jours,
+                )
+              }
+              rdv={joursAvecRdv(rdv)}
+              onChoisir={setJourChoisi}
+            />
 
             {zoneNote}
+
+            {blocRdv}
+
+            {jourChoisi === demain && (
+              <>
+                <View style={styles.titreTrois}>
+                  <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: spacing.md }]}>
+                    TES {prefs.nombre} POUR DEMAIN
+                  </Texte>
+                  <TouchableOpacity onPress={() => router.push("/trois-reglages" as never)} hitSlop={10} accessibilityLabel="Réglages de Mes 3">
+                    <Texte style={{ fontSize: 18 }}>⚙️</Texte>
+                  </TouchableOpacity>
+                </View>
+                {troisDemain.length === 0 ? (
+                  carteDemain
+                ) : (
+                  <>
+                    {troisDemain.map((p, i) => carteGrande(p, i))}
+                    <TouchableOpacity onPress={() => setFeuilleTrois(true)} hitSlop={8} style={styles.uneAutre}>
+                      <Texte style={[styles.lien, { color: t.accentText }]}>Changer mon choix</Texte>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
+            )}
 
             {jourChoisi ? (
               <>
@@ -790,9 +869,14 @@ export default function Taches() {
               </>
             ) : (
               <>
-                <Texte style={[styles.surtitre, { color: t.textMuted }]}>
-                  {jourDifficile ? "UNE SEULE CHOSE" : "MES 3 POUR AUJOURD'HUI"}
-                </Texte>
+                <View style={styles.titreTrois}>
+                  <Texte style={[styles.surtitre, { color: t.textMuted }]}>
+                    {jourDifficile ? "UNE SEULE CHOSE" : `MES ${prefs.nombre} POUR AUJOURD'HUI`}
+                  </Texte>
+                  <TouchableOpacity onPress={() => router.push("/trois-reglages" as never)} hitSlop={10} accessibilityLabel="Réglages de Mes 3">
+                    <Texte style={{ fontSize: 18, marginTop: spacing.xl }}>⚙️</Texte>
+                  </TouchableOpacity>
+                </View>
                 {jourDifficile && unique && (
                   <>
                     <Texte style={[styles.vide, { color: t.textMuted }]}>
@@ -816,6 +900,12 @@ export default function Taches() {
                   </Texte>
                 )}
                 {maintenant.map((p, i) => carteGrande(p, i))}
+                {!jourDifficile && maintenant.length < prefs.nombre && classement.length > maintenant.length && (
+                  <TouchableOpacity onPress={onUneAutre} hitSlop={8} style={styles.uneAutre}>
+                    <Texte style={[styles.lien, { color: t.accentText }]}>Une autre ?</Texte>
+                  </TouchableOpacity>
+                )}
+                {!jourDifficile && new Date().getHours() >= 18 && choixDemain.length === 0 && carteDemain}
               </>
             )}
 
@@ -876,6 +966,22 @@ export default function Taches() {
           </>
         )}
       </ScrollView>
+
+      <MenuOptions
+        titre={menuTache?.nom ?? ""}
+        options={menuTache ? optionsAppui(menuTache) : []}
+        onFermer={() => setMenuTache(null)}
+      />
+
+      <FeuilleChoixTrois
+        visible={feuilleTrois}
+        titre={`Mes ${prefs.nombre} pour demain`}
+        candidats={candidatsDemain}
+        max={prefs.nombre}
+        initial={choixDemain}
+        onValider={onChoisirDemain}
+        onFermer={() => setFeuilleTrois(false)}
+      />
 
       {/* Bouton « + » : noter vite, tâche complète, listes */}
       <Modal
@@ -1182,6 +1288,12 @@ const styles = StyleSheet.create({
   jourPoints: { flexDirection: "row", gap: 2, height: 6, marginTop: 4 },
   jourPoint: { width: 6, height: 6, borderRadius: 3, borderWidth: 1 },
 
+  titreTrois: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  boutonTrois: { alignSelf: "flex-start", borderRadius: radius.pill, paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, marginTop: spacing.md },
+  rdvLigne: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 4 },
+  rdvPastille: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#8A9A98" },
+  rdvHeure: { fontSize: typography.small, fontWeight: "600", minWidth: 52 },
+  rdvTitre: { flex: 1, fontSize: typography.body },
   surtitre: {
     fontSize: typography.tiny,
     fontWeight: "700",

@@ -1,5 +1,5 @@
 import type { Categorie } from "../catalogue";
-import { dateLocale, jourDeCreation } from "../dates";
+import { jourDeCreation, jourLogique } from "../dates";
 import { categorieEffective } from "./categories";
 import { getDatabase } from "./client";
 import { logEvent } from "./events";
@@ -34,9 +34,9 @@ export type RoutineAvecStatut = {
   ancre_position: "avant" | "apres" | null;
 };
 
-/** Date du jour en heure locale (la journée bascule à minuit). */
+/** Jour de l'appli : la journée bascule à l'heure de début (6 h par défaut), pas à minuit. */
 export function getAujourdhui(): string {
-  return dateLocale();
+  return jourLogique();
 }
 
 /**
@@ -75,11 +75,12 @@ const ORDRE_MOMENT = `
     ELSE 7
   END`;
 
-export async function getRoutinesAvecStatutDuJour(): Promise<
-  RoutineAvecStatut[]
-> {
+export async function getRoutinesAvecStatutDuJour(
+  /** Jour à afficher, si ce n'est pas aujourd'hui (hier, avant-hier). */
+  jour?: string,
+): Promise<RoutineAvecStatut[]> {
   const db = await getDatabase();
-  const aujourdhui = getAujourdhui();
+  const aujourdhui = jour ?? getAujourdhui();
 
   const rows = await db.getAllAsync<{
     id: number;

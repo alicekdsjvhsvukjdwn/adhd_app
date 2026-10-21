@@ -49,7 +49,11 @@ export async function routineProposee(): Promise<{ id: number; nom: string } | n
  */
 export async function cocherRoutineLiee(date: string): Promise<boolean> {
   const id = await getRoutineLiee();
-  if (id === null) return false;
+  return id === null ? false : cocherRoutine(id, date);
+}
+
+/** Coche une routine donnée pour ce jour (la même mécanique : étapes, palier, points une seule fois). */
+export async function cocherRoutine(id: number, date: string): Promise<boolean> {
   const db = await getDatabase();
   const item = await db.getFirstAsync<{ id: number }>(
     "SELECT id FROM items WHERE id = ? AND type = 'routine'",

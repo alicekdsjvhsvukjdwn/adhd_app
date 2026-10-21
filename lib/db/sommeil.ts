@@ -14,6 +14,7 @@ import {
 } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
+import { ecrireMeta, lireMeta } from "./meta";
 import { addPoints } from "./stats";
 
 /**
@@ -37,17 +38,6 @@ const COLONNES = "date, coucher, lever, duree_min, qualite, ecrans, reponses";
 const CLE_EN_COURS = "nuit_en_cours";
 const cleReponses = (date: string) => `nuit_reponses:${date}`;
 
-async function lireMeta(cle: string): Promise<string | null> {
-  const db = await getDatabase();
-  const r = await db.getFirstAsync<{ valeur: string }>("SELECT valeur FROM meta WHERE cle = ?", cle);
-  return r?.valeur ?? null;
-}
-
-async function ecrireMeta(cle: string, valeur: string | null): Promise<void> {
-  const db = await getDatabase();
-  if (valeur === null) await db.runAsync("DELETE FROM meta WHERE cle = ?", cle);
-  else await db.runAsync("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)", cle, valeur);
-}
 
 export async function getNuit(date: string): Promise<Nuit | null> {
   const db = await getDatabase();

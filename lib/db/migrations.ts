@@ -1,12 +1,17 @@
 import {
   COLONNES_STATS,
   SQL_CATEGORIES_RECOMPENSES,
+  SQL_CATEGORIES_RECOMPENSES_V2,
   SQL_COULEURS_LISTES,
   SQL_SEANCES_NOTEES,
   SQL_SKILLS_DEPUIS_PALIERS,
   SQL_TABLES_LOT4,
+  SQL_TABLES_ESPRIT,
+  SQL_TABLES_MENAGE,
+  SQL_TABLES_TROIS,
   SQL_TABLES_SEANCES_GUIDEES,
   SQL_MOMENTS,
+  SQL_RANG_MANUEL,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
@@ -726,6 +731,46 @@ const MIGRATIONS: Migration[] = [
     nom: "séances de sport notées, routine liée au sport",
     run: async (db) => {
       await db.execAsync(SQL_SEANCES_NOTEES);
+    },
+  },
+
+  {
+    version: 26,
+    nom: "mes 3 tâches du jour",
+    run: async (db) => {
+      await db.execAsync(SQL_TABLES_TROIS);
+    },
+  },
+
+  {
+    version: 27,
+    nom: "place d'une tâche choisie à la main dans sa liste",
+    run: async (db) => {
+      await db.execAsync(SQL_RANG_MANUEL);
+    },
+  },
+
+  {
+    version: 28,
+    nom: "étagères de récompenses : mer, bouffe, temps, découvertes, gros",
+    run: async (db) => {
+      await db.execAsync(SQL_CATEGORIES_RECOMPENSES_V2);
+    },
+  },
+
+  {
+    version: 29,
+    nom: "ménage par pièce",
+    run: async (db) => {
+      await db.execAsync(SQL_TABLES_MENAGE);
+    },
+  },
+
+  {
+    version: 30,
+    nom: "esprit : humeur, journal de pensées, TCC, vision",
+    run: async (db) => {
+      await db.execAsync(SQL_TABLES_ESPRIT);
     },
   },
 ];

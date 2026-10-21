@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { ChartColumn, Gift, Moon, Sun, SquareCheck, User, type LucideIcon } from "lucide-react-native";
+import { Gift, Moon, SprayCan, Sun, SquareCheck, User, type LucideIcon } from "lucide-react-native";
 import { Platform, type ColorValue } from "react-native";
 import { policeDe, typography, useTheme } from "../../lib/theme";
 
@@ -51,10 +51,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="recompenses"
+        name="menage"
         options={{
-          title: "Récompenses",
-          tabBarIcon: icone(Gift),
+          title: "Ménage",
+          tabBarIcon: icone(SprayCan),
         }}
       />
       <Tabs.Screen
@@ -65,12 +65,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="progression"
+        name="recompenses"
         options={{
-          title: "Progression",
-          tabBarIcon: icone(ChartColumn),
+          title: "Récompenses",
+          tabBarIcon: icone(Gift),
         }}
       />
+      {/* Progression vit dans Suivi › Progrès : la route reste, sans onglet. */}
+      <Tabs.Screen name="progression" options={{ href: null }} />
       <Tabs.Screen
         name="profil"
         options={{

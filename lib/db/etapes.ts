@@ -284,6 +284,7 @@ export type EtapeRoutine = Etape & { cochee: boolean };
 /** Étapes de plusieurs routines, avec leur état du jour. */
 export async function getEtapesRoutines(
   itemIds: number[],
+  jour: string = getAujourdhui(),
 ): Promise<Record<number, EtapeRoutine[]>> {
   const resultat: Record<number, EtapeRoutine[]> = {};
   if (itemIds.length === 0) return resultat;
@@ -294,7 +295,7 @@ export async function getEtapesRoutines(
      LEFT JOIN etapes_cochees ec ON ec.etape_id = e.id AND ec.date = ?
      WHERE e.item_id IN (${itemIds.map(() => "?").join(",")})
      ORDER BY e.ordre, e.id`,
-    getAujourdhui(),
+    jour,
     ...itemIds,
   );
   for (const e of rows) (resultat[e.item_id] ??= []).push({ ...e, cochee: e.cochee === 1 });
@@ -309,9 +310,11 @@ const VERSION_PALIER = { 1: "essentielles", 2: "toutes" } as const;
  * complétion du jour au palier atteint. Les points donnés sont gardés
  * dans completions.points : on ne verse que la différence.
  */
-export async function basculerEtapeRoutine(etapeId: number): Promise<void> {
+export async function basculerEtapeRoutine(
+  etapeId: number,
+  date: string = getAujourdhui(),
+): Promise<void> {
   const db = await getDatabase();
-  const date = getAujourdhui();
   const etape = await db.getFirstAsync<Etape>("SELECT * FROM etapes WHERE id = ?", etapeId);
   if (!etape) return;
 
@@ -332,13 +335,13 @@ export async function basculerEtapeRoutine(etapeId: number): Promise<void> {
     );
   }
 
-  const etapes = (await getEtapesRoutines([etape.item_id]))[etape.item_id] ?? [];
+  const etapes = (await getEtapesRoutines([etape.item_id], date))[etape.item_id] ?? [];
   const palier = palierEtapes(
     etapes.map((e) => ({ essentielle: e.essentielle === 1, cochee: e.cochee })),
   );
-  const points = pointsPalier(palier, await estJourDifficile());
-  if (palier === 0) await annulerCompletion(etape.item_id);
-  else await completer(etape.item_id, "complet", undefined, VERSION_PALIER[palier], points);
+  const points = pointsPalier(palier, await estJourDifficile(date));
+  if (palier === 0) await annulerCompletion(etape.item_id, date);
+  else await completer(etape.item_id, "complet", undefined, VERSION_PALIER[palier], points, date);
 }
 
 /**

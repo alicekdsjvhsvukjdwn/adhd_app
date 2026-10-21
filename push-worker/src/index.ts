@@ -1,7 +1,35 @@
 import { buildPushPayload } from "@block65/webcrypto-web-push";
+import { analyserIcs, type Evenement } from "./ics";
 import { rappelsDus, TEXTES, type Envoyes, type Reglages, type TypeRappel } from "./rappels";
 
-// Le Worker ne garde que l'abonnement push et les heures choisies. Aucune donnée de l'appli.
+// Le Worker garde l'abonnement push et les heures choisies, plus l'adresse secrète de l'agenda
+// (KV, jamais dans le dépôt) et les rendez-vous mis en cache 15 minutes. Aucune autre donnée de l'appli.
+
+const CLE_AGENDA_URL = "agenda:url";
+const CLE_AGENDA_CACHE = "agenda:cache";
+const CACHE_MS = 15 * 60_000;
+/** Seules les adresses iCal de Google Agenda sont acceptées (pas de requête vers n'importe où). */
+const ICAL_GOOGLE = /^https:\/\/calendar\.google\.com\/calendar\/ical\/\S+\.ics$/;
+
+type CacheAgenda = { maj: number; evenements: Evenement[] };
+
+async function lireAgenda(env: Env): Promise<{ maj: number; evenements: Evenement[]; perime?: boolean } | null> {
+  const url = ((await env.ABONNES.get(CLE_AGENDA_URL, "json")) as { url: string } | null)?.url;
+  if (!url) return null;
+  const cache = (await env.ABONNES.get(CLE_AGENDA_CACHE, "json")) as CacheAgenda | null;
+  if (cache && Date.now() - cache.maj < CACHE_MS) return cache;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(String(r.status));
+    const aujourdhui = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+    const frais: CacheAgenda = { maj: Date.now(), evenements: analyserIcs(await r.text(), aujourdhui) };
+    await env.ABONNES.put(CLE_AGENDA_CACHE, JSON.stringify(frais));
+    return frais;
+  } catch {
+    // Google injoignable : on rend le dernier état connu, signalé comme périmé.
+    return cache ? { ...cache, perime: true } : null;
+  }
+}
 
 type Env = {
   ABONNES: KVNamespace;
@@ -29,7 +57,7 @@ const cle = async (endpoint: string) => {
 const cors = (env: Env) => ({
   "Access-Control-Allow-Origin": env.ORIGINE,
   "Access-Control-Allow-Headers": "authorization, content-type",
-  "Access-Control-Allow-Methods": "POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 });
 
 async function envoyer(env: Env, a: Abonne, type: TypeRappel): Promise<number> {
@@ -49,6 +77,26 @@ export default {
       return new Response("non autorisé", { status: 401, headers: h });
     }
     const { pathname } = new URL(req.url);
+
+    // Agenda : l'adresse secrète arrive une seule fois et reste ici ; l'appli lit ensuite les rendez-vous.
+    if (pathname === "/agenda/url" && req.method === "POST") {
+      const url = ((await req.json().catch(() => null)) as { url?: string } | null)?.url?.trim() ?? "";
+      if (!ICAL_GOOGLE.test(url)) return new Response("adresse iCal Google invalide", { status: 400, headers: h });
+      await env.ABONNES.put(CLE_AGENDA_URL, JSON.stringify({ url }));
+      await env.ABONNES.delete(CLE_AGENDA_CACHE);
+      return new Response("ok", { headers: h });
+    }
+    if (pathname === "/agenda/url" && req.method === "DELETE") {
+      await env.ABONNES.delete(CLE_AGENDA_URL);
+      await env.ABONNES.delete(CLE_AGENDA_CACHE);
+      return new Response("ok", { headers: h });
+    }
+    if (pathname === "/agenda" && req.method === "GET") {
+      const a = await lireAgenda(env);
+      if (!a) return new Response("pas d'agenda", { status: 404, headers: h });
+      return new Response(JSON.stringify(a), { headers: { ...h, "content-type": "application/json" } });
+    }
+
     const corps = (await req.json().catch(() => null)) as any;
     if (!corps?.endpoint && !corps?.subscription?.endpoint) {
       return new Response("requête invalide", { status: 400, headers: h });

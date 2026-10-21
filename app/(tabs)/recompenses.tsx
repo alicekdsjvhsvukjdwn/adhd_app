@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { MenuOptions } from "../../components/MenuOptions";
 import { Texte, ChampTexte } from "../../components/Texte";
 import { IconeRecompense } from "../../components/IconeRecompense";
 import {
@@ -38,6 +39,7 @@ import {
   type CategorieRecompense,
 } from "../../lib/recompenses-regles";
 import { niveauDePoints, totalAffiche } from "../../lib/regles-taches";
+import { ideesRestantes } from "../../lib/catalogue-recompenses";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../../lib/theme";
 
 const PRIX = [25, 50, 100, 150, 300, 500];
@@ -83,6 +85,8 @@ export default function Recompenses() {
   const [voirRegles, setVoirRegles] = useState(false);
   const [voirAchats, setVoirAchats] = useState(false);
   const [bravo, setBravo] = useState<string | null>(null);
+  /** Étagère dont le menu « Idées » est ouvert. */
+  const [ideesDe, setIdeesDe] = useState<CategorieRecompense | null>(null);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -221,14 +225,25 @@ export default function Recompenses() {
         </View>
 
         {/* Une étagère par catégorie */}
-        {etageres(liste.map((r) => r.categorie)).map((cle) => {
+        {etageres().map((cle) => {
           const cat = categorieRecompense(cle);
           const dedans = liste.filter((r) => categorieRecompense(r.categorie).cle === cle);
           return (
             <View key={cle} style={styles.etagere}>
               <View style={styles.etagereTitre}>
                 <View style={[styles.point, { backgroundColor: cat.couleur }]} />
-                <Texte style={[styles.section, { color: t.textPrimary }]}>{cat.nom}</Texte>
+                <Texte style={[styles.section, { color: t.textPrimary, flex: 1 }]}>{cat.nom}</Texte>
+                {ideesRestantes(cle, dedans.map((r) => r.nom)).length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setIdeesDe(cle)}
+                    hitSlop={8}
+                    style={[styles.idees, { borderColor: cat.couleur }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Idées de récompenses : ${cat.nom}`}
+                  >
+                    <Texte style={{ color: cat.couleur, fontSize: typography.small, fontWeight: "600" }}>Idées</Texte>
+                  </TouchableOpacity>
+                )}
               </View>
               <ScrollView
                 horizontal
@@ -391,6 +406,22 @@ export default function Recompenses() {
       )}
 
       {/* Créer / modifier une récompense */}
+      <MenuOptions
+        titre={ideesDe ? `Idées · ${categorieRecompense(ideesDe).nom}` : ""}
+        options={
+          ideesDe
+            ? ideesRestantes(ideesDe, liste.map((r) => r.nom)).map((i) => ({
+                libelle: `${i.nom} · ${i.prix} pts`,
+                onPress: async () => {
+                  await ajouterRecompense({ nom: i.nom, icone: i.icone, prix: i.prix, categorie: ideesDe });
+                  await charger();
+                },
+              }))
+            : []
+        }
+        onFermer={() => setIdeesDe(null)}
+      />
+
       <Modal
         visible={formulaire !== null}
         transparent
@@ -610,6 +641,7 @@ const styles = StyleSheet.create({
   soldeTexte: { fontSize: typography.small, fontWeight: "600" },
 
   etagere: { marginBottom: spacing.lg },
+  idees: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 4 },
   etagereTitre: {
     flexDirection: "row",
     alignItems: "center",

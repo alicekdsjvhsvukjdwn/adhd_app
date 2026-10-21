@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Moon, PersonStanding, Play, Square, Timer } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -35,7 +35,9 @@ const ICONES: Record<Meditation["icone"], typeof Moon> = {
 export default function Mediter() {
   const router = useRouter();
   const t = useTheme();
-  const [choisie, setChoisie] = useState<Meditation>(MEDITATIONS[0]);
+  // ?id=carre : une séance précise (le lien d'un exercice de TCC vers la respiration).
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const [choisie, setChoisie] = useState<Meditation>(() => MEDITATIONS.find((m) => m.id === id) ?? MEDITATIONS[0]);
   const [debut, setDebut] = useState<number | null>(null);
   const [maintenant, setMaintenant] = useState(0);
   const [message, setMessage] = useState<string | null>(null);

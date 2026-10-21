@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Texte, ChampTexte } from "../components/Texte";
 import type { Categorie } from "../lib/catalogue";
-import { dateLocale, decalerJours, jourDeCreation } from "../lib/dates";
+import { decalerJours, jourDeCreation, jourLogique } from "../lib/dates";
 import {
   addItem,
   confirmationSuppression,
@@ -148,7 +148,7 @@ const DIFFICULTES: { valeur: 1 | 2 | 3; libelle: string }[] = [
 
 /** Date locale dans n jours (même convention que getAujourdhui). */
 function dateDansJours(n: number): string {
-  return decalerJours(dateLocale(), n);
+  return decalerJours(jourLogique(), n);
 }
 
 function recurrenceDe(jours: number[]): string {

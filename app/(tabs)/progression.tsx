@@ -11,6 +11,7 @@ import {
 import { Texte } from "../../components/Texte";
 import Svg, { Circle } from "react-native-svg";
 import { CalendrierMois } from "../../components/CalendrierMois";
+import { SectionHumeur } from "../../components/SectionHumeur";
 import { LiensSommeilSport } from "../../components/LiensSommeilSport";
 import { remettreAFaire } from "../../lib/db/etapes";
 import { getStats } from "../../lib/db/stats";
@@ -364,12 +365,14 @@ export default function Progression() {
 
       <LiensSommeilSport />
 
+      <SectionHumeur />
+
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
+  container: { flex: 1, paddingTop: spacing.md, paddingHorizontal: spacing.xl },
   titre: {
     fontSize: typography.h1,
     fontWeight: "600",

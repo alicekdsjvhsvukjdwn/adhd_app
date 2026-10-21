@@ -269,6 +269,172 @@ export const SQL_SEANCES_NOTEES = `
 `;
 
 /**
+ * Migration 26 : « Mes 3 ». Les tâches retenues pour un jour (choisies la veille,
+ * reportées de la veille ou proposées par le moteur), dans l'ordre d'affichage.
+ */
+export const SQL_TABLES_TROIS = `
+  CREATE TABLE IF NOT EXISTS trois (
+    jour TEXT NOT NULL DEFAULT '',
+    item_id INTEGER NOT NULL DEFAULT 0,
+    rang INTEGER NOT NULL DEFAULT 0,
+    -- 'choisi' | 'report' | 'moteur'
+    source TEXT NOT NULL DEFAULT 'moteur',
+    PRIMARY KEY (jour, item_id)
+  );
+`;
+
+/**
+ * Migration 27 : place choisie à la main dans une liste. Négatif = en haut (le plus petit d'abord),
+ * positif = en bas, vide = l'ordre de l'appli.
+ */
+export const SQL_RANG_MANUEL = `
+  ALTER TABLE items ADD COLUMN rang_manuel INTEGER;
+`;
+
+/**
+ * Migration 28 : les cinq étagères pensées pour moi (mer, bouffe, temps, découvertes, gros).
+ * Les anciennes clés sont rangées d'après le nom ; les nouvelles ne bougent pas, donc rejouable.
+ * (lower() de SQLite ne touche pas aux accents, d'où les deux orthographes.)
+ */
+export const SQL_CATEGORIES_RECOMPENSES_V2 = `
+  UPDATE recompenses SET categorie = CASE
+    WHEN categorie IN ('mer', 'bouffe', 'temps', 'decouvertes', 'gros') THEN categorie
+    WHEN categorie = 'musique' THEN 'temps'
+    WHEN lower(nom) LIKE '%baignade%' OR lower(nom) LIKE '%plage%' OR lower(nom) LIKE '%calanque%'
+      OR lower(nom) LIKE '%bateau%' OR lower(nom) LIKE '%paddle%' OR lower(nom) LIKE '%kayak%'
+      OR lower(nom) LIKE '%rando%' OR lower(nom) LIKE '%coucher de soleil%'
+      THEN 'mer'
+    WHEN lower(nom) LIKE '%resto%' OR lower(nom) LIKE '%café%' OR lower(nom) LIKE '%cafe%'
+      OR lower(nom) LIKE '%gâteau%' OR lower(nom) LIKE '%gateau%' OR lower(nom) LIKE '%pâtisserie%'
+      OR lower(nom) LIKE '%patisserie%' OR lower(nom) LIKE '%glace%' OR lower(nom) LIKE '%brunch%'
+      OR lower(nom) LIKE '%burger%' OR lower(nom) LIKE '%pizza%'
+      THEN 'bouffe'
+    WHEN categorie = 'sorties' THEN 'decouvertes'
+    ELSE 'temps'
+  END;
+`;
+
+/**
+ * Migration 29 : ménage par pièce. Les pièces et tâches de départ sont créées
+ * à la première ouverture de l'onglet (lib/db/menage.ts), pas ici.
+ */
+export const SQL_TABLES_MENAGE = `
+  CREATE TABLE IF NOT EXISTS menage_pieces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    icone TEXT NOT NULL DEFAULT 'maison',
+    ordre INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS menage_taches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    piece_id INTEGER NOT NULL DEFAULT 0,
+    nom TEXT NOT NULL DEFAULT '',
+    freq_jours INTEGER NOT NULL DEFAULT 7,
+    prochaine_le TEXT NOT NULL DEFAULT '',
+    fait_le TEXT,
+    avant_le TEXT,
+    points_donnes INTEGER NOT NULL DEFAULT 0,
+    ordre INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS menage_faits (
+    tache_id INTEGER NOT NULL DEFAULT 0,
+    echeance TEXT NOT NULL DEFAULT '',
+    jour TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (tache_id, echeance)
+  );
+`;
+
+/**
+ * Migration 30 : Esprit (humeur, journal de pensées, TCC, vision). Données sensibles :
+ * elles restent sur l'appareil et ne vont jamais au serveur de rappels.
+ */
+export const SQL_TABLES_ESPRIT = `
+  CREATE TABLE IF NOT EXISTS humeurs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour TEXT NOT NULL DEFAULT '',
+    heure TEXT NOT NULL DEFAULT '',
+    niveau INTEGER NOT NULL DEFAULT 3,
+    emotions TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_humeurs_jour ON humeurs(jour);
+
+  CREATE TABLE IF NOT EXISTS pensees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour TEXT NOT NULL DEFAULT '',
+    heure TEXT NOT NULL DEFAULT '',
+    situation TEXT NOT NULL DEFAULT '',
+    pensee TEXT NOT NULL DEFAULT '',
+    emotions TEXT NOT NULL DEFAULT '',
+    intensite_avant INTEGER,
+    pieges TEXT NOT NULL DEFAULT '',
+    autre_vision TEXT NOT NULL DEFAULT '',
+    intensite_apres INTEGER,
+    -- 0 rien | 1 à en parler en séance | 2 abordée
+    a_dire INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_pensees_jour ON pensees(jour);
+
+  CREATE TABLE IF NOT EXISTS tcc_seances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL DEFAULT '',
+    heure TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS tcc_exercices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    consigne TEXT NOT NULL DEFAULT '',
+    freq_type TEXT NOT NULL DEFAULT 'jour',
+    freq_n INTEGER NOT NULL DEFAULT 1,
+    lien TEXT NOT NULL DEFAULT '',
+    actif INTEGER NOT NULL DEFAULT 1,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS tcc_exercices_faits (
+    exercice_id INTEGER NOT NULL DEFAULT 0,
+    jour TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (exercice_id, jour)
+  );
+
+  CREATE TABLE IF NOT EXISTS a_dire (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    texte TEXT NOT NULL DEFAULT '',
+    -- 'note' | 'humeur' | 'journal'
+    source TEXT NOT NULL DEFAULT 'note',
+    fait INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS bilan_semaine (
+    semaine TEXT NOT NULL DEFAULT '' PRIMARY KEY,
+    aide TEXT NOT NULL DEFAULT '',
+    garder TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS vision_domaines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    ordre INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS vision_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domaine_id INTEGER NOT NULL DEFAULT 0,
+    -- photo compressée, en data URI (data:image/jpeg;base64,…) : elle part dans la sauvegarde
+    data TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS vision_phrases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domaine_id INTEGER NOT NULL DEFAULT 0,
+    texte TEXT NOT NULL DEFAULT '',
+    ordre INTEGER NOT NULL DEFAULT 0
+  );
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */
@@ -278,6 +444,7 @@ export function transformationsApres(schemaSauvegarde: number): string[] {
     ...(schemaSauvegarde < 20 ? [SQL_VERSIONS_EN_ETAPES] : []),
     ...(schemaSauvegarde < 21 ? [SQL_COULEURS_LISTES] : []),
     ...(schemaSauvegarde < 22 ? [SQL_CATEGORIES_RECOMPENSES] : []),
+    ...(schemaSauvegarde < 28 ? [SQL_CATEGORIES_RECOMPENSES_V2] : []),
     ...(schemaSauvegarde < 23 ? [SQL_SKILLS_DEPUIS_PALIERS] : []),
   ];
 }

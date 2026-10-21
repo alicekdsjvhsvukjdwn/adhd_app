@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CarteRappelEsprit } from "../components/CarteRappelEsprit";
 import { Texte } from "../components/Texte";
 import {
     ConfigRappel,
@@ -205,6 +206,8 @@ export default function RappelsScreen() {
           </TouchableOpacity>
         </>
       )}
+
+      <CarteRappelEsprit />
     </ScrollView>
   );
 }

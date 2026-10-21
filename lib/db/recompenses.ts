@@ -6,6 +6,8 @@ import {
   POINTS_TOUTES,
 } from "../regles-taches";
 import { POINTS_MEDITATION } from "../meditations";
+import { POINTS_MENAGE } from "../menage-regles";
+import { POINTS_TCC } from "../tcc-points";
 import { POINTS_ETAPE_SKILL, POINTS_MAITRISE } from "../skills";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
@@ -68,6 +70,14 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
   {
     action: "Une méditation terminée ou d'au moins 1 min (une fois par jour)",
     points: `+${POINTS_MEDITATION}`,
+  },
+  {
+    action: "Un exercice de TCC fait (une fois par jour, même s'il y en a plusieurs). Humeurs et journal : jamais de points",
+    points: `+${POINTS_TCC}`,
+  },
+  {
+    action: "Une tâche de ménage due ou en retard (une fois par tâche et par échéance ; rien si elle n'était pas encore due)",
+    points: `+${POINTS_MENAGE}`,
   },
   {
     action: "Décocher, annuler ou remettre à faire",

@@ -195,10 +195,10 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
     colonnes: {
       id: "identifiant",
       nom: "texte",
-      icone: "icône au trait ('cafe', 'ecran', 'gateau', 'ticket', 'musique', 'montagne', 'casque', 'vinyle', 'clavier', 'lit', 'livre', 'cadeau', 'etoile', 'avion', 'manette') ou emoji des premières versions",
+      icone: "icône au trait ('cafe', 'ecran', 'gateau', 'ticket', 'musique', 'montagne', 'casque', 'vinyle', 'clavier', 'lit', 'livre', 'cadeau', 'etoile', 'avion', 'manette', 'vague', 'soleil', 'glace', 'couverts', 'lune', 'musee', 'carte', 'bateau', 'film', 'bain', 'sandwich', 'palette', 'ville') ou emoji des premières versions",
       prix: "points",
       cree_le: ISO,
-      categorie: "'plaisirs' | 'sorties' | 'musique' | 'temps' (temps pour moi) | 'gros' (gros objectifs)",
+      categorie: "'mer' (mer & dehors) | 'bouffe' (bouffe & sorties) | 'temps' (temps pour moi) | 'decouvertes' (activités & découvertes) | 'gros' (gros objectifs) ; avant la version 28 : 'plaisirs' | 'sorties' | 'musique' | 'temps' | 'gros'",
     },
   },
   achats: {
@@ -260,10 +260,110 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   meta: {
     table: "Valeurs diverses, clé → valeur.",
     colonnes: {
-      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour)",
+      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' (réglages de Mes 3, JSON) | 'trois_compose:AAAA-MM-JJ' (les 3 du jour sont composés) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache)",
       valeur:
         "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1 ; nuit_en_cours : jour et heure locaux du coucher, 'AAAA-MM-JJ HH:MM' ; nuit_reponses : JSON {qualite?, ecrans?}",
     },
+  },
+  menage_pieces: {
+    table: "Ménage : les pièces, dans l'ordre d'affichage.",
+    colonnes: { id: "identifiant", nom: "texte", icone: "clé de l'icône ('cuisine', 'bain', 'chambre', 'salon', 'entree', 'linge', 'courses', 'maison')", ordre: "position, 0 = première" },
+  },
+  menage_taches: {
+    table: "Ménage : les tâches de chaque pièce, avec leur fréquence et leur prochaine échéance.",
+    colonnes: {
+      id: "identifiant",
+      piece_id: "pièce (table menage_pieces)",
+      nom: "texte",
+      freq_jours: "revient tous les N jours (1 = chaque jour, 7 = chaque semaine, 30 = chaque mois)",
+      prochaine_le: `prochaine échéance, ${JOUR}`,
+      fait_le: `dernier jour où elle a été cochée, ${JOUR}`,
+      avant_le: "échéance d'avant le dernier cochage (sert à décocher)",
+      points_donnes: `le dernier cochage a rapporté 5 points : ${BOOL}`,
+      ordre: "position dans la pièce",
+      cree_le: ISO,
+    },
+  },
+  menage_faits: {
+    table: "Ménage : une ligne par tâche et par échéance ayant rapporté des points (empêche de les compter deux fois).",
+    colonnes: { tache_id: "tâche (table menage_taches)", echeance: `échéance honorée, ${JOUR}`, jour: `jour du cochage, ${JOUR}` },
+  },
+  trois: {
+    table: "Mes 3 : les tâches retenues pour un jour, dans l'ordre d'affichage.",
+    colonnes: { jour: JOUR, item_id: "tâche (table items)", rang: "position, 0 = première", source: "'choisi' (choisie la veille) | 'report' (pas faite la veille) | 'moteur' (proposée par l'appli)" },
+  },
+  humeurs: {
+    table: "Esprit : une ligne par humeur notée (plusieurs par jour possibles). Données sensibles : elles restent sur l'appareil.",
+    colonnes: {
+      id: "identifiant",
+      jour: JOUR,
+      heure: "HH:MM (heure locale)",
+      niveau: "1 = très bas … 5 = très bien",
+      emotions: "0 à 3 émotions, séparées par des virgules",
+      note: "une ligne de texte libre",
+    },
+  },
+  pensees: {
+    table: "Esprit : journal de pensées (colonnes de la TCC). Données sensibles.",
+    colonnes: {
+      id: "identifiant",
+      jour: JOUR,
+      heure: "HH:MM",
+      situation: "texte libre",
+      pensee: "pensée automatique, texte libre",
+      emotions: "séparées par des virgules",
+      intensite_avant: "force de l'émotion avant, 0–100 ; vide si non notée",
+      pieges: "pièges de pensée, séparés par des virgules",
+      autre_vision: "une autre façon de voir, texte libre",
+      intensite_apres: "force de l'émotion après, 0–100 ; vide si non notée",
+      a_dire: "0 rien | 1 à en parler en séance | 2 abordée",
+    },
+  },
+  tcc_seances: {
+    table: "Ma TCC : les séances (dates et heures).",
+    colonnes: { id: "identifiant", date: JOUR, heure: "HH:MM" },
+  },
+  tcc_exercices: {
+    table: "Ma TCC : les exercices donnés par la psy.",
+    colonnes: {
+      id: "identifiant",
+      nom: "texte",
+      consigne: "texte libre",
+      freq_type: "'jour' (chaque jour) | 'semaine' (freq_n fois par semaine)",
+      freq_n: "1 à 7",
+      lien: "'' | 'journal' | 'respiration' | 'meditation'",
+      actif: `${BOOL} ; 0 = retiré de la liste, ses jours faits restent`,
+      cree_le: ISO,
+    },
+  },
+  tcc_exercices_faits: {
+    table: "Ma TCC : un exercice fait un jour donné (+5 points par jour, au premier exercice).",
+    colonnes: { exercice_id: "exercice (table tcc_exercices)", jour: JOUR },
+  },
+  a_dire: {
+    table: "Ma TCC : notes « à dire en séance ».",
+    colonnes: { id: "identifiant", texte: "texte libre", source: "'note' | 'humeur' | 'journal'", fait: `abordée : ${BOOL}`, cree_le: ISO },
+  },
+  bilan_semaine: {
+    table: "Esprit : « Ma semaine » du dimanche.",
+    colonnes: { semaine: `lundi de la semaine, ${JOUR}`, aide: "ce qui a aidé, texte libre", garder: "une chose à garder, texte libre", cree_le: ISO },
+  },
+  vision_domaines: {
+    table: "Ma vision : les domaines de vie.",
+    colonnes: { id: "identifiant", nom: "texte", ordre: "position" },
+  },
+  vision_photos: {
+    table: "Ma vision : les photos, compressées (40 au plus).",
+    colonnes: {
+      id: "identifiant",
+      domaine_id: "domaine (table vision_domaines)",
+      data: "photo JPEG en data URI : 'data:image/jpeg;base64,…' (colonne très longue)",
+      cree_le: ISO,
+    },
+  },
+  vision_phrases: {
+    table: "Ma vision : les phrases écrites au présent.",
+    colonnes: { id: "identifiant", domaine_id: "domaine (table vision_domaines)", texte: "texte libre", ordre: "position" },
   },
   sommeil: {
     table: "Une ligne par nuit, datée du jour du lever.",

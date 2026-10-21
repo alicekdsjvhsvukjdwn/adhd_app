@@ -44,7 +44,13 @@
       "expo-asset",
       "expo-sharing",
       "expo-audio",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Routines choisit des photos de ta galerie pour Ma vision. Elles restent sur ton téléphone."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

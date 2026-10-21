@@ -25,9 +25,9 @@ export function decalerJours(iso: string, n: number): string {
   return d.toISOString().split("T")[0];
 }
 
-/** La date locale d'il y a n jours. */
+/** Le jour de l'appli d'il y a n jours. */
 export function ilYA(n: number): string {
-  return decalerJours(dateLocale(), -n);
+  return decalerJours(jourLogique(), -n);
 }
 
 /**
@@ -42,4 +42,25 @@ export function jourDeCreation(creeLe: string): string {
     if (!isNaN(d.getTime())) return dateLocale(d);
   }
   return creeLe.slice(0, 10);
+}
+
+/** Heure à laquelle commence la journée de l'appli (réglable dans Profil, 4 à 8). */
+export const DEBUT_JOUR_DEFAUT = 6;
+let debutJour = DEBUT_JOUR_DEFAUT;
+
+export const getDebutJour = () => debutJour;
+
+/** Appelé au démarrage et quand le réglage change. Hors 4–8 : valeur par défaut. */
+export function definirDebutJour(h: number): void {
+  debutJour = Number.isInteger(h) && h >= 4 && h <= 8 ? h : DEBUT_JOUR_DEFAUT;
+}
+
+/**
+ * Jour « logique » : avant l'heure de début, on compte encore pour la veille.
+ * Comparaison sur l'heure du mur (getHours), pas en retranchant des heures :
+ * le changement d'heure ne peut pas décaler le résultat.
+ */
+export function jourLogique(d: Date = new Date(), debut: number = debutJour): string {
+  const jour = dateLocale(d);
+  return d.getHours() < debut ? decalerJours(jour, -1) : jour;
 }

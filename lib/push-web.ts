@@ -23,6 +23,7 @@ export type EtatRappels =
 export const REGLAGES_DEFAUT: Reglages = {
   quotidien: { actif: false, heure: "20:00" },
   soir: { actif: false, heure: "22:30" },
+  esprit: { actif: false, heure: "21:30" },
 };
 
 /** Ouverte depuis l'écran d'accueil (et non dans un onglet de Safari). */

@@ -28,6 +28,7 @@ const MESSAGES: Partial<Record<EtatRappels, string>> = {
 const LIBELLES: Record<TypeRappel, { titre: string; aide: string }> = {
   quotidien: { titre: "Rappel quotidien", aide: "« Un coup d'œil à tes routines ? »" },
   soir: { titre: "Rappel du soir", aide: "« C'est l'heure de Je vais dormir ? »" },
+  esprit: { titre: "30 secondes pour toi", aide: "« Un tap pour dire comment ça va. » (Esprit)" },
 };
 
 export default function RappelsWeb() {
@@ -98,7 +99,7 @@ export default function RappelsWeb() {
       )}
 
       {etat === "actif" &&
-        (["quotidien", "soir"] as const).map((type) => (
+        (["quotidien", "soir", "esprit"] as const).map((type) => (
           <View key={type} style={[styles.carte, { backgroundColor: t.bgCard }]}>
             <View style={styles.ligne}>
               <View style={{ flex: 1 }}>

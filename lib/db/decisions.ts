@@ -14,6 +14,8 @@ export type Composantes = {
    * Absent si la liste n'a pas d'objectif.
    */
   retard_liste?: number;
+  /** Poids utilisés pour « Mes 3 » (curseurs échéance / priorité), quand la décision vient de là. */
+  poids_trois?: Record<string, number>;
 };
 
 export type Decision = {

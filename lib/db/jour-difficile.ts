@@ -13,11 +13,11 @@ import { getAujourdhui } from "./completions";
 
 export const cleEnergie = (date: string = getAujourdhui()) => `energie_routines:${date}`;
 
-export async function estJourDifficile(): Promise<boolean> {
+export async function estJourDifficile(jour?: string): Promise<boolean> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ valeur: string }>(
     "SELECT valeur FROM meta WHERE cle = ?",
-    cleEnergie(),
+    cleEnergie(jour),
   );
   return row?.valeur === "1";
 }

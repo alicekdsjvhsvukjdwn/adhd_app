@@ -5,13 +5,13 @@ import {
   type RoutineAvecStatut,
 } from "../lib/db";
 
-/** Routines du jour de l'onglet Routines. */
-export function useRoutines() {
+/** Routines du jour de l'onglet Routines (ou d'un jour passé, pour cocher après coup). */
+export function useRoutines(jour?: string) {
   const [routines, setRoutines] = useState<RoutineAvecStatut[]>([]);
 
   const charger = useCallback(async () => {
-    setRoutines(await getRoutinesAvecStatutDuJour());
-  }, []);
+    setRoutines(await getRoutinesAvecStatutDuJour(jour));
+  }, [jour]);
 
   useEffect(() => {
     charger();

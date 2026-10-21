@@ -160,5 +160,5 @@ test("23 : jamais configuré → rien à convertir (le premier lancement demande
   db.exec(SQL_SKILLS_DEPUIS_PALIERS);
   assert.deepEqual(etats(db), {});
   assert.ok(transformationsApres(22).includes(SQL_SKILLS_DEPUIS_PALIERS));
-  assert.deepEqual(transformationsApres(23), []);
+  assert.deepEqual(transformationsApres(28), []);
 });

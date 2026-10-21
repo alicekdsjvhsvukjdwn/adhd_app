@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { libelleEcheance, pointsEcheance, semaineDe } from "../lib/regles-taches.ts";
-import { etageres, etatRecompense } from "../lib/recompenses-regles.ts";
-import { SQL_CATEGORIES_RECOMPENSES, transformationsApres } from "../lib/schema.ts";
+import { IDEES_RECOMPENSES, ideesRestantes } from "../lib/catalogue-recompenses.ts";
+import { CATEGORIES_RECOMPENSES, categorieRecompense, ICONES_RECOMPENSES, etageres, etatRecompense } from "../lib/recompenses-regles.ts";
+import { SQL_CATEGORIES_RECOMPENSES, SQL_CATEGORIES_RECOMPENSES_V2, transformationsApres } from "../lib/schema.ts";
 
 test("semaine en cours : du lundi au dimanche, quel que soit le jour", () => {
   const attendu = [
@@ -124,7 +125,45 @@ test("récompense accessible ou pas encore, selon le solde", () => {
   assert.deepEqual(etatRecompense(400, 0), { accessible: false, part: 0 });
 });
 
-test("étagères : seulement les catégories utilisées, Petits plaisirs toujours, dans l'ordre", () => {
-  assert.deepEqual(etageres([]), ["plaisirs"]);
-  assert.deepEqual(etageres(["gros", "musique", "musique"]), ["plaisirs", "musique", "gros"]);
+test("étagères : les cinq, toujours, dans l'ordre et avec les bonnes couleurs", () => {
+  assert.deepEqual(etageres(), ["mer", "bouffe", "temps", "decouvertes", "gros"]);
+  assert.deepEqual(CATEGORIES_RECOMPENSES.map((c) => c.couleur), ["#22D3EE", "#FB923C", "#A78BFA", "#FACC15", "#60A5FA"]);
+  assert.equal(categorieRecompense("plaisirs").cle, "temps"); // clé d'avant la version 28
+});
+
+test("migration 28 : anciennes catégories rangées d'après le nom, nouvelles intactes, rejouable", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE recompenses (id INTEGER PRIMARY KEY, nom TEXT NOT NULL, categorie TEXT NOT NULL)");
+  const ins = db.prepare("INSERT INTO recompenses (nom, categorie) VALUES (?, ?)");
+  const lignes = [
+    ["Aller boire un café", "plaisirs", "bouffe"],
+    ["Une pâtisserie", "plaisirs", "bouffe"],
+    ["Resto avec Léa", "sorties", "bouffe"],
+    ["Une séance de ciné", "sorties", "decouvertes"],
+    ["Rando dans les calanques", "sorties", "mer"],
+    ["Un album", "musique", "temps"],
+    ["Un épisode", "temps", "temps"],
+    ["Un truc", "plaisirs", "temps"],
+    ["Week-end à la mer", "gros", "gros"],
+    ["Déjà rangée", "mer", "mer"],
+  ];
+  for (const [n, c] of lignes) ins.run(n, c);
+  db.exec(SQL_CATEGORIES_RECOMPENSES_V2);
+  db.exec(SQL_CATEGORIES_RECOMPENSES_V2);
+  const res = Object.fromEntries(db.prepare("SELECT nom, categorie FROM recompenses").all().map((r) => [r.nom, r.categorie]));
+  for (const [n, , attendu] of lignes) assert.equal(res[n], attendu, n);
+  assert.ok(transformationsApres(27).includes(SQL_CATEGORIES_RECOMPENSES_V2));
+  assert.ok(!transformationsApres(28).includes(SQL_CATEGORIES_RECOMPENSES_V2));
+});
+
+test("catalogue d'idées : icônes connues, prix dans les fourchettes, rien d'ajouté deux fois", () => {
+  const prix = Object.values(IDEES_RECOMPENSES).flat().map((i) => i.prix);
+  assert.ok(prix.every((p) => p >= 20 && p <= 1000));
+  for (const i of Object.values(IDEES_RECOMPENSES).flat()) assert.ok(ICONES_RECOMPENSES.includes(i.icone), i.nom);
+  assert.equal(IDEES_RECOMPENSES.mer.length, 7);
+  assert.equal(IDEES_RECOMPENSES.bouffe.length, 6);
+  assert.equal(IDEES_RECOMPENSES.temps.length, 6);
+  assert.equal(IDEES_RECOMPENSES.decouvertes.length, 6);
+  const restantes = ideesRestantes("bouffe", ["glace", " RESTO "]).map((i) => i.nom);
+  assert.deepEqual(restantes, ["Pâtisserie", "Street food", "Brunch", "Soirée en ville"]);
 });
