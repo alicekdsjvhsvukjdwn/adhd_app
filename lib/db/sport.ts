@@ -1,7 +1,11 @@
 import { decalerJours } from "../dates";
+import { exercice, faisable } from "../exercices";
+import type { Materiel } from "../materiel";
+import type { LigneSeance, SeanceSport } from "../seances-sport";
 import {
   choisirEntretien,
   etapeDepart,
+  etapeFaisable,
   maitrise,
   MAX_ACTIFS,
   pointsValidation,
@@ -9,7 +13,6 @@ import {
   skill,
   SKILLS,
   statut,
-  type Etape,
   type EtatSkill,
   type Skill,
 } from "../skills";
@@ -85,13 +88,13 @@ async function ecrireEtat(id: string, e: EtatSkill) {
 
 /** Premier lancement : barre, et où on en est sur chaque fondation (actives d'emblée). */
 export async function configurerSport(
-  barre: boolean,
+  barre: Materiel | boolean,
   choix: Record<string, number | "inconnu">,
 ): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `INSERT OR REPLACE INTO sport_reglages (id, barre_traction, configure_le) VALUES (1, ?, ?)`,
-    barre ? 1 : 0,
+    (typeof barre === "boolean" ? barre : barre.dispo.barre) ? 1 : 0,
     new Date().toISOString(),
   );
   const etats: Record<string, EtatSkill> = {};
@@ -121,16 +124,28 @@ export async function basculerActif(id: string): Promise<boolean> {
 
 export type SeanceSkill = { fin: string; realise: number[] };
 
-/** Séances faites à une étape, la plus récente d'abord, séries dans l'ordre. */
+/**
+ * Séances faites à une étape, la plus récente d'abord, séries dans l'ordre. Elles comptent toutes, quelle que
+ * soit la séance où l'exercice a été fait (Workout, séance de skills, essai noté), à partir du moment où l'étape
+ * est devenue l'étape en cours. Les séries notées avant la bibliothèque (famille = skill, palier = étape) comptent aussi.
+ */
 async function seancesA(id: string, etape: number): Promise<SeanceSkill[]> {
   const db = await getDatabase();
+  const exerciceId = skill(id)?.etapes[etape - 1]?.exercice ?? "";
+  const arrivee = await db.getFirstAsync<{ h: string | null }>(
+    "SELECT MAX(horodatage) AS h FROM skills_historique WHERE skill = ? AND vers = ? AND origine IN ('depart', 'valide', 'manuel')",
+    id,
+    etape,
+  );
   const rows = await db.getAllAsync<{ seance_id: number; quand: string; realise: number }>(
     `SELECT s.seance_id, COALESCE(se.fin, se.debut) AS quand, s.realise
      FROM series s JOIN seances se ON se.id = s.seance_id
-     WHERE s.famille = ? AND s.palier = ?
+     WHERE s.realise > 0 AND ((s.famille = ? AND s.palier = ?) OR (s.exercice_id = ? AND se.debut > ?))
      ORDER BY quand DESC, s.seance_id DESC, s.numero`,
     id,
     etape,
+    exerciceId,
+    arrivee?.h ?? "",
   );
   const par = new Map<number, SeanceSkill>();
   for (const r of rows) {
@@ -256,8 +271,8 @@ export async function noterEssai(
   );
   for (let n = 1; n <= series; n++) {
     await db.runAsync(
-      `INSERT INTO series (seance_id, famille, palier, exercice, numero, unite, objectif_bas, objectif_haut, realise)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO series (seance_id, famille, palier, exercice, numero, unite, objectif_bas, objectif_haut, realise, exercice_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       r.lastInsertRowId,
       id,
       etat.etape,
@@ -267,6 +282,7 @@ export async function noterEssai(
       etape.objectif,
       etape.objectif,
       valeur,
+      etape.exercice,
     );
   }
   if (points > 0) await addPoints(points);
@@ -306,54 +322,42 @@ export async function redescendre(id: string): Promise<void> {
   await journaliser(id, etat.etape, etat.etape - 1, "manuel");
 }
 
-// ─── Séance ─────────────────────────────────────────────────────────────
+// ─── Séance de skills ───────────────────────────────────────────────────
 
-export type ExerciceDuJour = {
-  skill: Skill;
-  numero: number;
-  etape: Etape;
-  /** Série d'entretien d'un skill maîtrisé : une seule, au niveau de la dernière étape. */
-  entretien: boolean;
-};
-
-/** L'étape en cours de chaque skill actif, puis 1 série d'entretien pour au plus 2 skills maîtrisés. */
-export async function seanceProposee(): Promise<ExerciceDuJour[]> {
-  const { barre } = await getReglages();
+/**
+ * La séance de skills : l'étape en cours de chaque skill actif (son exercice, les séries et la cible de l'étape),
+ * puis 1 série d'entretien pour au plus 2 skills maîtrisés. Elle se fait dans le lecteur du Workout : ce qui est
+ * noté compte pour les étapes, comme n'importe quelle autre séance. Un skill dont il manque le matériel n'y est pas.
+ */
+export async function seanceSkills(m: Materiel): Promise<SeanceSport> {
   const etats = await getEtats();
-  const res: ExerciceDuJour[] = [];
+  const lignes: LigneSeance[] = [];
   for (const s of SKILLS) {
     const e = etats[s.id];
-    if (!e?.actif || statut(s, etats, barre) !== "en_cours") continue;
-    res.push({ skill: s, numero: e.etape, etape: s.etapes[e.etape - 1], entretien: false });
+    if (!e?.actif || statut(s, etats, m) !== "en_cours") continue;
+    const et = s.etapes[e.etape - 1];
+    const ex = exercice(et.exercice);
+    if (ex && faisable(ex, m)) lignes.push({ exercice: ex.id, series: et.series, cible: et.objectif, poids: null, repos_s: et.unite === "s" ? 45 : 60 });
   }
   const db = await getDatabase();
   const maitrises = [];
-  for (const s of SKILLS.filter((x) => maitrise(x, etats[x.id]) && (!x.barre || barre))) {
+  for (const s of SKILLS.filter((x) => maitrise(x, etats[x.id]) && statut(x, etats, m) === "maitrise" && etapeFaisable(x.etapes[x.etapes.length - 1], m))) {
+    const dernier = s.etapes[s.etapes.length - 1];
     const r = await db.getFirstAsync<{ d: string | null }>(
-      "SELECT MAX(se.date) AS d FROM series s JOIN seances se ON se.id = s.seance_id WHERE s.famille = ?",
+      "SELECT MAX(se.date) AS d FROM series s JOIN seances se ON se.id = s.seance_id WHERE s.famille = ? OR s.exercice_id = ?",
       s.id,
+      dernier.exercice,
     );
     maitrises.push({ id: s.id, dernier: r?.d ?? null });
   }
   for (const id of choisirEntretien(maitrises)) {
-    const s = skill(id)!;
-    const n = s.etapes.length;
-    res.push({ skill: s, numero: n, etape: { ...s.etapes[n - 1], series: 1 }, entretien: true });
+    const et = skill(id)!.etapes.at(-1)!;
+    lignes.push({ exercice: et.exercice, series: 1, cible: et.objectif, poids: null, repos_s: 45 });
   }
-  return res;
+  return { nom: "Séance de skills", lignes };
 }
 
-export async function commencerSeance(): Promise<number> {
-  const db = await getDatabase();
-  const r = await db.runAsync(
-    "INSERT INTO seances (date, debut) VALUES (?, ?)",
-    getAujourdhui(),
-    new Date().toISOString(),
-  );
-  return r.lastInsertRowId;
-}
-
-/** Une séance (skills ou guidée) a déjà rapporté ce jour-là : les points du sport sont une fois par jour. */
+/** Une séance (de sport ou guidée) a déjà rapporté ce jour-là : les points du sport sont une fois par jour. */
 export async function sportPayeLe(date: string): Promise<boolean> {
   const db = await getDatabase();
   const r = await db.getFirstAsync<{ n: number }>(
@@ -363,81 +367,6 @@ export async function sportPayeLe(date: string): Promise<boolean> {
     date,
   );
   return (r?.n ?? 0) > 0;
-}
-
-/**
- * Enregistre une série dès qu'elle change : rien ne se perd si l'appli
- * se ferme en cours de séance. La première série faite donne les points,
- * si aucune séance n'a rapporté aujourd'hui.
- */
-export async function enregistrerSerie(
-  seanceId: number,
-  ex: ExerciceDuJour,
-  numero: number,
-  realise: number,
-): Promise<void> {
-  const db = await getDatabase();
-  const existante = await db.getFirstAsync<{ id: number }>(
-    "SELECT id FROM series WHERE seance_id = ? AND famille = ? AND numero = ?",
-    seanceId,
-    ex.skill.id,
-    numero,
-  );
-  if (existante) {
-    await db.runAsync("UPDATE series SET realise = ? WHERE id = ?", realise, existante.id);
-  } else {
-    await db.runAsync(
-      `INSERT INTO series (seance_id, famille, palier, exercice, numero, unite, objectif_bas, objectif_haut, realise)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      seanceId,
-      ex.skill.id,
-      ex.numero,
-      ex.etape.nom,
-      numero,
-      ex.etape.unite,
-      ex.etape.objectif,
-      ex.etape.objectif,
-      realise,
-    );
-  }
-
-  if (realise > 0) {
-    const s = await db.getFirstAsync<{ points_donnes: number; date: string }>(
-      "SELECT points_donnes, date FROM seances WHERE id = ?",
-      seanceId,
-    );
-    if (s && s.points_donnes === 0 && !(await sportPayeLe(s.date))) {
-      await db.runAsync("UPDATE seances SET points_donnes = ? WHERE id = ?", POINTS_SEANCE, seanceId);
-      await addPoints(POINTS_SEANCE);
-    }
-  }
-}
-
-export async function terminerSeance(seanceId: number): Promise<void> {
-  const db = await getDatabase();
-  // Les séries laissées à 0 n'ont pas été faites : on ne les garde pas.
-  await db.runAsync("DELETE FROM series WHERE seance_id = ? AND realise = 0", seanceId);
-  const reste = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM series WHERE seance_id = ?",
-    seanceId,
-  );
-  if ((reste?.n ?? 0) === 0) {
-    // Tout remis à 0 avant de terminer : pas de séance, pas de points.
-    const s = await db.getFirstAsync<{ points_donnes: number }>(
-      "SELECT points_donnes FROM seances WHERE id = ?",
-      seanceId,
-    );
-    if (s?.points_donnes) await addPoints(-s.points_donnes);
-    await db.runAsync("DELETE FROM seances WHERE id = ?", seanceId);
-    return;
-  }
-  await db.runAsync(
-    "UPDATE seances SET fin = ? WHERE id = ?",
-    new Date().toISOString(),
-    seanceId,
-  );
-  const faite = await db.getFirstAsync<{ date: string }>("SELECT date FROM seances WHERE id = ?", seanceId);
-  if (faite) await cocherRoutineLiee(faite.date);
 }
 
 /** Séances faites sur les 7 derniers jours, skills et guidées. */

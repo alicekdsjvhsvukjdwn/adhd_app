@@ -9,7 +9,6 @@ import {
   basculerActif,
   ficheSkill,
   getEtats,
-  getReglages,
   redescendre,
   refuserValidation,
   validerEtape,
@@ -17,6 +16,7 @@ import {
 } from "../lib/db/sport";
 import {
   critere,
+  etapeFaisable,
   manques,
   MAX_ACTIFS,
   NIVEAUX,
@@ -26,6 +26,9 @@ import {
   statut,
   type Statut,
 } from "../lib/skills";
+import { getMateriel } from "../lib/db/sport-materiel";
+import { alternativeA, exercice } from "../lib/exercices";
+import { MATERIEL_DEFAUT, nomMateriel, type Materiel } from "../lib/materiel";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 const dateCourte = (d: string) => `${Number(d.slice(8))}/${Number(d.slice(5, 7))}`;
@@ -37,17 +40,19 @@ export default function SkillFiche() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [fiche, setFiche] = useState<FicheSkill | null>(null);
   const [st, setSt] = useState<Statut>("en_cours");
-  const [manque, setManque] = useState<{ prerequis: string[]; barre: boolean }>({ prerequis: [], barre: false });
+  const [manque, setManque] = useState<{ prerequis: string[]; materiel: string[] }>({ prerequis: [], materiel: [] });
+  const [materiel, setMateriel] = useState<Materiel>(MATERIEL_DEFAUT);
   const [essai, setEssai] = useState(false);
   const [acquis, setAcquis] = useState(false);
 
   const charger = useCallback(async () => {
     const s = skillDe(id);
     if (!s) return;
-    const { barre } = await getReglages();
+    const m = await getMateriel();
     const etats = await getEtats();
-    setSt(statut(s, etats, barre));
-    setManque(manques(s, etats, barre));
+    setMateriel(m);
+    setSt(statut(s, etats, m));
+    setManque(manques(s, etats, m));
     setFiche(await ficheSkill(id));
   }, [id]);
 
@@ -63,6 +68,9 @@ export default function SkillFiche() {
   const enCours = st === "en_cours";
   const etape = s.etapes[etat.etape - 1];
   const derniere = fiche.seances[0]?.realise ?? null;
+  const exoEtape = etape ? exercice(etape.exercice) : undefined;
+  const etapeOk = !etape || etapeFaisable(etape, materiel);
+  const alternative = exoEtape ? alternativeA(exoEtape, materiel) : null;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
@@ -84,8 +92,10 @@ export default function SkillFiche() {
               </Texte>
             </TouchableOpacity>
           ))}
-          {manque.barre && (
-            <Texte style={[styles.ligne, { color: t.textSecondary }]}>Barre de traction nécessaire</Texte>
+          {manque.materiel.length > 0 && (
+            <Texte style={[styles.ligne, { color: t.textSecondary }]}>
+              Matériel nécessaire : {manque.materiel.map((m) => nomMateriel(m as never).toLowerCase()).join(", ")}. Tu peux le régler dans Sport › ⚙️.
+            </Texte>
           )}
         </View>
       )}
@@ -109,6 +119,33 @@ export default function SkillFiche() {
               <Texte style={[styles.phrase, { color: t.accentText }]}>{phraseMotivante(derniere, etape)}</Texte>
             </View>
           </View>
+
+          {exoEtape && (
+            <TouchableOpacity onPress={() => router.push(`/exercice?id=${exoEtape.id}` as never)} hitSlop={6} style={{ marginTop: spacing.md }} accessibilityRole="button">
+              <Texte style={[styles.lien, { color: t.accentText }]}>Exercice : {exoEtape.nom} →</Texte>
+            </TouchableOpacity>
+          )}
+          {!etapeOk && exoEtape && (
+            <View style={{ marginTop: spacing.sm }}>
+              <Texte style={[styles.ligne, { color: t.danger }]}>
+                Matériel manquant pour cette étape. Les séries d&apos;une alternative ne comptent pas pour elle ; « C&apos;est acquis » reste possible.
+              </Texte>
+              {alternative && (
+                <TouchableOpacity onPress={() => router.push(`/exercice?id=${alternative.id}` as never)} hitSlop={6} accessibilityRole="button">
+                  <Texte style={[styles.lien, { color: t.accentText }]}>Alternative : {alternative.nom} →</Texte>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {etapeOk && (
+            <TouchableOpacity
+              onPress={() => router.push(`/seance-sport?source=exercice&id=${etape.exercice}&series=${etape.series}&cible=${etape.objectif}` as never)}
+              style={[styles.petitBouton, { backgroundColor: t.accent, alignSelf: "flex-start", marginTop: spacing.md }]}
+              accessibilityRole="button"
+            >
+              <Texte style={[styles.petitBoutonTexte, { color: t.textOnAccent }]}>▶ Faire cette étape</Texte>
+            </TouchableOpacity>
+          )}
 
           {fiche.proposition && (
             <View style={[styles.proposition, { backgroundColor: t.bgCardActive }]}>
@@ -251,6 +288,7 @@ export default function SkillFiche() {
                   ]}
                 >
                   {e.nom} · {critere(e)}
+                  {!validee && !etapeFaisable(e, materiel) ? "  (matériel manquant)" : ""}
                 </Texte>
                 {validee && (
                   <Texte style={[styles.date, { color: VERT }]}>

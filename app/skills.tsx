@@ -17,12 +17,13 @@ import {
   getReglages,
   mettreAJourNiveau,
   refuserValidation,
+  seanceSkills,
   validerEtape,
   type Reglages,
 } from "../lib/db/sport";
 import { ecrireMateriel, getMateriel, materielConfigure } from "../lib/db/sport-materiel";
-import { MATERIEL_DEFAUT, type Materiel } from "../lib/materiel";
-import { critere, NIVEAUX, SKILLS, statut, type EtatSkill, type Statut } from "../lib/skills";
+import { MATERIEL_DEFAUT, nomMateriel, type Materiel } from "../lib/materiel";
+import { critere, manques, NIVEAUX, SKILLS, statut, type EtatSkill, type Statut } from "../lib/skills";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
@@ -61,7 +62,7 @@ export default function Skills() {
     setMaterielOk(await materielConfigure());
     const prets: string[] = [];
     for (const s of SKILLS) {
-      if (statut(s, e, r.barre) === "en_cours" && (await ficheSkill(s.id)).proposition) prets.push(s.id);
+      if (statut(s, e, m) === "en_cours" && (await ficheSkill(s.id)).proposition) prets.push(s.id);
     }
     setAValider(prets);
   }, []);
@@ -99,7 +100,13 @@ export default function Skills() {
         <View style={styles.enteteDroite}>
           {reglages?.configure && onglet === "skills" && (
             <TouchableOpacity
-              onPress={() => router.push("/seance")}
+              onPress={async () => {
+                if ((await seanceSkills(materiel)).lignes.length === 0) {
+                  Alert.alert("Aucun skill à travailler", "Choisis des skills à travailler (jusqu'à 4) ou vérifie ton matériel avec ⚙️.");
+                  return;
+                }
+                router.push("/seance-sport?source=skills" as never);
+              }}
               style={[styles.seance, { backgroundColor: t.accent }]}
             >
               <Texte style={[styles.seanceTexte, { color: t.textOnAccent }]}>Séance</Texte>
@@ -213,7 +220,7 @@ export default function Skills() {
 
   // Mettre à jour mon niveau : l'étape de chaque skill débloqué, plusieurs à la fois.
   if (niveau && reglages) {
-    const modifiables = SKILLS.filter((s) => statut(s, etats, reglages.barre) !== "verrouille");
+    const modifiables = SKILLS.filter((s) => statut(s, etats, materiel) !== "verrouille");
     return (
       <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
         <TouchableOpacity onPress={() => setNiveau(null)} hitSlop={12}>
@@ -286,7 +293,7 @@ export default function Skills() {
           ) : (
             <>
               <Texte style={[styles.question, { color: t.textPrimary }]}>Où en es-tu ?</Texte>
-              {SKILLS.filter((s) => s.niveau === "fondation" && (materiel.dispo.barre || !s.barre)).map((s) => (
+              {SKILLS.filter((s) => s.niveau === "fondation" && manques(s, {}, materiel).materiel.length === 0).map((s) => (
                 <View key={s.id} style={{ marginTop: spacing.md }}>
                   <Texte style={[styles.nomFondation, { color: t.textSecondary }]}>{s.nom}</Texte>
                   <View style={styles.puces}>
@@ -310,7 +317,7 @@ export default function Skills() {
               <TouchableOpacity
                 style={[styles.bouton, { backgroundColor: t.accent }]}
                 onPress={async () => {
-                  await configurerSport(materiel.dispo.barre, depart);
+                  await configurerSport(materiel, depart);
                   await charger();
                 }}
               >
@@ -325,7 +332,7 @@ export default function Skills() {
 
   if (!reglages) return <View style={{ flex: 1, backgroundColor: t.bgApp }} />;
 
-  const statuts = Object.fromEntries(SKILLS.map((s) => [s.id, statut(s, etats, reglages.barre)]));
+  const statuts = Object.fromEntries(SKILLS.map((s) => [s.id, statut(s, etats, materiel)]));
   const compte = (st: Statut) => SKILLS.filter((s) => statuts[s.id] === st).length;
 
   const valider = async (id: string) => {
@@ -435,6 +442,11 @@ export default function Skills() {
                   <Texte style={[styles.caseNom, { color: t.textPrimary }]} numberOfLines={1}>
                     {s.nom}
                   </Texte>
+                  {st === "verrouille" && manques(s, etats, materiel).materiel.length > 0 && (
+                    <Texte style={{ color: t.textMuted, fontSize: 10 }} numberOfLines={1}>
+                      {manques(s, etats, materiel).materiel.map(nomMateriel).join(", ").toLowerCase()} nécessaire
+                    </Texte>
+                  )}
                   <Segments skill={s} etape={e.etape} st={st} accent={t.accent} accentFonce={t.accentFonce} />
                 </TouchableOpacity>
               );

@@ -279,3 +279,97 @@ test("migration 34 : tables et colonnes de séances de sport créées", async ()
   for (const t of ["sport_seances", "sport_seances_ex"]) assert.ok(noms.includes(t), t);
   assert.ok(EXERCICES.length >= 60);
 });
+
+// ─── Lot 3 : les skills lisent les séries de toutes les séances ───
+
+const pause = (ms = 6) => new Promise((r) => setTimeout(r, ms));
+/** Une séance de 3 séries d'un exercice, comme dans le Workout. */
+const seanceDe = async (exerciceId, valeurs) => {
+  const id = await commencerSeanceSport("Séance", "perso", AUJ);
+  for (const [i, v] of valeurs.entries()) await noterSerieSport(id, { exercice: exerciceId, numero: i + 1, realise: v, poids: null, prevu: v });
+  await terminerSeanceSport(id, "");
+  await pause();
+  return id;
+};
+
+test("skills : les séries notées dans n'importe quelle séance valident les étapes, à partir du moment où l'étape est en cours", async () => {
+  const { configurerSport, ficheSkill, validerEtape } = await import("../lib/db/sport.ts");
+  await configurerSport(MATERIEL_DEFAUT, {});
+  assert.equal((await ficheSkill("pompe")).etape ?? 1, 1);
+
+  // Étape 1 : Pompes au mur, 3 × 12. Une séance incomplète ne compte pas pour valider ; deux réussies, oui.
+  await pause();
+  assert.deepEqual((await ficheSkill("pompe")).seances, []);
+  await seanceDe("pompes_mur", [12, 12]); // 2 séries sur 3
+  assert.equal((await ficheSkill("pompe")).proposition, false);
+  await seanceDe("pompes_mur", [12, 12, 13]);
+  assert.equal((await ficheSkill("pompe")).proposition, false); // une seule réussie
+  await seanceDe("pompes_mur", [12, 14, 12]);
+  const f1 = await ficheSkill("pompe");
+  assert.deepEqual(f1.seances[0].realise, [12, 14, 12]); // la plus récente d'abord
+  assert.equal(f1.proposition, true);
+  assert.equal(f1.meilleur, 14);
+
+  // Des séances de l'étape 3 faites AVANT de l'atteindre ne comptent pas une fois qu'on y arrive.
+  await seanceDe("pompes_genoux", [12, 12, 12]);
+  await seanceDe("pompes_genoux", [12, 12, 12]);
+  await pause();
+  await validerEtape("pompe"); // → étape 2
+  assert.deepEqual((await ficheSkill("pompe")).seances, []); // les pompes au mur ne valident pas les pompes inclinées
+  await seanceDe("pompes_inclinees", [12, 12, 12]);
+  await seanceDe("pompes_inclinees", [13, 12, 12]);
+  assert.equal((await ficheSkill("pompe")).proposition, true);
+  await pause();
+  await validerEtape("pompe"); // → étape 3 : pompes sur les genoux
+  assert.deepEqual((await ficheSkill("pompe")).seances, []); // les deux séances d'avant l'arrivée sont écartées
+  assert.equal((await ficheSkill("pompe")).proposition, false);
+  await seanceDe("pompes_genoux", [12, 12, 12]);
+  await seanceDe("pompes_genoux", [12, 12, 12]);
+  assert.equal((await ficheSkill("pompe")).proposition, true);
+  await pause();
+  await validerEtape("pompe"); // → étape 4 : Pompes 3 × 5
+
+  // Même exercice sur deux étapes d'affilée (Pompes 3 × 5 puis 3 × 10) : ce qui précède l'arrivée ne compte pas.
+  await seanceDe("pompes", [5, 5, 5]);
+  await seanceDe("pompes", [10, 10, 10]);
+  await seanceDe("pompes", [10, 10, 10]);
+  assert.equal((await ficheSkill("pompe")).proposition, true);
+  await pause();
+  await validerEtape("pompe"); // → étape 5 : Pompes 3 × 10
+  assert.equal((await ficheSkill("pompe")).proposition, false); // les 3 × 10 d'avant ne comptent pas
+  await seanceDe("pompes", [10, 11, 10]);
+  assert.equal((await ficheSkill("pompe")).proposition, false);
+  await seanceDe("pompes", [10, 10, 12]);
+  assert.equal((await ficheSkill("pompe")).proposition, true);
+});
+
+test("séance de skills : l'étape en cours des skills actifs, l'entretien des maîtrisés, rien quand il manque le matériel", async () => {
+  const { seanceSkills, validerEtape, ficheSkill } = await import("../lib/db/sport.ts");
+  const s = await seanceSkills(MATERIEL_DEFAUT);
+  const par = Object.fromEntries(s.lignes.map((l) => [l.exercice, l]));
+  assert.deepEqual([par.pompes.series, par.pompes.cible, par.pompes.poids], [3, 10, null]); // étape 5 de la pompe
+  assert.deepEqual([par.appui_tenu.series, par.appui_tenu.cible], [3, 30]); // dips, étape 1 : en secondes
+  assert.deepEqual([par.squat.series, par.squat.cible], [3, 20]); // pistol, étape 1
+  assert.deepEqual([par.planche.series, par.planche.cible], [3, 60]); // gainage
+  assert.ok(!s.lignes.some((l) => l.exercice === "suspension_passive")); // pas de barre : la traction n'y est pas
+  assert.ok(s.lignes.every((l) => faisable(exercice(l.exercice), MATERIEL_DEFAUT)));
+  // Sans table ni chaise : l'appui entre deux chaises disparaît.
+  const sansMobilier = materielValide({ dispo: { mobilier: false } });
+  assert.ok(!(await seanceSkills(sansMobilier)).lignes.some((l) => l.exercice === "appui_tenu"));
+
+  // Pompe maîtrisée : elle quitte les skills actifs, une série d'entretien la remplace.
+  await pause();
+  await validerEtape("pompe");
+  assert.equal((await ficheSkill("pompe")).etat.etape, 6);
+  const apres = await seanceSkills(MATERIEL_DEFAUT);
+  const entretien = apres.lignes.find((l) => l.exercice === "pompes");
+  assert.deepEqual([entretien.series, entretien.cible], [1, 10]);
+});
+
+test("essai noté sur un skill : compte aussi pour l'historique de l'exercice de l'étape", async () => {
+  const { noterEssai } = await import("../lib/db/sport.ts");
+  await noterEssai("dips", 3, 30, AUJ);
+  const ligne = await db.getFirstAsync("SELECT exercice_id, famille, palier FROM series WHERE famille = 'dips' ORDER BY id DESC");
+  assert.deepEqual({ ...ligne }, { exercice_id: "appui_tenu", famille: "dips", palier: 1 });
+  assert.equal((await historiqueExercice(exercice("appui_tenu"))).record.valeur, 30);
+});

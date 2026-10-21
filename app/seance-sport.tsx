@@ -15,6 +15,7 @@ import {
   terminerSeanceSport,
   type OrigineSeance,
 } from "../lib/db/seances-sport";
+import { seanceSkills } from "../lib/db/sport";
 import { getMateriel } from "../lib/db/sport-materiel";
 import { exercice } from "../lib/exercices";
 import { dateCourte } from "../lib/esprit-regles";
@@ -50,7 +51,7 @@ export default function SeanceSportEcran() {
   const t = useTheme();
   useKeepAwake();
   const bip = useAudioPlayer(require("../assets/sons/bip.wav"));
-  const p = useLocalSearchParams<{ source?: string; id?: string; zone?: string; min?: string; graine?: string; liste?: string; date?: string }>();
+  const p = useLocalSearchParams<{ source?: string; id?: string; zone?: string; min?: string; graine?: string; liste?: string; date?: string; series?: string; cible?: string }>();
   const modeListe = p.liste === "1";
   const date = p.date || getAujourdhui();
 
@@ -89,8 +90,12 @@ export default function SeanceSportEcran() {
       } else if (p.source === "proposee") {
         s = proposerSeance((p.zone as ZoneProposee) ?? "complet", (Number(p.min) as DureeProposee) || 20, m, Number(p.graine) || 0);
         o = "proposee";
+      } else if (p.source === "skills") {
+        s = await seanceSkills(m);
+        o = "skills";
       } else if (p.source === "exercice" && p.id && exercice(p.id)) {
-        s = { nom: exercice(p.id)!.nom, lignes: [{ ...ligneParDefaut(p.id, m), series: 3 }] };
+        // Depuis la fiche d'un skill : les séries et la cible de l'étape.
+        s = { nom: exercice(p.id)!.nom, lignes: [{ ...ligneParDefaut(p.id, m), series: Number(p.series) || 3, cible: Number(p.cible) || ligneParDefaut(p.id, m).cible }] };
         o = "exercice";
       }
       if (!s || s.lignes.length === 0) return router.back();

@@ -2,10 +2,14 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { exercice, uniteDe } from "../lib/exercices.ts";
+import { MATERIEL_DEFAUT, materielValide } from "../lib/materiel.ts";
+import { alternativeA } from "../lib/exercices.ts";
 import {
   choisirEntretien,
   critere,
   etapeDepart,
+  etapeFaisable,
   manques,
   phraseMotivante,
   pointsValidation,
@@ -21,10 +25,10 @@ import { SQL_SKILLS_DEPUIS_PALIERS, SQL_TABLES_LOT4, transformationsApres } from
 const pompe = skill("pompe");
 const e1 = pompe.etapes[0]; // 3 × 12
 
-test("catalogue : ids uniques, prérequis existants, 11 bonhommes", () => {
+test("catalogue : ids uniques, prérequis existants, 12 bonhommes", () => {
   const ids = SKILLS.map((s) => s.id);
   assert.equal(new Set(ids).size, ids.length);
-  assert.equal(ids.length, 11);
+  assert.equal(ids.length, 12);
   for (const s of SKILLS) for (const p of s.prerequis) assert.ok(skill(p), `${s.id} → ${p}`);
   assert.equal(skill("traction").etapes.length, 7);
   assert.equal(critere(skill("pistol").etapes[1]), "3 × 10 / jambe");
@@ -57,15 +61,57 @@ test("refus puis reproposition : 2 nouvelles réussites après le refus", () => 
 test("prérequis et barre : verrouillé, puis débloqué", () => {
   const sans = {};
   assert.equal(statut(skill("lsit"), sans, true), "verrouille");
-  assert.deepEqual(manques(skill("lsit"), sans, true), { prerequis: ["gainage"], barre: false });
+  assert.deepEqual(manques(skill("lsit"), sans, true), { prerequis: ["gainage"], barre: false, materiel: [] });
   const gainageMaitrise = { gainage: { etape: 3, actif: false } };
   assert.equal(statut(skill("lsit"), gainageMaitrise, true), "en_cours");
   // Planche : pompe ET L-sit maîtrisés.
   assert.deepEqual(manques(skill("planche"), { pompe: { etape: 6, actif: false } }, true).prerequis, ["lsit"]);
   // Sans barre : traction grisée, « barre nécessaire ».
   assert.equal(statut(skill("traction"), sans, false), "verrouille");
-  assert.deepEqual(manques(skill("traction"), sans, false), { prerequis: [], barre: true });
+  assert.deepEqual(manques(skill("traction"), sans, false), { prerequis: [], barre: true, materiel: ["barre"] });
   assert.equal(statut(skill("dips"), sans, false), "en_cours");
+});
+
+test("chaque étape est un exercice de la bibliothèque, dans la même unité, et grimpe d'un cran à chaque fois", () => {
+  for (const sk of SKILLS) {
+    sk.etapes.forEach((et, i) => {
+      const ex = exercice(et.exercice);
+      assert.ok(ex, `${sk.id} étape ${i + 1} → ${et.exercice}`);
+      assert.equal(uniteDe(ex), et.unite, `${sk.id} étape ${i + 1} : ${et.nom}`);
+      const avant = sk.etapes[i - 1];
+      // Un même exercice sur deux étapes d'affilée : la cible monte (sinon l'étape se validerait d'elle-même).
+      if (avant && avant.exercice === et.exercice) assert.ok(et.series * et.objectif > avant.series * avant.objectif || et.objectif > avant.objectif, `${sk.id} ${et.nom}`);
+    });
+  }
+  // Les six demandés sont là, avec le matériel qu'on a vraiment (parallettes, sol, mur).
+  const exos = new Set(SKILLS.flatMap((sk) => sk.etapes.map((et) => et.exercice)));
+  for (const id of ["lsit_parallettes", "tuck_lsit_parallettes", "tuck_planche_parallettes", "pompes_pseudo_planche", "dips_parallettes", "poirier_mur", "pistol_squat"]) assert.ok(exos.has(id), id);
+  assert.deepEqual(skill("pseudo").prerequis, ["pompe"]);
+  assert.equal(skill("traction").etapes[2].exercice, "rowing_table"); // le rowing australien se fait sous une table
+});
+
+test("matériel des skills : barre pour traction, muscle-up et front lever ; parallettes pour L-sit et planche ; le reste au sol", () => {
+  const requis = Object.fromEntries(SKILLS.map((sk) => [sk.id, sk.materiel ?? []]));
+  assert.deepEqual([requis.traction, requis.muscleup, requis.frontlever], [["barre"], ["barre"], ["barre"]]);
+  assert.deepEqual([requis.lsit, requis.planche], [["parallettes"], ["parallettes"]]);
+  for (const id of ["pompe", "dips", "pistol", "gainage", "poirier", "archer", "pseudo"]) assert.deepEqual(requis[id], [], id);
+
+  const sansParallettes = materielValide({ dispo: { parallettes: false } });
+  const gainageOk = { gainage: { etape: 3, actif: false } };
+  assert.equal(statut(skill("lsit"), gainageOk, MATERIEL_DEFAUT), "en_cours");
+  assert.equal(statut(skill("lsit"), gainageOk, sansParallettes), "verrouille");
+  assert.deepEqual(manques(skill("lsit"), gainageOk, sansParallettes), { prerequis: [], barre: false, materiel: ["parallettes"] });
+  assert.equal(statut(skill("traction"), {}, MATERIEL_DEFAUT), "verrouille"); // pas de barre par défaut
+  assert.equal(statut(skill("traction"), {}, materielValide({ dispo: { barre: true } })), "en_cours");
+  assert.equal(statut(skill("dips"), {}, sansParallettes), "en_cours"); // jamais bloqué en entier
+
+  // Étape dont il manque le matériel : grisée, avec une alternative.
+  const dipsParallettes = skill("dips").etapes[3];
+  assert.equal(etapeFaisable(dipsParallettes, MATERIEL_DEFAUT), true);
+  assert.equal(etapeFaisable(dipsParallettes, sansParallettes), false);
+  assert.equal(alternativeA(exercice(dipsParallettes.exercice), sansParallettes).id, "dips_banc");
+  assert.equal(etapeFaisable(skill("pompe").etapes[0], materielValide({ dispo: {} })), true); // le sol suffit
+  assert.equal(etapeFaisable(skill("traction").etapes[0], MATERIEL_DEFAUT), false); // suspension : barre
 });
 
 test("maîtrise : dernière étape validée", () => {
