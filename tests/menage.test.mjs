@@ -18,7 +18,7 @@ import {
   supprimerPiece,
   supprimerTacheMenage,
 } from "../lib/db/menage.ts";
-import { menageFaitLe, menageParJour, statsMenage } from "../lib/db/menage-stats.ts";
+import { menageFaitesEntre, menageFaitLe, menageParJour } from "../lib/db/menage-stats.ts";
 import { getStats } from "../lib/db/stats.ts";
 import { REGLES_POINTS } from "../lib/db/recompenses.ts";
 import {
@@ -28,8 +28,8 @@ import {
   cleLibre,
   COULEURS_MENAGE,
   couleurPiece,
-  faitesParSemaine,
-  regularite,
+  roueMenage,
+  TACHES_PAR_ROUE,
   couleurJauge,
   jauge,
   libelleFrequence,
@@ -226,13 +226,12 @@ test("supprimer une tâche : plus proposée, historique gardé, comptée dans le
   assert.ok(!aFaireAujourdhui(m.taches, J, { max: 99 }).visibles.some((x) => x.id === tache.id));
   assert.equal((await lignes()).length, 1); // l'historique reste
   assert.equal((await db.getFirstAsync("SELECT COUNT(*) AS n FROM menage_taches WHERE id = ?", tache.id)).n, 1);
-  assert.equal((await statsMenage(J)).semaines.at(-1).total >= 1, true);
+  assert.equal(await menageFaitesEntre(J, J) >= 1, true);
 
-  // Pièce supprimée : disparaît des pièces, ses cochages restent dans les barres (couleur gardée).
+  // Pièce supprimée : disparaît des pièces, ses cochages restent dans l'historique.
   await supprimerPiece(id);
-  const apres = await statsMenage(J);
-  assert.ok(!apres.pieces.some((p) => p.id === id));
-  assert.ok(apres.semaines.at(-1).parts.some((p) => p.nom === "Bureau"));
+  assert.ok(!(await getMenage()).pieces.some((p) => p.id === id));
+  assert.equal((await lignes()).length, 1);
 });
 
 test("cocher écrit le journal (à temps ou en retard), décocher le retire ; le calendrier le montre", async () => {
@@ -259,38 +258,31 @@ test("à temps : le jour même, avant, ou un jour de grâce", () => {
   assert.equal(aTemps("2026-10-21", "2026-10-23"), false);
 });
 
-test("Progrès : tâches par semaine (8 semaines, lundi → dimanche) et par pièce", () => {
-  // AUJ = mercredi 21/10/2026 ; semaine courante = 19 → 25/10
-  const f = (jour, piece, tache = 1) => ({ tache_id: tache, piece_id: piece, jour, echeance: jour, a_temps: 1 });
-  const faits = [f("2026-10-19", 1), f("2026-10-21", 1), f("2026-10-25", 2), f("2026-10-18", 2), f("2026-08-31", 1), f("2026-08-30", 1)];
-  const s = faitesParSemaine(faits, AUJ, 8);
-  assert.equal(s.length, 8);
-  assert.equal(s.at(-1).debut, "2026-10-19");
-  assert.deepEqual(s.at(-1).parPiece, { 1: 2, 2: 1 });
-  assert.equal(s.at(-2).total, 1); // dimanche 18 : semaine d'avant
-  assert.equal(s[0].debut, "2026-08-31");
-  assert.equal(s[0].total, 1); // le 30/08 est trop ancien
+test("Progrès : une roue complète = 3 tâches de ménage, jamais plus que pleine", () => {
+  assert.equal(TACHES_PAR_ROUE, 3);
+  assert.equal(roueMenage(0), 0);
+  assert.equal(roueMenage(1), 1 / 3);
+  assert.equal(roueMenage(3), 1);
+  assert.equal(roueMenage(7), 1);
+  assert.equal(roueMenage(-2), 0);
 });
 
-test("Progrès : régularité sur 30 jours (attendu selon la fréquence, à temps seulement)", () => {
-  const vieille = "2026-01-01T00:00:00.000Z";
-  const fait = (jour, a_temps = 1) => ({ tache_id: 1, piece_id: 1, jour, echeance: jour, a_temps });
-  const hebdo = [{ id: 1, freq_jours: 7, cree_le: vieille }];
-  // 30 jours / 7 = 4 attendues ; 3 à temps et 1 en retard → 3/4
-  assert.equal(regularite(hebdo, [fait("2026-10-02"), fait("2026-10-09"), fait("2026-10-16"), fait("2026-10-20", 0)], AUJ), 0.75);
-  // Rien fait : 0, pas « pas de donnée »
-  assert.equal(regularite(hebdo, [], AUJ), 0);
-  // Tâche toute récente : rien d'attendu encore
-  assert.equal(regularite([{ id: 1, freq_jours: 7, cree_le: "2026-10-20T08:00:00Z" }], [], AUJ), null);
-  // Aucune tâche
-  assert.equal(regularite([], [], AUJ), null);
-  // Plus de cochages que d'attendu : plafonné à 1
-  assert.equal(regularite([{ id: 1, freq_jours: 30, cree_le: vieille }], [fait("2026-10-01"), fait("2026-10-05")], AUJ), 1);
-});
-
-test("Progrès (base) : stats par pièce, jauge entre 0 et 1", async () => {
-  const stats = await statsMenage(J);
-  assert.equal(stats.semaines.length, 8);
-  assert.ok(stats.pieces.length >= 7);
-  for (const p of stats.pieces) assert.ok(p.jauge >= 0 && p.jauge <= 1);
+test("Progrès (base) : les tâches de ménage cochées sur la période, supprimées comprises", async () => {
+  const db = await getDatabase();
+  const avant = await menageFaitesEntre(J, J);
+  const id = await ajouterPiece("Cave");
+  await ajouterTacheMenage(id, "Ranger", 7);
+  await ajouterTacheMenage(id, "Balayer", 7);
+  const [a, b] = (await getMenage()).taches.filter((x) => x.piece_id === id);
+  await cocherTacheMenage(a.id);
+  await cocherTacheMenage(b.id);
+  assert.equal(await menageFaitesEntre(J, J), avant + 2);
+  assert.equal(await menageFaitesEntre(decalerJours(J, -6), J), avant + 2);
+  assert.equal(await menageFaitesEntre(decalerJours(J, -30), decalerJours(J, -1)), 0); // rien avant aujourd'hui
+  await supprimerTacheMenage(a.id); // supprimée : son historique reste dans la roue
+  assert.equal(await menageFaitesEntre(J, J), avant + 2);
+  await decocherTacheMenage(b.id);
+  assert.equal(await menageFaitesEntre(J, J), avant + 1);
+  await db.runAsync("DELETE FROM menage_journal WHERE piece_id = ?", id);
+  await supprimerPiece(id);
 });

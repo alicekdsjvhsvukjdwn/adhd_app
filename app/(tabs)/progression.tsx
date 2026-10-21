@@ -13,12 +13,14 @@ import Svg, { Circle } from "react-native-svg";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { SectionHumeur } from "../../components/SectionHumeur";
 import { SectionConfiance } from "../../components/SectionConfiance";
-import { SectionMenage } from "../../components/SectionMenage";
 import { LiensSommeilSport } from "../../components/LiensSommeilSport";
 import { remettreAFaire } from "../../lib/db/etapes";
+import { menageFaitesEntre } from "../../lib/db/menage-stats";
+import { roueMenage, TACHES_PAR_ROUE } from "../../lib/menage-regles";
 import { getStats } from "../../lib/db/stats";
 import {
   avanceePeriode,
+  bornesPeriode,
   decalerJours,
   mesureAdaptation,
   tachesFaites,
@@ -132,6 +134,8 @@ export default function Progression() {
   const [parCategorie, setParCategorie] = useState<AvanceeCategorie[]>([]);
   const [taches, setTaches] = useState<TacheFaite[]>([]);
   const [mesure, setMesure] = useState<MesureAdaptation | null>(null);
+  /** Tâches de ménage faites sur la période : une roue complète = 3. */
+  const [menage, setMenage] = useState(0);
   const [serie, setSerie] = useState<{ actuelle: number; record: number } | null>(null);
 
   const charger = useCallback(async () => {
@@ -142,6 +146,8 @@ export default function Progression() {
       getStats(),
     ]);
     setSerie({ actuelle: stats.currentStreak, record: stats.bestStreak });
+    const b = bornesPeriode(periode);
+    setMenage(await menageFaitesEntre(b.debut, b.fin));
     setGlobal(avancee.global);
     setParCategorie(avancee.parCategorie);
     setTaches(tf);
@@ -233,11 +239,12 @@ export default function Progression() {
       <Texte style={[styles.sectionTitre, { color: t.textPrimary }]}>
         Par domaine
       </Texte>
-      {parCategorie.length === 0 ? (
+      {parCategorie.length === 0 && (
         <Texte style={[styles.vide, { color: t.textMuted }]}>
           Les domaines apparaîtront dès que tes routines ou tâches en auront un.
         </Texte>
-      ) : (
+      )}
+      {(
         <View style={styles.grilleAnneaux}>
           {parCategorie.map((a) => (
             <View key={a.categorie} style={styles.celluleAnneau}>
@@ -266,6 +273,18 @@ export default function Progression() {
               )}
             </View>
           ))}
+          {/* Ménage : une roue complète = 3 tâches de ménage faites sur la période */}
+          <View style={styles.celluleAnneau}>
+            <Anneau taux={roueMenage(menage)} couleur={t.accent} fond={t.bgCard}>
+              <Texte style={[styles.anneauValeur, { color: t.textPrimary }]}>
+                {Math.min(menage, TACHES_PAR_ROUE)}/{TACHES_PAR_ROUE}
+              </Texte>
+            </Anneau>
+            <Texte style={[styles.anneauLibelle, { color: t.textPrimary }]}>🧹 Ménage</Texte>
+            <Texte style={[styles.anneauDetail, { color: t.textMuted }]}>
+              {menage} tâche{menage > 1 ? "s" : ""}
+            </Texte>
+          </View>
         </View>
       )}
 
@@ -321,8 +340,6 @@ export default function Progression() {
           </View>
         </>
       )}
-
-      <SectionMenage />
 
       {/* Ce que l'appli apprend : ses propositions sont-elles utiles ? */}
       {mesure &&

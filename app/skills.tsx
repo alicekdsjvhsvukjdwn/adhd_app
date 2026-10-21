@@ -1,10 +1,13 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { Check, Lock } from "lucide-react-native";
+import { Check, Lock, Settings } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { FigureSkill, GRIS, Segments, VERT } from "../components/FigureSkill";
 import { CarteRoutineLiee, FeuilleEssai } from "../components/FeuillesSport";
 import { BoutonOptions } from "../components/Options";
+import { MaterielEditeur } from "../components/MaterielEditeur";
+import { OngletExercices } from "../components/OngletExercices";
+import { OngletPlan } from "../components/OngletPlan";
 import { OngletSeances } from "../components/OngletSeances";
 import { Texte } from "../components/Texte";
 import {
@@ -17,13 +20,15 @@ import {
   validerEtape,
   type Reglages,
 } from "../lib/db/sport";
+import { ecrireMateriel, getMateriel, materielConfigure } from "../lib/db/sport-materiel";
+import { MATERIEL_DEFAUT, type Materiel } from "../lib/materiel";
 import { critere, NIVEAUX, SKILLS, statut, type EtatSkill, type Statut } from "../lib/skills";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
- * Sport, deux onglets. Séances : séances guidées (components/OngletSeances).
- * Mes skills : l'arbre par niveau, où j'en suis sur chacun, et les
- * étapes prêtes à valider. Premier lancement : « où tu en es ? ».
+ * Sport, quatre parties. Skills : l'arbre par niveau, où j'en suis sur chacun, et les étapes prêtes à valider
+ * (premier lancement : mon matériel, puis « où tu en es ? »). Workout : séances guidées (components/OngletSeances).
+ * Exercices : la bibliothèque (components/OngletExercices). Plan : le coach (à venir). ⚙️ : mon matériel.
  */
 export default function Skills() {
   const router = useRouter();
@@ -35,10 +40,14 @@ export default function Skills() {
   const [essaiPour, setEssaiPour] = useState<string | null>(null);
   /** « Mettre à jour mon niveau » : l'étape choisie pour chaque skill, null = fermé. */
   const [niveau, setNiveau] = useState<Record<string, number> | null>(null);
-  const [onglet, setOnglet] = useState<"skills" | "seances">("skills");
+  const [onglet, setOnglet] = useState<"skills" | "workout" | "exercices" | "plan">("skills");
+  /** Mon matériel : celui qui filtre tout le sport, et le brouillon en cours de réglage (⚙️ ou premier lancement). */
+  const [materiel, setMateriel] = useState<Materiel>(MATERIEL_DEFAUT);
+  const [materielOk, setMaterielOk] = useState(true);
+  const [brouillon, setBrouillon] = useState<Materiel | null>(null);
+  const [reglageOuvert, setReglageOuvert] = useState(false);
 
   // Premier lancement
-  const [barre, setBarre] = useState<boolean | null>(null);
   const [depart, setDepart] = useState<Record<string, number | "inconnu">>({});
 
   const charger = useCallback(async () => {
@@ -46,6 +55,10 @@ export default function Skills() {
     const e = await getEtats();
     setReglages(r);
     setEtats(e);
+    const m = await getMateriel();
+    setMateriel(m);
+    setBrouillon((b) => b ?? m);
+    setMaterielOk(await materielConfigure());
     const prets: string[] = [];
     for (const s of SKILLS) {
       if (statut(s, e, r.barre) === "en_cours" && (await ficheSkill(s.id)).proposition) prets.push(s.id);
@@ -83,20 +96,35 @@ export default function Skills() {
       </TouchableOpacity>
       <View style={styles.entete}>
         <Texte style={[styles.titre, { color: t.textPrimary }]}>Sport</Texte>
-        {reglages?.configure && onglet === "skills" && (
+        <View style={styles.enteteDroite}>
+          {reglages?.configure && onglet === "skills" && (
+            <TouchableOpacity
+              onPress={() => router.push("/seance")}
+              style={[styles.seance, { backgroundColor: t.accent }]}
+            >
+              <Texte style={[styles.seanceTexte, { color: t.textOnAccent }]}>Séance</Texte>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            onPress={() => router.push("/seance")}
-            style={[styles.seance, { backgroundColor: t.accent }]}
+            onPress={() => {
+              setBrouillon(materiel);
+              setReglageOuvert(true);
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Mon matériel"
           >
-            <Texte style={[styles.seanceTexte, { color: t.textOnAccent }]}>Séance</Texte>
+            <Settings color={t.textSecondary} size={22} strokeWidth={1.8} />
           </TouchableOpacity>
-        )}
+        </View>
       </View>
       <View style={[styles.onglets, { backgroundColor: t.bgCard, borderColor: t.border }]}>
         {(
           [
-            ["skills", "Mes skills"],
-            ["seances", "Séances"],
+            ["skills", "Skills"],
+            ["workout", "Workout"],
+            ["exercices", "Exercices"],
+            ["plan", "Plan"],
           ] as const
         ).map(([cle, libelle]) => (
           <TouchableOpacity
@@ -115,12 +143,70 @@ export default function Skills() {
     </>
   );
 
-  if (onglet === "seances") {
+  const feuilleMateriel = (
+    <Modal visible={reglageOuvert} transparent animationType="slide" onRequestClose={() => setReglageOuvert(false)}>
+      <Pressable style={styles.fond} onPress={() => setReglageOuvert(false)}>
+        <Pressable style={[styles.feuille, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+          <Texte style={[styles.question, { color: t.textPrimary }]}>Mon matériel</Texte>
+          <Texte style={[styles.aide, { color: t.textMuted }]}>Les exercices, skills et séances se règlent sur ce que tu as.</Texte>
+          <ScrollView style={{ maxHeight: 460 }}>{brouillon && <MaterielEditeur materiel={brouillon} onChange={setBrouillon} />}</ScrollView>
+          <TouchableOpacity
+            style={[styles.bouton, { backgroundColor: t.accent }]}
+            onPress={async () => {
+              if (brouillon) await ecrireMateriel(brouillon);
+              setReglageOuvert(false);
+              await charger();
+            }}
+          >
+            <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>Enregistrer</Texte>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
+  if (onglet === "workout") {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
         {entete}
         <OngletSeances />
         <CarteRoutineLiee />
+        {feuilleMateriel}
+      </ScrollView>
+    );
+  }
+
+  if (onglet === "exercices") {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
+        {entete}
+        {!materielOk && (
+          <TouchableOpacity
+            onPress={() => {
+              setBrouillon(materiel);
+              setReglageOuvert(true);
+            }}
+            style={[styles.carte, { backgroundColor: t.bgCardActive, borderColor: t.accent }]}
+            accessibilityRole="button"
+          >
+            <Texte style={[styles.question, { color: t.textPrimary }]}>Règle ton matériel</Texte>
+            <Texte style={[styles.aide, { color: t.textMuted, marginTop: 0 }]}>
+              Haltères, parallettes, barre… Les exercices dont il manque le matériel sont grisés, avec une alternative.
+            </Texte>
+          </TouchableOpacity>
+        )}
+        <OngletExercices materiel={materiel} />
+        {feuilleMateriel}
+      </ScrollView>
+    );
+  }
+
+  if (onglet === "plan") {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
+        {entete}
+        <OngletPlan />
+        {feuilleMateriel}
       </ScrollView>
     );
   }
@@ -180,17 +266,27 @@ export default function Skills() {
       <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.contenu}>
         {entete}
         <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border }]}>
-          <Texte style={[styles.question, { color: t.textPrimary }]}>As-tu une barre de traction ?</Texte>
-          <View style={styles.puces}>
-            {puce(barre === true, "Oui", () => setBarre(true))}
-            {puce(barre === false, "Non", () => setBarre(false))}
-          </View>
-          {barre !== null && (
+          {!materielOk ? (
             <>
-              <Texte style={[styles.question, { color: t.textPrimary, marginTop: spacing.lg }]}>
-                Où en es-tu ?
+              <Texte style={[styles.question, { color: t.textPrimary }]}>Quel matériel as-tu ?</Texte>
+              <Texte style={[styles.aide, { color: t.textMuted, marginTop: 0, marginBottom: spacing.md }]}>
+                Tu pourras le changer quand tu veux avec ⚙️. Les skills qui demandent une barre restent visibles, grisés.
               </Texte>
-              {SKILLS.filter((s) => s.niveau === "fondation" && (barre || !s.barre)).map((s) => (
+              {brouillon && <MaterielEditeur materiel={brouillon} onChange={setBrouillon} />}
+              <TouchableOpacity
+                style={[styles.bouton, { backgroundColor: t.accent }]}
+                onPress={async () => {
+                  if (brouillon) await ecrireMateriel(brouillon);
+                  await charger();
+                }}
+              >
+                <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>Continuer</Texte>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Texte style={[styles.question, { color: t.textPrimary }]}>Où en es-tu ?</Texte>
+              {SKILLS.filter((s) => s.niveau === "fondation" && (materiel.dispo.barre || !s.barre)).map((s) => (
                 <View key={s.id} style={{ marginTop: spacing.md }}>
                   <Texte style={[styles.nomFondation, { color: t.textSecondary }]}>{s.nom}</Texte>
                   <View style={styles.puces}>
@@ -214,7 +310,7 @@ export default function Skills() {
               <TouchableOpacity
                 style={[styles.bouton, { backgroundColor: t.accent }]}
                 onPress={async () => {
-                  await configurerSport(barre, depart);
+                  await configurerSport(materiel.dispo.barre, depart);
                   await charger();
                 }}
               >
@@ -351,6 +447,7 @@ export default function Skills() {
       </Texte>
       <CarteRoutineLiee />
       <FeuilleEssai skillId={essaiPour} onFermer={() => setEssaiPour(null)} onFini={charger} />
+      {feuilleMateriel}
     </ScrollView>
   );
 }
@@ -359,6 +456,9 @@ const styles = StyleSheet.create({
   contenu: { paddingTop: 60, paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl },
   retour: { fontSize: typography.body, fontWeight: "600", marginBottom: spacing.lg },
   entete: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  enteteDroite: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
+  fond: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
+  feuille: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, borderWidth: 1, padding: spacing.xl },
   titre: { fontSize: typography.h1, fontWeight: "600" },
   onglets: { flexDirection: "row", borderRadius: radius.pill, borderWidth: 1, padding: 3, marginTop: spacing.lg },
   onglet: { flex: 1, borderRadius: radius.pill, paddingVertical: spacing.sm, alignItems: "center" },

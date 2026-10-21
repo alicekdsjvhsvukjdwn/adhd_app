@@ -168,7 +168,7 @@ L'appli rappelle de prendre un traitement, elle ne donne jamais d'indication de 
 | Je me décourage vite           | Le soir, noter une chose réussie (soir, 1 min)                | Se parler comme à un ami : une phrase prête à relire (à tout moment, 1 min) |
 | J'ai du mal à me détendre      | 5 minutes sans écran (soir, 5 min)                            | Une activité calme choisie à l'avance (soir, 10 min)                        |
 
-Choisir « Tout me semble trop d'un coup » affiche aussi, discrètement, le 3114 (« Si ça ne va vraiment pas »).
+Choisir « Tout me semble trop d'un coup » propose des routines de respiration et de vidage de tête.
 
 #### 🎨 Ce qui compte pour moi — domaine Compétences
 

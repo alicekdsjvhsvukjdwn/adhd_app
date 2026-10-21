@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookOpen, Footprints, HeartHandshake, PenLine, Sparkles } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { OuJenSuis } from "../components/OuJenSuis";
 import { Texte } from "../components/Texte";
 import { useJourCourant } from "../hooks/useJourCourant";
@@ -78,11 +78,6 @@ export default function Programme() {
         <Texte style={{ color: t.accentText, fontSize: typography.small }}>Noter une pensée, puis la tester si je veux</Texte>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => Linking.openURL("tel:3114")} style={{ marginTop: spacing.xl }}>
-        <Texte style={{ color: t.textMuted, fontSize: typography.small, textAlign: "center", lineHeight: 17 }}>
-          Si ça ne va vraiment pas : le 3114, numéro national de prévention du suicide, gratuit, 24 h/24. Toucher pour appeler.
-        </Texte>
-      </TouchableOpacity>
     </ScrollView>
   );
 }

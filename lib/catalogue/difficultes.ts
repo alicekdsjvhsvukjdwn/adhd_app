@@ -18,8 +18,6 @@ export type Difficulte = {
   routines: string[];
   /** Fait partie des 8 affichées d'abord. */
   frequente?: boolean;
-  /** Afficher discrètement le 3114 (« Si ça ne va vraiment pas »). */
-  lienAide?: boolean;
 };
 
 export const THEMES: Theme[] = [
@@ -240,7 +238,6 @@ export const DIFFICULTES: Difficulte[] = [
     icone: "🌊",
     theme: "emotions",
     routines: ["respiration-lente", "vider-sa-tete"],
-    lienAide: true,
   },
   {
     id: "emotions-vite",

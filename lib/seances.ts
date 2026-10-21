@@ -4,6 +4,8 @@
  * base : testable seul (tests/seances.test.mjs).
  */
 
+import { exercice } from "./exercices";
+
 export type Zone = "haut" | "bas" | "abdos" | "mobilite" | "complet";
 
 export const ZONES: { cle: Zone; nom: string; couleur: string }[] = [
@@ -78,6 +80,12 @@ export const REVEIL_DEFAUT: Seance = {
 };
 
 export const seance = (id: string) => SEANCES.find((s) => s.id === id);
+
+/** « Faire maintenant » depuis la fiche d'un exercice : 3 tours de 40 s d'effort et 20 s de repos (id « ex-<exercice> »). */
+export function seanceExercice(idSeance: string): Seance | null {
+  const e = idSeance.startsWith("ex-") ? exercice(idSeance.slice(3)) : undefined;
+  return e ? { id: idSeance, nom: e.nom, zone: e.zones[0] ?? null, exercices: [e.id], effort_s: 40, repos_s: 20, tours: 3 } : null;
+}
 
 export const couleurSeance = (s: Seance, accent: string) => (s.zone ? zone(s.zone).couleur : accent);
 

@@ -395,7 +395,7 @@ Principes :
 - pas de récompense aléatoire, pas de notification culpabilisante ;
 - les suggestions sont toujours refusables, et un refus est respecté ; le bilan de la journée n'est jamais demandé ;
 - les données restent sur le téléphone, sauf si la personne exporte une sauvegarde : le fichier contient tout, check-ins et rappels de traitement compris, et l'écran le dit ;
-- Profil et la mise en place donnent un accès direct au 3114 ; l'appli rappelle un traitement sans jamais donner de dose ni d'horaire médical.
+- L'appli rappelle un traitement sans jamais donner de dose ni d'horaire médical.
 
 ---
 

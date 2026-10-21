@@ -2,7 +2,6 @@ import { useCleReset } from "../../lib/reset-onglet";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
-  Linking,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -78,16 +77,6 @@ function ProfilContenu() {
 
         <BoutonReinitialiser />
 
-        <TouchableOpacity
-          style={styles.aide}
-          onPress={() => Linking.openURL("tel:3114")}
-        >
-          <Texte style={[styles.aideTexte, { color: t.textMuted }]}>
-            Si ça ne va vraiment pas : le 3114, numéro national de prévention du
-            suicide, gratuit, 24 h/24. Toucher pour appeler.
-          </Texte>
-        </TouchableOpacity>
-
         <Texte style={[styles.version, { color: t.textMuted }]}>
           Version {Constants.expoConfig?.version}
           {process.env.EXPO_PUBLIC_BUILD ? ` · publiée le ${process.env.EXPO_PUBLIC_BUILD}` : ""}
@@ -118,8 +107,6 @@ const styles = StyleSheet.create({
   },
   entreeTexte: { fontSize: typography.small, lineHeight: 19 },
   version: { fontSize: typography.tiny, textAlign: "center", marginTop: spacing.lg },
-  aide: { marginTop: spacing.xl, paddingVertical: spacing.sm },
-  aideTexte: { fontSize: typography.tiny, lineHeight: 17, textAlign: "center" },
 });
 
 /** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */

@@ -1,7 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Linking,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -51,7 +50,6 @@ type Groupe = {
   titre: string | null;
   familles: FamilleTemplate[];
   dejaEnPlace: number;
-  lienAide: boolean;
 };
 
 const normaliser = (s: string) =>
@@ -177,12 +175,11 @@ export function MiseEnPlace() {
     const sources: {
       titre: string | null;
       ids: string[];
-      lienAide: boolean;
     }[] = partirDeZero
-      ? [{ titre: null, ids: DEMARRAGE_UNIVERSEL, lienAide: false }]
+      ? [{ titre: null, ids: DEMARRAGE_UNIVERSEL }]
       : choisies.map((id) => {
           const d = DIFFICULTES.find((x) => x.id === id)!;
-          return { titre: d.libelle, ids: d.routines, lienAide: !!d.lienAide };
+          return { titre: d.libelle, ids: d.routines };
         });
 
     const nouveauxGroupes: Groupe[] = sources.map((s) => {
@@ -195,7 +192,7 @@ export function MiseEnPlace() {
         vues.add(f.id);
         return true;
       });
-      return { titre: s.titre, familles, dejaEnPlace, lienAide: s.lienAide };
+      return { titre: s.titre, familles, dejaEnPlace };
     });
 
     // Pré-cocher : tout le démarrage universel, sinon la première de chaque difficulté.
@@ -615,14 +612,6 @@ export function MiseEnPlace() {
                     </View>
                   );
                 })}
-                {g.lienAide && (
-                  <TouchableOpacity onPress={() => Linking.openURL("tel:3114")}>
-                    <Texte style={[styles.aide, { color: t.textMuted }]}>
-                      Si ça ne va vraiment pas : le 3114, gratuit, 24 h/24.
-                      Toucher pour appeler.
-                    </Texte>
-                  </TouchableOpacity>
-                )}
               </View>
             ))}
           </>
@@ -923,7 +912,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 6,
   },
-  aide: { fontSize: typography.small, textDecorationLine: "underline" },
 
   pastilles: {
     flexDirection: "row",

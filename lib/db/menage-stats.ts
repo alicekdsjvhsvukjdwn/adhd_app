@@ -1,60 +1,16 @@
-import { decalerJours } from "../dates";
-import { faitesParSemaine, jauge, regularite, type FaitMenage, type TacheMenage } from "../menage-regles";
 import { getDatabase } from "./client";
-import { getAujourdhui } from "./completions";
-import { COLONNES_TACHE, enPieces, initialiserMenage, type LignePiece } from "./menage";
+import { enPieces, type LignePiece } from "./menage";
 
-/** Ménage : statistiques du Progrès et points de couleur du calendrier, lus dans menage_journal. */
-
-export type StatsMenage = {
-  /** 8 semaines, la plus ancienne d'abord : tâches faites par pièce. */
-  semaines: { debut: string; total: number; parts: { couleur: string; nom: string; n: number }[] }[];
-  /** Pièces affichées : jauge actuelle et régularité sur 30 jours (null : pas encore assez d'historique). */
-  pieces: { id: number; nom: string; couleur: string; jauge: number; regularite: number | null }[];
-};
+/** Ménage : la roue du Progrès et les points de couleur du calendrier, lus dans menage_journal. */
 
 const GRIS = "#8A9A98";
 const SQL_PIECES = "SELECT id, nom, icone, ordre, couleur FROM menage_pieces ORDER BY ordre, id";
 
-export async function statsMenage(aujourdhui: string = getAujourdhui()): Promise<StatsMenage> {
-  await initialiserMenage();
+/** Tâches de ménage cochées entre deux jours (bornes comprises) : de quoi remplir la roue du Progrès. */
+export async function menageFaitesEntre(debut: string, fin: string): Promise<number> {
   const db = await getDatabase();
-  const faits = await db.getAllAsync<FaitMenage>(
-    "SELECT tache_id, piece_id, jour, echeance, a_temps FROM menage_journal WHERE jour >= ?",
-    decalerJours(aujourdhui, -7 * 8),
-  );
-  // Toutes les pièces, supprimées comprises : leurs couleurs gardent les barres lisibles.
-  const toutes = enPieces(await db.getAllAsync<LignePiece>(SQL_PIECES));
-  const actives = new Set(
-    (await db.getAllAsync<{ id: number }>("SELECT id FROM menage_pieces WHERE supprimee_le IS NULL")).map((p) => p.id),
-  );
-  const taches = await db.getAllAsync<TacheMenage & { cree_le: string }>(
-    `SELECT ${COLONNES_TACHE}, cree_le FROM menage_taches WHERE supprimee_le IS NULL`,
-  );
-  const parId = new Map(toutes.map((p) => [p.id, p]));
-  return {
-    semaines: faitesParSemaine(faits, aujourdhui, 8).map((s) => ({
-      debut: s.debut,
-      total: s.total,
-      parts: Object.entries(s.parPiece).map(([id, n]) => ({
-        couleur: parId.get(Number(id))?.couleur ?? GRIS,
-        nom: parId.get(Number(id))?.nom ?? "",
-        n,
-      })),
-    })),
-    pieces: toutes
-      .filter((p) => actives.has(p.id))
-      .map((p) => {
-        const siennes = taches.filter((x) => x.piece_id === p.id);
-        return {
-          id: p.id,
-          nom: p.nom,
-          couleur: p.couleur,
-          jauge: jauge(siennes, aujourdhui),
-          regularite: regularite(siennes, faits, aujourdhui),
-        };
-      }),
-  };
+  const r = await db.getFirstAsync<{ n: number }>("SELECT COUNT(*) AS n FROM menage_journal WHERE jour >= ? AND jour <= ?", debut, fin);
+  return r?.n ?? 0;
 }
 
 /** Calendrier : couleurs des pièces où quelque chose a été fait, par jour (sans doublon). */

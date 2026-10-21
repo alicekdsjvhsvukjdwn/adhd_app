@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookHeart, Eye, Flower2, HeartHandshake, PenLine } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useJourCourant } from "../hooks/useJourCourant";
 import { decalerJours } from "../lib/dates";
 import { ecrireBilan, humeursEntre, lireBilan, listerPensees } from "../lib/db/esprit";
@@ -100,7 +100,7 @@ function MaSemaine({ aujourdhui }: { aujourdhui: string }) {
 
 /**
  * Suivi › Esprit : l'humeur d'abord, puis le journal de pensées, Mon programme (TCC en autonomie), Méditer et Ma vision.
- * Pas de points pour l'humeur ni le journal. Le 3114 reste en bas.
+ * Pas de points pour l'humeur ni le journal.
  */
 export function EspritEcran() {
   const router = useRouter();
@@ -183,11 +183,6 @@ export function EspritEcran() {
         <Texte style={{ color: t.accentText, fontSize: typography.small }}>Régler le rappel du soir « 30 secondes pour toi »</Texte>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => Linking.openURL("tel:3114")} style={{ marginTop: spacing.xl }}>
-        <Texte style={[styles.sous, { color: t.textMuted, textAlign: "center", lineHeight: 17 }]}>
-          Si ça ne va vraiment pas : le 3114, numéro national de prévention du suicide, gratuit, 24 h/24. Toucher pour appeler.
-        </Texte>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
