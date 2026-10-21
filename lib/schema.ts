@@ -443,6 +443,80 @@ export const SQL_TABLES_ESPRIT = `
 `;
 
 /**
+ * Migration 35 : le plan de sport (le coach). Un plan actif à la fois : ses séances types (sport_plan_lignes, avec
+ * la fourchette visée et le compteur de séances au plafond), la suite des séances à faire (sport_plan_seances, avec
+ * leur jour, qui se décale si j'en rate une), mes tests de niveau et les bilans du dimanche.
+ */
+export const SQL_PLAN_SPORT = `
+  CREATE TABLE IF NOT EXISTS sport_plan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- 'force' | 'skill' | 'tonifier' | 'mobilite'
+    objectif TEXT NOT NULL DEFAULT 'force',
+    -- id du skill (objectif 'skill'), sinon vide
+    skill TEXT NOT NULL DEFAULT '',
+    -- jours de la semaine choisis, « 1,3,5 » (0 = dimanche)
+    jours TEXT NOT NULL DEFAULT '',
+    duree INTEGER NOT NULL DEFAULT 30,
+    -- niveaux de départ (JSON)
+    niveaux TEXT NOT NULL DEFAULT '',
+    -- 'actif' | 'termine'
+    statut TEXT NOT NULL DEFAULT 'actif',
+    debut TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS sport_plan_lignes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL DEFAULT 0,
+    slot INTEGER NOT NULL DEFAULT 0,
+    rang INTEGER NOT NULL DEFAULT 0,
+    exercice_id TEXT NOT NULL DEFAULT '',
+    series INTEGER NOT NULL DEFAULT 3,
+    bas INTEGER NOT NULL DEFAULT 8,
+    haut INTEGER NOT NULL DEFAULT 12,
+    poids REAL,
+    repos_s INTEGER NOT NULL DEFAULT 45,
+    -- 'base' | 'skill'
+    role TEXT NOT NULL DEFAULT 'base',
+    -- séances de suite au haut de la fourchette
+    atteint INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_sport_plan_lignes ON sport_plan_lignes(plan_id, slot, rang);
+  CREATE TABLE IF NOT EXISTS sport_plan_seances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL DEFAULT 0,
+    ordre INTEGER NOT NULL DEFAULT 0,
+    slot INTEGER NOT NULL DEFAULT 0,
+    semaine INTEGER NOT NULL DEFAULT 1,
+    nom TEXT NOT NULL DEFAULT '',
+    jour TEXT NOT NULL DEFAULT '',
+    -- 'a_faire' | 'faite'
+    statut TEXT NOT NULL DEFAULT 'a_faire',
+    -- bilan du dimanche : -1, 0 ou +1 série
+    ajust INTEGER NOT NULL DEFAULT 0,
+    seance_id INTEGER,
+    fait_le TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_sport_plan_seances ON sport_plan_seances(plan_id, ordre);
+  CREATE TABLE IF NOT EXISTS sport_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL DEFAULT 0,
+    jour TEXT NOT NULL DEFAULT '',
+    -- 'pompes' | 'dips' | 'planche' | 'tuck_lsit' | 'squats' | 'pont'
+    cle TEXT NOT NULL DEFAULT '',
+    valeur INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS sport_bilans (
+    -- lundi de la semaine
+    semaine TEXT NOT NULL DEFAULT '',
+    plan_id INTEGER NOT NULL DEFAULT 0,
+    -- 'facile' | 'ok' | 'dur'
+    ressenti TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (semaine, plan_id)
+  );
+`;
+
+/**
  * Migration 34 : séances de sport construites sur la bibliothèque (lot 2 du Sport). Une séance faite reste dans
  * `seances` (nom, origine, ressenti en plus) et chaque série dans `series` avec son exercice de la bibliothèque et
  * son poids : on voit ce qu'on a vraiment fait, série par série. « Mes séances » vivent dans sport_seances.

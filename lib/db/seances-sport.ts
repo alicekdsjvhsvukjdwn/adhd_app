@@ -87,7 +87,7 @@ export async function supprimerMaSeance(id: number): Promise<void> {
 
 // ─── Une séance qu'on fait ──────────────────────────────────────────────
 
-export type OrigineSeance = "perso" | "proposee" | "exercice" | "notee" | "skills";
+export type OrigineSeance = "perso" | "proposee" | "exercice" | "notee" | "skills" | "plan";
 
 export async function commencerSeanceSport(nom: string, origine: OrigineSeance, date: string = getAujourdhui()): Promise<number> {
   const db = await getDatabase();

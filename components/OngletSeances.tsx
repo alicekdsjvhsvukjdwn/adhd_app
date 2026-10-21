@@ -21,6 +21,7 @@ import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
 import { ChoixExercices } from "./ChoixExercices";
 import { FigureSkill } from "./FigureSkill";
 import { MesSeances } from "./MesSeances";
+import { SeanceDuPlan } from "./SeanceDuPlan";
 import { SeancesProposees } from "./SeancesProposees";
 import { PlusMoins } from "./PlusMoins";
 import { Texte } from "./Texte";
@@ -118,6 +119,7 @@ export function OngletSeances({ materiel }: { materiel: Materiel }) {
         </View>
       )}
       <FeuilleSeanceNotee visible={notee} onFermer={() => setNotee(false)} onEnregistre={charger} />
+      <SeanceDuPlan />
 
       <Texte style={[styles.surtitre, { color: t.textMuted }]}>RÉVEIL DU CORPS · MA ROUTINE DU MATIN</Texte>
       {perso && !b && (

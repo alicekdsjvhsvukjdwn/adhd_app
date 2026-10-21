@@ -15,12 +15,14 @@ import {
   terminerSeanceSport,
   type OrigineSeance,
 } from "../lib/db/seances-sport";
+import { lignesDeSeancePlan, validerSeancePlan, type EvenementPlan } from "../lib/db/plan-sport";
 import { seanceSkills } from "../lib/db/sport";
 import { getMateriel } from "../lib/db/sport-materiel";
 import { exercice } from "../lib/exercices";
 import { dateCourte } from "../lib/esprit-regles";
 import { formatRestant } from "../lib/minuteur";
 import { libellePoids, MATERIEL_DEFAUT, type Materiel } from "../lib/materiel";
+import { libelleRaison } from "../lib/plan-sport";
 import { RESSENTIS, zone } from "../lib/seances";
 import {
   dureeEstimee,
@@ -51,7 +53,7 @@ export default function SeanceSportEcran() {
   const t = useTheme();
   useKeepAwake();
   const bip = useAudioPlayer(require("../assets/sons/bip.wav"));
-  const p = useLocalSearchParams<{ source?: string; id?: string; zone?: string; min?: string; graine?: string; liste?: string; date?: string; series?: string; cible?: string }>();
+  const p = useLocalSearchParams<{ source?: string; id?: string; zone?: string; min?: string; graine?: string; liste?: string; date?: string; series?: string; cible?: string; courte?: string }>();
   const modeListe = p.liste === "1";
   const date = p.date || getAujourdhui();
 
@@ -68,6 +70,8 @@ export default function SeanceSportEcran() {
   const [toast, setToast] = useState<string | null>(null);
   const [ressenti, setRessenti] = useState("");
   const [points, setPoints] = useState(0);
+  /** Séance du plan : ce qui a monté d'un cran à la fin. */
+  const [evenements, setEvenements] = useState<EvenementPlan[]>([]);
   // Repos : heure de fin (les calculs partent de l'heure, pas d'un compteur).
   const [finRepos, setFinRepos] = useState(0);
   const [maintenant, setMaintenant] = useState(0);
@@ -77,6 +81,10 @@ export default function SeanceSportEcran() {
   const [grille, setGrille] = useState<{ valeur: number; poids: number | null }[][]>([]);
   const seanceId = useRef<number | null>(null);
   const termine = useRef(false);
+  // Séance du plan : les lignes prévues, les séries faites (pour savoir si elle compte) et si elle a déjà été validée.
+  const prevu = useRef<SeanceSport | null>(null);
+  const faitesRef = useRef<SerieFaite[]>([]);
+  const planValide = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -90,6 +98,10 @@ export default function SeanceSportEcran() {
       } else if (p.source === "proposee") {
         s = proposerSeance((p.zone as ZoneProposee) ?? "complet", (Number(p.min) as DureeProposee) || 20, m, Number(p.graine) || 0);
         o = "proposee";
+      } else if (p.source === "plan" && p.id) {
+        const x = await lignesDeSeancePlan(Number(p.id), p.courte === "1");
+        if (x) s = { nom: x.nom, lignes: x.lignes };
+        o = "plan";
       } else if (p.source === "skills") {
         s = await seanceSkills(m);
         o = "skills";
@@ -101,6 +113,7 @@ export default function SeanceSportEcran() {
       if (!s || s.lignes.length === 0) return router.back();
       setOrigine(modeListe ? "notee" : o);
       setSeance(s);
+      prevu.current = s;
       setGrille(s.lignes.map((l) => Array.from({ length: l.series }, () => ({ valeur: l.cible, poids: l.poids }))));
       setValeur(s.lignes[0].cible);
       setPoids(s.lignes[0].poids);
@@ -114,9 +127,22 @@ export default function SeanceSportEcran() {
     termine.current = true;
     return seanceId.current === null ? null : terminerSeanceSport(seanceId.current, r);
   }, []);
+  /** Séance du plan : elle compte (et fait monter les exercices) si au moins la moitié des séries sont faites. */
+  const validerPlan = useCallback(async () => {
+    if (p.source !== "plan" || planValide.current || seanceId.current === null || !prevu.current) return;
+    if (resumeSeance(prevu.current.lignes, faitesRef.current).completion < 0.5) return;
+    planValide.current = true;
+    setEvenements((await validerSeancePlan(Number(p.id), seanceId.current)).evenements);
+  }, [p.source, p.id]);
+  const validerPlanRef = useRef(validerPlan);
+  useEffect(() => {
+    validerPlanRef.current = validerPlan;
+  }, [validerPlan]);
   useEffect(
     () => () => {
-      cloturer("").catch(() => {});
+      cloturer("")
+        .then(() => validerPlanRef.current())
+        .catch(() => {});
     },
     [cloturer],
   );
@@ -171,7 +197,8 @@ export default function SeanceSportEcran() {
   const enregistrerSerie = async (exerciceId: string, n: number, realise: number, kg: number | null, prevu: number) => {
     if (seanceId.current === null) seanceId.current = await commencerSeanceSport(seance!.nom, origine, date);
     const r = await noterSerieSport(seanceId.current, { exercice: exerciceId, numero: n, realise, poids: kg, prevu });
-    setFaites((f) => [...f.filter((x) => !(x.exercice === exerciceId && x.numero === n)), { exercice: exerciceId, numero: n, realise, poids: kg }]);
+    faitesRef.current = [...faitesRef.current.filter((x) => !(x.exercice === exerciceId && x.numero === n)), { exercice: exerciceId, numero: n, realise, poids: kg }];
+    setFaites(faitesRef.current);
     if (r.points > 0) setPoints((x) => x + r.points);
     if (r.record) {
       setRecords((x) => (x.includes(exerciceId) ? x : [...x, exerciceId]));
@@ -225,6 +252,7 @@ export default function SeanceSportEcran() {
         text: "Arrêter",
         onPress: async () => {
           await cloturer("");
+          await validerPlan();
           router.back();
         },
       },
@@ -247,6 +275,11 @@ export default function SeanceSportEcran() {
     }
     setPhase("fin");
   };
+
+  // Arrivé à la fin : la séance du plan est validée tout de suite, pour montrer ce qui a monté.
+  useEffect(() => {
+    if (phase === "fin") validerPlan().catch(() => {});
+  }, [phase, validerPlan]);
 
   if (!seance) return <View style={{ flex: 1, backgroundColor: t.bgApp }} />;
 
@@ -299,6 +332,16 @@ export default function SeanceSportEcran() {
             </View>
           );
         })}
+        {evenements.length > 0 && (
+          <View style={[styles.ligneBilan, { borderColor: t.accent, backgroundColor: t.bgCard, flexDirection: "column", alignItems: "flex-start" }]}>
+            <Texte style={{ color: t.textPrimary, fontSize: typography.body, fontWeight: "700" }}>📈 Ton plan monte d&apos;un cran</Texte>
+            {evenements.map((x) => (
+              <Texte key={x.exercice} style={{ color: t.textSecondary, fontSize: typography.small }}>
+                {exercice(x.exercice)?.nom} : {libelleRaison(x.raison, x.nouvelExercice)}
+              </Texte>
+            ))}
+          </View>
+        )}
         {faites.length > 0 && (
           <>
             <Texte style={[styles.etiquette, { color: t.textMuted }]}>COMMENT C&apos;ÉTAIT ?</Texte>
