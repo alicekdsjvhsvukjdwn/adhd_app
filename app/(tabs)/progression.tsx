@@ -12,6 +12,7 @@ import { Texte } from "../../components/Texte";
 import Svg, { Circle } from "react-native-svg";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { SectionHumeur } from "../../components/SectionHumeur";
+import { SectionMenage } from "../../components/SectionMenage";
 import { LiensSommeilSport } from "../../components/LiensSommeilSport";
 import { remettreAFaire } from "../../lib/db/etapes";
 import { getStats } from "../../lib/db/stats";
@@ -319,6 +320,8 @@ export default function Progression() {
           </View>
         </>
       )}
+
+      <SectionMenage />
 
       {/* Ce que l'appli apprend : ses propositions sont-elles utiles ? */}
       {mesure &&

@@ -443,6 +443,46 @@ export const SQL_TABLES_ESPRIT = `
 `;
 
 /**
+ * Migration 32 : ménage. Une couleur par pièce ; supprimer une pièce ou une tâche la retire
+ * sans effacer son historique (supprimee_le) ; un journal des cochages pour les stats du Progrès.
+ * Les couleurs de départ suivent l'ordre des pièces (8 teintes distinctes, voir lib/menage-regles.ts).
+ */
+export const SQL_MENAGE_V2 = `
+  ALTER TABLE menage_pieces ADD COLUMN couleur TEXT NOT NULL DEFAULT '';
+  ALTER TABLE menage_pieces ADD COLUMN supprimee_le TEXT;
+  ALTER TABLE menage_taches ADD COLUMN supprimee_le TEXT;
+  CREATE TABLE IF NOT EXISTS menage_journal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tache_id INTEGER NOT NULL DEFAULT 0,
+    piece_id INTEGER NOT NULL DEFAULT 0,
+    jour TEXT NOT NULL DEFAULT '',
+    echeance TEXT NOT NULL DEFAULT '',
+    a_temps INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_menage_journal_jour ON menage_journal(jour);
+  UPDATE menage_pieces SET couleur = CASE (
+      SELECT COUNT(*) FROM menage_pieces p2
+      WHERE p2.ordre < menage_pieces.ordre OR (p2.ordre = menage_pieces.ordre AND p2.id < menage_pieces.id)
+    ) % 8
+    WHEN 0 THEN 'orange' WHEN 1 THEN 'cyan' WHEN 2 THEN 'violet' WHEN 3 THEN 'jaune'
+    WHEN 4 THEN 'rose' WHEN 5 THEN 'bleu' WHEN 6 THEN 'vert' ELSE 'corail' END
+    WHERE couleur = '';
+
+  -- Reprise de ce qui existait : seuls les cochages qui avaient rapporté des points étaient notés.
+  INSERT INTO menage_journal (tache_id, piece_id, jour, echeance, a_temps)
+    SELECT f.tache_id, t.piece_id, f.jour, f.echeance, CASE WHEN julianday(f.jour) - julianday(f.echeance) <= 1 THEN 1 ELSE 0 END
+    FROM menage_faits f JOIN menage_taches t ON t.id = f.tache_id;
+`;
+
+/** Une sauvegarde d'avant la migration 32 n'a pas de journal : on le refait depuis menage_faits (sans doublon). */
+export const SQL_JOURNAL_DEPUIS_FAITS = `
+  INSERT INTO menage_journal (tache_id, piece_id, jour, echeance, a_temps)
+    SELECT f.tache_id, t.piece_id, f.jour, f.echeance, CASE WHEN julianday(f.jour) - julianday(f.echeance) <= 1 THEN 1 ELSE 0 END
+    FROM menage_faits f JOIN menage_taches t ON t.id = f.tache_id
+    WHERE NOT EXISTS (SELECT 1 FROM menage_journal j WHERE j.tache_id = f.tache_id AND j.echeance = f.echeance);
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */
@@ -454,5 +494,6 @@ export function transformationsApres(schemaSauvegarde: number): string[] {
     ...(schemaSauvegarde < 22 ? [SQL_CATEGORIES_RECOMPENSES] : []),
     ...(schemaSauvegarde < 28 ? [SQL_CATEGORIES_RECOMPENSES_V2] : []),
     ...(schemaSauvegarde < 23 ? [SQL_SKILLS_DEPUIS_PALIERS] : []),
+    ...(schemaSauvegarde < 32 ? [SQL_JOURNAL_DEPUIS_FAITS] : []),
   ];
 }

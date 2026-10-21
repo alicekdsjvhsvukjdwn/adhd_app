@@ -13,6 +13,7 @@ import {
   SQL_MOMENTS,
   SQL_RANG_MANUEL,
   SQL_JOURS_TACHE,
+  SQL_MENAGE_V2,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
@@ -780,6 +781,14 @@ const MIGRATIONS: Migration[] = [
     nom: "jours de la semaine d'une tâche régulière",
     run: async (db) => {
       await db.execAsync(SQL_JOURS_TACHE);
+    },
+  },
+
+  {
+    version: 32,
+    nom: "ménage : couleur par pièce, suppression sans perte d'historique, journal",
+    run: async (db) => {
+      await db.execAsync(SQL_MENAGE_V2);
     },
   },
 ];

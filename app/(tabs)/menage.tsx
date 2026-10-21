@@ -1,17 +1,18 @@
 import { useCleReset } from "../../lib/reset-onglet";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
-import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { FeuilleMenage, type SaisieMenage } from "../../components/FeuilleMenage";
 import { IconePiece } from "../../components/IconePiece";
 import { MenuOptions } from "../../components/MenuOptions";
-import type { Option } from "../../components/Options";
+import { Glissable, type Option } from "../../components/Options";
 import { Texte } from "../../components/Texte";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import {
   ajouterPiece,
   ajouterTacheMenage,
   cocherTacheMenage,
+  colorierPiece,
   decocherTacheMenage,
   deplacerPiece,
   getMenage,
@@ -23,7 +24,8 @@ import {
 } from "../../lib/db/menage";
 import {
   aFaireAujourdhui,
-  couleurJauge,
+  CLES_MENAGE,
+  COULEURS_MENAGE,
   estDue,
   jauge,
   joursEntre,
@@ -53,6 +55,8 @@ function MenageContenu() {
   const [taches, setTaches] = useState<TacheMenage[]>([]);
   const [jourDifficile, setJourDifficile] = useState(false);
   const [ouverte, setOuverte] = useState<number | null>(null);
+  /** Mode « Modifier la pièce » : croix rouge sur chaque tâche, couleur, renommer, supprimer. */
+  const [edition, setEdition] = useState(false);
   const [saisie, setSaisie] = useState<SaisieMenage>(null);
   const [menu, setMenu] = useState<{ titre: string; options: Option[] }>({ titre: "", options: [] });
   const [bravo, setBravo] = useState<string | null>(null);
@@ -90,31 +94,76 @@ function MenageContenu() {
   const piece = pieces.find((p) => p.id === ouverte) ?? null;
   const dansPiece = taches.filter((x) => x.piece_id === ouverte);
 
+  const couleurDe = (id: number) => pieces.find((p) => p.id === id)?.couleur ?? t.accent;
+  const fermerPiece = () => {
+    setOuverte(null);
+    setEdition(false);
+  };
+
+  /** Confirmation avant suppression : l'historique est gardé pour les stats. */
+  const confirmerTache = (x: TacheMenage) =>
+    Alert.alert(`Supprimer « ${x.nom} » ?`, "Elle ne sera plus proposée. Ce que tu as déjà fait reste dans tes statistiques.", [
+      { text: "Garder", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await supprimerTacheMenage(x.id);
+          await charger();
+        },
+      },
+    ]);
+  const confirmerPiece = (p: Piece) =>
+    Alert.alert(`Supprimer la pièce « ${p.nom} » ?`, "Ses tâches ne seront plus proposées. Ce que tu as déjà fait reste dans tes statistiques.", [
+      { text: "Garder", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await supprimerPiece(p.id);
+          fermerPiece();
+          await charger();
+        },
+      },
+    ]);
+
   const optionsPiece = (p: Piece): Option[] => [
+    { libelle: "Modifier la pièce", onPress: () => { setOuverte(p.id); setEdition(true); } },
     { libelle: "Renommer", onPress: () => apres(() => setSaisie({ type: "piece", id: p.id, nom: p.nom, freq: 7 })) },
     { libelle: "Monter", onPress: async () => { await deplacerPiece(p.id, -1); await charger(); } },
     { libelle: "Descendre", onPress: async () => { await deplacerPiece(p.id, 1); await charger(); } },
-    {
-      libelle: "Supprimer la pièce",
-      danger: true,
-      onPress: async () => {
-        await supprimerPiece(p.id);
-        setOuverte(null);
-        await charger();
-      },
-    },
+    { libelle: "Supprimer la pièce", danger: true, onPress: () => confirmerPiece(p) },
   ];
   const optionsTache = (x: TacheMenage): Option[] => [
     { libelle: "Modifier", onPress: () => apres(() => setSaisie({ type: "tache", id: x.id, nom: x.nom, freq: x.freq_jours })) },
-    {
-      libelle: "Supprimer",
-      danger: true,
-      onPress: async () => {
-        await supprimerTacheMenage(x.id);
-        await charger();
-      },
-    },
+    { libelle: "Supprimer", danger: true, onPress: () => confirmerTache(x) },
   ];
+  /** Glisser vers la gauche (Expo Go) : modifier ou supprimer. */
+  const actions = (x: TacheMenage) => (
+    <View style={styles.actions}>
+      <TouchableOpacity
+        style={[styles.action, { backgroundColor: t.accentText }]}
+        onPress={() => setSaisie({ type: "tache", id: x.id, nom: x.nom, freq: x.freq_jours })}
+      >
+        <Texte style={{ color: t.textOnAccent, fontWeight: "600" }}>Modifier</Texte>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.action, { backgroundColor: t.danger }]} onPress={() => confirmerTache(x)}>
+        <Texte style={{ color: t.textOnAccent, fontWeight: "600" }}>Supprimer</Texte>
+      </TouchableOpacity>
+    </View>
+  );
+  /** « ⋯ » sur chaque tâche : sur le web, Glissable le fournit déjà. */
+  const boutonPlus = (x: TacheMenage) =>
+    Platform.OS === "web" ? null : (
+      <TouchableOpacity
+        onPress={() => setMenu({ titre: x.nom, options: optionsTache(x) })}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={`Plus d'actions pour ${x.nom}`}
+      >
+        <Texte style={{ color: t.textMuted, fontSize: 22 }}>⋯</Texte>
+      </TouchableOpacity>
+    );
 
   const enregistrer = async (s: NonNullable<SaisieMenage>) => {
     setSaisie(null);
@@ -161,17 +210,20 @@ function MenageContenu() {
           <Texte style={[styles.note, { color: t.textSecondary }]}>Tout est à jour. Rien d&apos;urgent.</Texte>
         ) : (
           visibles.map((x) => (
-            <View key={x.id} style={[styles.ligne, { backgroundColor: t.bgCard }]}>
-              {case_(x, t.accent)}
-              <View style={{ flex: 1 }}>
-                <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={1}>
-                  {x.nom}
-                </Texte>
-                <Texte style={[styles.sous, { color: t.textMuted }]}>
-                  {nomPiece(x.piece_id)} · {etat(x, auj)}
-                </Texte>
+            <Glissable key={x.id} renderRightActions={() => actions(x)} options={optionsTache(x)} titre={x.nom}>
+              <View style={[styles.ligne, styles.liseré, { backgroundColor: t.bgCard, borderLeftColor: couleurDe(x.piece_id) }]}>
+                {case_(x, couleurDe(x.piece_id))}
+                <View style={{ flex: 1 }}>
+                  <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={1}>
+                    {x.nom}
+                  </Texte>
+                  <Texte style={[styles.sous, { color: t.textMuted }]}>
+                    {nomPiece(x.piece_id)} · {etat(x, auj)}
+                  </Texte>
+                </View>
+                {boutonPlus(x)}
               </View>
-            </View>
+            </Glissable>
           ))
         )}
         {autres > 0 && (
@@ -184,16 +236,16 @@ function MenageContenu() {
         <View style={styles.grille}>
           {pieces.map((p) => {
             const part = jauge(taches.filter((x) => x.piece_id === p.id), auj);
-            const c = couleurJauge(part);
+            const c = p.couleur;
             return (
               <TouchableOpacity
                 key={p.id}
                 onPress={() => setOuverte(p.id)}
                 onLongPress={() => setMenu({ titre: p.nom, options: optionsPiece(p) })}
-                style={[styles.tuile, { backgroundColor: t.bgCard, borderColor: t.border }]}
+                style={[styles.tuile, { backgroundColor: t.bgCard, borderColor: t.border, borderLeftWidth: 4, borderLeftColor: c }]}
                 accessibilityRole="button"
                 accessibilityLabel={p.nom}
-                accessibilityHint="Toucher : ses tâches · appui long : renommer, déplacer, supprimer"
+                accessibilityHint="Toucher : ses tâches · appui long : modifier, déplacer, supprimer"
               >
                 <IconePiece icone={p.icone} couleur={c} taille={26} />
                 <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={1}>
@@ -220,48 +272,123 @@ function MenageContenu() {
         <View style={[styles.feuille, { backgroundColor: t.bgApp }]}>
           <ScrollView contentContainerStyle={styles.container}>
             <View style={styles.entete}>
-              <TouchableOpacity onPress={() => setOuverte(null)} hitSlop={12} accessibilityRole="button">
+              <TouchableOpacity onPress={fermerPiece} hitSlop={12} accessibilityRole="button">
                 <Texte style={{ color: t.accentText, fontSize: typography.body }}>‹ Ménage</Texte>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setMenu({ titre: piece.nom, options: optionsPiece(piece) })}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Plus d'actions"
-              >
-                <Texte style={{ color: t.textMuted, fontSize: 24 }}>⋯</Texte>
-              </TouchableOpacity>
+              <View style={styles.enteteDroite}>
+                <TouchableOpacity
+                  onPress={() => setEdition(!edition)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={edition ? "Terminer la modification de la pièce" : "Modifier la pièce"}
+                >
+                  <Texte style={{ color: edition ? t.accentText : t.textMuted, fontSize: edition ? typography.body : 22, fontWeight: edition ? "600" : "400" }}>
+                    {edition ? "Terminé" : "✎"}
+                  </Texte>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setMenu({ titre: piece.nom, options: optionsPiece(piece) })}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Plus d'actions"
+                >
+                  <Texte style={{ color: t.textMuted, fontSize: 24 }}>⋯</Texte>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.titrePiece}>
-              <IconePiece icone={piece.icone} couleur={couleurJauge(jauge(dansPiece, auj))} taille={30} />
+              <IconePiece icone={piece.icone} couleur={piece.couleur} taille={30} />
               <Texte style={[styles.titre, { color: t.textPrimary }]}>{piece.nom}</Texte>
             </View>
+            {edition && (
+              <View style={[styles.panneau, { backgroundColor: t.bgCard, borderColor: piece.couleur }]}>
+                <Texte style={[styles.surtitre, { color: t.textMuted }]}>COULEUR DE LA PIÈCE</Texte>
+                <View style={styles.couleurs}>
+                  {CLES_MENAGE.map((cle) => {
+                    const choisie = piece.couleur === COULEURS_MENAGE[cle];
+                    return (
+                      <TouchableOpacity
+                        key={cle}
+                        onPress={async () => {
+                          await colorierPiece(piece.id, cle);
+                          await charger();
+                        }}
+                        style={[styles.pastille, { backgroundColor: COULEURS_MENAGE[cle], borderColor: choisie ? t.textPrimary : "transparent" }]}
+                        hitSlop={4}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: choisie }}
+                        accessibilityLabel={`Couleur ${cle}`}
+                      />
+                    );
+                  })}
+                </View>
+                <View style={styles.panneauLiens}>
+                  <TouchableOpacity
+                    onPress={() => setSaisie({ type: "piece", id: piece.id, nom: piece.nom, freq: 7 })}
+                    accessibilityRole="button"
+                  >
+                    <Texte style={{ color: t.accentText, fontSize: typography.body }}>Renommer</Texte>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => confirmerPiece(piece)} accessibilityRole="button">
+                    <Texte style={{ color: t.danger, fontSize: typography.body }}>Supprimer la pièce</Texte>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
             {dansPiece.length === 0 && (
               <Texte style={[styles.note, { color: t.textMuted }]}>Aucune tâche ici pour l&apos;instant.</Texte>
             )}
-            {dansPiece.map((x) => (
-              <TouchableOpacity
-                key={x.id}
-                activeOpacity={0.8}
-                onPress={() => basculer(x)}
-                onLongPress={() => setMenu({ titre: x.nom, options: optionsTache(x) })}
-                style={[styles.ligne, { backgroundColor: t.bgCard }]}
-                accessibilityHint="Toucher : cocher · appui long : modifier ou supprimer"
-              >
-                {case_(x, couleurJauge(1 - Math.min(1, retardJours(x, auj) / 3)))}
-                <View style={{ flex: 1 }}>
-                  <Texte
-                    style={[styles.nom, { color: x.fait_le === auj ? t.textMuted : t.textPrimary }, x.fait_le === auj && { textDecorationLine: "line-through" }]}
-                    numberOfLines={2}
+            {dansPiece.map((x) =>
+              edition ? (
+                // Mode « Modifier la pièce » : croix rouge pour retirer, toucher pour modifier.
+                <View key={x.id} style={[styles.ligne, styles.liseré, { backgroundColor: t.bgCard, borderLeftColor: piece.couleur }]}>
+                  <TouchableOpacity
+                    onPress={() => confirmerTache(x)}
+                    hitSlop={8}
+                    style={[styles.croix, { backgroundColor: t.danger }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Retirer ${x.nom}`}
                   >
-                    {x.nom}
-                  </Texte>
-                  <Texte style={[styles.sous, { color: t.textMuted }]}>
-                    {libelleFrequence(x.freq_jours)} · {etat(x, auj)}
-                  </Texte>
+                    <Texte style={{ color: t.textOnAccent, fontWeight: "700", fontSize: 14 }}>✕</Texte>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1 }}
+                    onPress={() => setSaisie({ type: "tache", id: x.id, nom: x.nom, freq: x.freq_jours })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Modifier ${x.nom}`}
+                  >
+                    <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={2}>
+                      {x.nom}
+                    </Texte>
+                    <Texte style={[styles.sous, { color: t.textMuted }]}>{libelleFrequence(x.freq_jours)}</Texte>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            ))}
+              ) : (
+                <Glissable key={x.id} renderRightActions={() => actions(x)} options={optionsTache(x)} titre={x.nom}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => basculer(x)}
+                    onLongPress={() => setMenu({ titre: x.nom, options: optionsTache(x) })}
+                    style={[styles.ligne, styles.liseré, { backgroundColor: t.bgCard, borderLeftColor: piece.couleur }]}
+                    accessibilityHint="Toucher : cocher · ⋯ ou glisser : modifier ou supprimer"
+                  >
+                    {case_(x, piece.couleur)}
+                    <View style={{ flex: 1 }}>
+                      <Texte
+                        style={[styles.nom, { color: x.fait_le === auj ? t.textMuted : t.textPrimary }, x.fait_le === auj && { textDecorationLine: "line-through" }]}
+                        numberOfLines={2}
+                      >
+                        {x.nom}
+                      </Texte>
+                      <Texte style={[styles.sous, { color: t.textMuted }]}>
+                        {libelleFrequence(x.freq_jours)} · {etat(x, auj)}
+                      </Texte>
+                    </View>
+                    {boutonPlus(x)}
+                  </TouchableOpacity>
+                </Glissable>
+              ),
+            )}
             <TouchableOpacity
               onPress={() => setSaisie({ type: "tache", nom: "", freq: 7 })}
               style={styles.ajout}
@@ -296,6 +423,15 @@ const styles = StyleSheet.create({
   jauge: { height: 6, borderRadius: 3, overflow: "hidden", marginTop: 4 },
   feuille: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   ajout: { paddingVertical: spacing.md },
+  liseré: { borderLeftWidth: 4 },
+  enteteDroite: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
+  panneau: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, marginBottom: spacing.lg },
+  couleurs: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  pastille: { width: 32, height: 32, borderRadius: 16, borderWidth: 3 },
+  panneauLiens: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.lg },
+  croix: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  actions: { flexDirection: "row", marginBottom: spacing.sm },
+  action: { justifyContent: "center", paddingHorizontal: spacing.lg, borderRadius: radius.lg, marginLeft: spacing.sm },
 });
 
 /** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */

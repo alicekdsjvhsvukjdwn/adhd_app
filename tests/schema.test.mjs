@@ -6,6 +6,7 @@ import {
   SQL_CATEGORIES_RECOMPENSES,
   SQL_CATEGORIES_RECOMPENSES_V2,
   SQL_COULEURS_LISTES,
+  SQL_JOURNAL_DEPUIS_FAITS,
   SQL_SKILLS_DEPUIS_PALIERS,
   SQL_LIGNES_DE_BASE,
   SQL_MOMENTS,
@@ -106,14 +107,17 @@ test("restauration : on ne rejoue que ce que la sauvegarde n'a pas connu", () =>
   const C = SQL_CATEGORIES_RECOMPENSES;
   const S = SQL_SKILLS_DEPUIS_PALIERS;
   const D = SQL_CATEGORIES_RECOMPENSES_V2;
-  assert.deepEqual(transformationsApres(17), [SQL_MOMENTS, SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C, D, S]);
-  assert.deepEqual(transformationsApres(19), [SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C, D, S]);
-  assert.deepEqual(transformationsApres(20), [SQL_COULEURS_LISTES, C, D, S]);
-  assert.deepEqual(transformationsApres(21), [C, D, S]);
-  assert.deepEqual(transformationsApres(22), [D, S]);
-  assert.deepEqual(transformationsApres(23), [D]);
-  assert.deepEqual(transformationsApres(27), [D]);
-  assert.deepEqual(transformationsApres(28), []);
+  const J = SQL_JOURNAL_DEPUIS_FAITS;
+  assert.deepEqual(transformationsApres(17), [SQL_MOMENTS, SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C, D, S, J]);
+  assert.deepEqual(transformationsApres(19), [SQL_VERSIONS_EN_ETAPES, SQL_COULEURS_LISTES, C, D, S, J]);
+  assert.deepEqual(transformationsApres(20), [SQL_COULEURS_LISTES, C, D, S, J]);
+  assert.deepEqual(transformationsApres(21), [C, D, S, J]);
+  assert.deepEqual(transformationsApres(22), [D, S, J]);
+  assert.deepEqual(transformationsApres(23), [D, J]);
+  assert.deepEqual(transformationsApres(27), [D, J]);
+  assert.deepEqual(transformationsApres(28), [J]);
+  assert.deepEqual(transformationsApres(31), [J]);
+  assert.deepEqual(transformationsApres(32), []);
 });
 
 test("21 : anciennes couleurs de listes remappées une à une, rejouable", async () => {

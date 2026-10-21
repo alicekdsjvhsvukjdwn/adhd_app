@@ -106,3 +106,76 @@ export const PIECES_DEFAUT: { nom: string; icone: string; taches: [string, numbe
   { nom: "Linge", icone: "linge", taches: [["Lessive", 3], ["Plier et ranger le linge", 3], ["Serviettes", 7], ["Changer les draps", 14]] },
   { nom: "Courses & poubelles", icone: "courses", taches: [["Sortir les poubelles", 3], ["Faire les courses", 7], ["Trier le recyclage", 7]] },
 ];
+
+// ─── Couleurs des pièces ────────────────────────────────────────────────
+
+/** 8 teintes bien distinctes (clé gardée en base). Dans l'ordre où les pièces de départ les reçoivent. */
+export const COULEURS_MENAGE = {
+  orange: "#FB923C",
+  cyan: "#22D3EE",
+  violet: "#A78BFA",
+  jaune: "#FACC15",
+  rose: "#F472B6",
+  bleu: "#60A5FA",
+  vert: "#4ADE80",
+  corail: "#F87171",
+} as const;
+
+export type CleMenage = keyof typeof COULEURS_MENAGE;
+export const CLES_MENAGE = Object.keys(COULEURS_MENAGE) as CleMenage[];
+
+/** Couleur d'une pièce : sa clé, ou (ligne sans couleur) celle de sa place dans la liste. */
+export const couleurPiece = (cle: string, rang: number): string =>
+  COULEURS_MENAGE[cle as CleMenage] ?? COULEURS_MENAGE[CLES_MENAGE[Math.max(0, rang) % CLES_MENAGE.length]];
+
+/** Première couleur pas encore prise par une autre pièce. */
+export function cleLibre(prises: string[]): CleMenage {
+  return CLES_MENAGE.find((c) => !prises.includes(c)) ?? CLES_MENAGE[prises.length % CLES_MENAGE.length];
+}
+
+// ─── Historique : stats du Progrès et du calendrier ─────────────────────
+
+/** Une tâche cochée (table menage_journal). */
+export type FaitMenage = { tache_id: number; piece_id: number; jour: string; echeance: string; a_temps: number };
+
+/** Faite à temps : le jour de l'échéance, avant, ou avec un jour de grâce. */
+export const aTemps = (echeance: string, jour: string): boolean => joursEntre(echeance, jour) <= 1;
+
+/** Lundi de la semaine qui contient `iso`. */
+const lundiDe = (iso: string): string => decalerJours(iso, -((new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7));
+
+/** Tâches faites par semaine (lundi → dimanche) sur les `n` dernières, la plus ancienne d'abord, par pièce. */
+export function faitesParSemaine(faits: FaitMenage[], aujourdhui: string, n = 8) {
+  const debut = decalerJours(lundiDe(aujourdhui), -7 * (n - 1));
+  const semaines = Array.from({ length: n }, (_, i) => ({ debut: decalerJours(debut, 7 * i), parPiece: {} as Record<number, number>, total: 0 }));
+  for (const f of faits) {
+    const i = Math.floor(joursEntre(debut, f.jour) / 7);
+    if (i < 0 || i >= n) continue;
+    semaines[i].parPiece[f.piece_id] = (semaines[i].parPiece[f.piece_id] ?? 0) + 1;
+    semaines[i].total += 1;
+  }
+  return semaines;
+}
+
+/**
+ * Régularité d'une pièce sur `jours` jours : part des tâches faites à temps parmi celles attendues
+ * (une tâche tous les N jours est attendue une fois par période écoulée depuis sa création).
+ * null : rien d'attendu encore.
+ */
+export function regularite(
+  taches: { id: number; freq_jours: number; cree_le: string }[],
+  faits: FaitMenage[],
+  aujourdhui: string,
+  jours = 30,
+): number | null {
+  const debut = decalerJours(aujourdhui, -(jours - 1));
+  let attendu = 0;
+  let alHeure = 0;
+  for (const t of taches) {
+    const depuis = t.cree_le.slice(0, 10) > debut ? t.cree_le.slice(0, 10) : debut;
+    const faites = faits.filter((f) => f.tache_id === t.id && f.jour >= debut && f.jour <= aujourdhui);
+    attendu += Math.max(faites.length, Math.floor((joursEntre(depuis, aujourdhui) + 1) / Math.max(1, t.freq_jours)));
+    alHeure += faites.filter((f) => f.a_temps).length;
+  }
+  return attendu === 0 ? null : Math.min(1, alHeure / attendu);
+}

@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Texte } from "./Texte";
+import { menageFaitLe, menageParJour } from "../lib/db/menage-stats";
 import { intensiteJours, recapJour, type RecapJour } from "../lib/db/progression";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { useCouleurCategorie } from "../lib/theme-categories";
@@ -68,6 +69,9 @@ export function CalendrierMois() {
   });
   const [niveaux, setNiveaux] = useState<Record<string, number | null>>({});
   const [recap, setRecap] = useState<RecapJour | null>(null);
+  /** Ménage : couleurs des pièces par jour (points) et ce qui a été fait le jour ouvert. */
+  const [menage, setMenage] = useState<Record<string, string[]>>({});
+  const [menageJour, setMenageJour] = useState<{ nom: string; piece: string; couleur: string }[]>([]);
 
   const charger = useCallback(async () => {
     const nb = joursDansMois(mois.annee, mois.mois);
@@ -77,6 +81,7 @@ export function CalendrierMois() {
         iso(mois.annee, mois.mois, nb),
       ),
     );
+    setMenage(await menageParJour(iso(mois.annee, mois.mois, 1), iso(mois.annee, mois.mois, nb)));
   }, [mois]);
 
   useFocusEffect(
@@ -112,6 +117,7 @@ export function CalendrierMois() {
     semaines.push(cases.slice(i, i + 7));
 
   const ouvrir = async (d: string) => {
+    setMenageJour(await menageFaitLe(d));
     setRecap(await recapJour(d));
   };
 
@@ -187,6 +193,13 @@ export function CalendrierMois() {
                 >
                   {jour}
                 </Texte>
+                {(menage[d]?.length ?? 0) > 0 && (
+                  <View style={styles.points} accessibilityLabel="Ménage fait ce jour-là">
+                    {[...new Set(menage[d])].slice(0, 3).map((c) => (
+                      <View key={c} style={[styles.point, { backgroundColor: c }]} />
+                    ))}
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -212,7 +225,7 @@ export function CalendrierMois() {
                     : dateLongue(recap.date)}
                 </Texte>
                 <Texte style={[styles.recapSous, { color: t.textSecondary }]}>
-                  {recap.faits.length === 0
+                  {recap.faits.length === 0 && menageJour.length === 0
                     ? "Rien de coché ce jour-là."
                     : recap.global === null
                       ? "Pas de routine prévue ce jour-là."
@@ -247,6 +260,20 @@ export function CalendrierMois() {
                     </View>
                   );
                 })}
+                {menageJour.length > 0 && (
+                  <View>
+                    <Texte style={[styles.recapGroupe, { color: t.textMuted }]}>Ménage · {menageJour.length}</Texte>
+                    {menageJour.map((m, i) => (
+                      <View key={i} style={styles.ligne}>
+                        <View style={[styles.pastille, { backgroundColor: m.couleur }]} />
+                        <Texte style={[styles.ligneNom, { color: t.textPrimary }]}>
+                          {m.nom}
+                          <Texte style={{ color: t.textMuted }}> · {m.piece}</Texte>
+                        </Texte>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 </ScrollView>
                 <TouchableOpacity
                   style={[styles.fermer, { backgroundColor: t.bgCardActive }]}
@@ -292,6 +319,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   numero: { fontSize: typography.small, fontWeight: "500" },
+  points: { flexDirection: "row", gap: 2, position: "absolute", bottom: 3 },
+  point: { width: 5, height: 5, borderRadius: 3 },
   aide: { fontSize: typography.tiny, marginTop: spacing.sm },
   fond: {
     flex: 1,

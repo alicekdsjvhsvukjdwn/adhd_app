@@ -11,15 +11,25 @@ import {
   ajouterPiece,
   ajouterTacheMenage,
   cocherTacheMenage,
+  colorierPiece,
   decocherTacheMenage,
   deplacerPiece,
   getMenage,
   supprimerPiece,
+  supprimerTacheMenage,
 } from "../lib/db/menage.ts";
+import { menageFaitLe, menageParJour, statsMenage } from "../lib/db/menage-stats.ts";
 import { getStats } from "../lib/db/stats.ts";
 import { REGLES_POINTS } from "../lib/db/recompenses.ts";
 import {
   aFaireAujourdhui,
+  aTemps,
+  CLES_MENAGE,
+  cleLibre,
+  COULEURS_MENAGE,
+  couleurPiece,
+  faitesParSemaine,
+  regularite,
   couleurJauge,
   jauge,
   libelleFrequence,
@@ -176,6 +186,111 @@ test("pièces : ajouter, réordonner, supprimer avec ses tâches ; règle ajout�
   await supprimerPiece(id);
   const fin = await getMenage();
   assert.ok(!fin.pieces.some((p) => p.id === id) && !fin.taches.some((x) => x.piece_id === id));
-  assert.equal((await (await getDatabase()).getAllAsync("SELECT * FROM menage_faits WHERE tache_id = ?", nouvelle.id)).length, 0);
+  // Supprimer retire sans effacer : l'historique reste pour les stats.
+  assert.equal((await (await getDatabase()).getAllAsync("SELECT * FROM menage_journal WHERE tache_id = ?", nouvelle.id)).length, 1);
   assert.ok(REGLES_POINTS.some((r) => /ménage/i.test(r.action) && r.points === "+5"));
+});
+
+// ─── Couleurs, suppression sans perte, statistiques ───
+
+test("couleurs : 8 teintes distinctes, pièces de départ toutes différentes, nouvelle pièce = couleur libre", async () => {
+  assert.equal(new Set(Object.values(COULEURS_MENAGE)).size, 8);
+  const m = await getMenage();
+  const hex = m.pieces.map((p) => p.couleur);
+  assert.equal(new Set(hex).size, m.pieces.length);
+  assert.ok(hex.every((c) => Object.values(COULEURS_MENAGE).includes(c)));
+  const id = await ajouterPiece("Garage");
+  const garage = (await getMenage()).pieces.find((p) => p.id === id);
+  assert.ok(!hex.includes(garage.couleur)); // la 8ᵉ teinte, encore libre
+  await colorierPiece(id, "rose");
+  assert.equal((await getMenage()).pieces.find((p) => p.id === id).couleur, COULEURS_MENAGE.rose);
+  await colorierPiece(id, "n'importe quoi"); // clé inconnue : ignorée
+  assert.equal((await getMenage()).pieces.find((p) => p.id === id).couleur, COULEURS_MENAGE.rose);
+  assert.equal(couleurPiece("", 2), COULEURS_MENAGE[CLES_MENAGE[2]]); // ancienne ligne sans couleur
+  assert.equal(cleLibre(CLES_MENAGE.slice(0, 3)), CLES_MENAGE[3]);
+  await supprimerPiece(id);
+});
+
+test("supprimer une tâche : plus proposée, historique gardé, comptée dans les stats", async () => {
+  const db = await getDatabase();
+  const id = await ajouterPiece("Bureau");
+  await ajouterTacheMenage(id, "Poussière", 7);
+  const tache = (await getMenage()).taches.find((x) => x.piece_id === id);
+  await cocherTacheMenage(tache.id);
+  const lignes = () => db.getAllAsync("SELECT * FROM menage_journal WHERE tache_id = ?", tache.id);
+  assert.equal((await lignes()).length, 1);
+
+  await supprimerTacheMenage(tache.id);
+  const m = await getMenage();
+  assert.ok(!m.taches.some((x) => x.id === tache.id));
+  assert.ok(!aFaireAujourdhui(m.taches, J, { max: 99 }).visibles.some((x) => x.id === tache.id));
+  assert.equal((await lignes()).length, 1); // l'historique reste
+  assert.equal((await db.getFirstAsync("SELECT COUNT(*) AS n FROM menage_taches WHERE id = ?", tache.id)).n, 1);
+  assert.equal((await statsMenage(J)).semaines.at(-1).total >= 1, true);
+
+  // Pièce supprimée : disparaît des pièces, ses cochages restent dans les barres (couleur gardée).
+  await supprimerPiece(id);
+  const apres = await statsMenage(J);
+  assert.ok(!apres.pieces.some((p) => p.id === id));
+  assert.ok(apres.semaines.at(-1).parts.some((p) => p.nom === "Bureau"));
+});
+
+test("cocher écrit le journal (à temps ou en retard), décocher le retire ; le calendrier le montre", async () => {
+  const db = await getDatabase();
+  const id = await ajouterPiece("Atelier");
+  await ajouterTacheMenage(id, "Balayer", 3);
+  const t1 = (await getMenage()).taches.find((x) => x.piece_id === id);
+  await db.runAsync("UPDATE menage_taches SET prochaine_le = ? WHERE id = ?", decalerJours(J, -5), t1.id); // 5 jours de retard
+  await cocherTacheMenage(t1.id);
+  const l = await db.getAllAsync("SELECT a_temps FROM menage_journal WHERE tache_id = ?", t1.id);
+  assert.deepEqual(l.map((x) => x.a_temps), [0]);
+  const couleur = (await getMenage()).pieces.find((p) => p.id === id).couleur;
+  assert.equal((await menageParJour(J, J))[J].includes(couleur), true);
+  assert.ok((await menageFaitLe(J)).some((x) => x.nom === "Balayer" && x.couleur === couleur));
+  await decocherTacheMenage(t1.id);
+  assert.equal((await db.getAllAsync("SELECT * FROM menage_journal WHERE tache_id = ?", t1.id)).length, 0);
+  await supprimerPiece(id);
+});
+
+test("à temps : le jour même, avant, ou un jour de grâce", () => {
+  assert.equal(aTemps("2026-10-21", "2026-10-21"), true);
+  assert.equal(aTemps("2026-10-21", "2026-10-19"), true);
+  assert.equal(aTemps("2026-10-21", "2026-10-22"), true);
+  assert.equal(aTemps("2026-10-21", "2026-10-23"), false);
+});
+
+test("Progrès : tâches par semaine (8 semaines, lundi → dimanche) et par pièce", () => {
+  // AUJ = mercredi 21/10/2026 ; semaine courante = 19 → 25/10
+  const f = (jour, piece, tache = 1) => ({ tache_id: tache, piece_id: piece, jour, echeance: jour, a_temps: 1 });
+  const faits = [f("2026-10-19", 1), f("2026-10-21", 1), f("2026-10-25", 2), f("2026-10-18", 2), f("2026-08-31", 1), f("2026-08-30", 1)];
+  const s = faitesParSemaine(faits, AUJ, 8);
+  assert.equal(s.length, 8);
+  assert.equal(s.at(-1).debut, "2026-10-19");
+  assert.deepEqual(s.at(-1).parPiece, { 1: 2, 2: 1 });
+  assert.equal(s.at(-2).total, 1); // dimanche 18 : semaine d'avant
+  assert.equal(s[0].debut, "2026-08-31");
+  assert.equal(s[0].total, 1); // le 30/08 est trop ancien
+});
+
+test("Progrès : régularité sur 30 jours (attendu selon la fréquence, à temps seulement)", () => {
+  const vieille = "2026-01-01T00:00:00.000Z";
+  const fait = (jour, a_temps = 1) => ({ tache_id: 1, piece_id: 1, jour, echeance: jour, a_temps });
+  const hebdo = [{ id: 1, freq_jours: 7, cree_le: vieille }];
+  // 30 jours / 7 = 4 attendues ; 3 à temps et 1 en retard → 3/4
+  assert.equal(regularite(hebdo, [fait("2026-10-02"), fait("2026-10-09"), fait("2026-10-16"), fait("2026-10-20", 0)], AUJ), 0.75);
+  // Rien fait : 0, pas « pas de donnée »
+  assert.equal(regularite(hebdo, [], AUJ), 0);
+  // Tâche toute récente : rien d'attendu encore
+  assert.equal(regularite([{ id: 1, freq_jours: 7, cree_le: "2026-10-20T08:00:00Z" }], [], AUJ), null);
+  // Aucune tâche
+  assert.equal(regularite([], [], AUJ), null);
+  // Plus de cochages que d'attendu : plafonné à 1
+  assert.equal(regularite([{ id: 1, freq_jours: 30, cree_le: vieille }], [fait("2026-10-01"), fait("2026-10-05")], AUJ), 1);
+});
+
+test("Progrès (base) : stats par pièce, jauge entre 0 et 1", async () => {
+  const stats = await statsMenage(J);
+  assert.equal(stats.semaines.length, 8);
+  assert.ok(stats.pieces.length >= 7);
+  for (const p of stats.pieces) assert.ok(p.jauge >= 0 && p.jauge <= 1);
 });

@@ -268,7 +268,14 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   },
   menage_pieces: {
     table: "Ménage : les pièces, dans l'ordre d'affichage.",
-    colonnes: { id: "identifiant", nom: "texte", icone: "clé de l'icône ('cuisine', 'bain', 'chambre', 'salon', 'entree', 'linge', 'courses', 'maison')", ordre: "position, 0 = première" },
+    colonnes: {
+      id: "identifiant",
+      nom: "texte",
+      icone: "clé de l'icône ('cuisine', 'bain', 'chambre', 'salon', 'entree', 'linge', 'courses', 'maison')",
+      ordre: "position, 0 = première",
+      couleur: "clé de la couleur ('orange', 'cyan', 'violet', 'jaune', 'rose', 'bleu', 'vert', 'corail') ; vide = couleur de sa place",
+      supprimee_le: "pièce supprimée (ISO) : elle n'est plus affichée, son historique reste",
+    },
   },
   menage_taches: {
     table: "Ménage : les tâches de chaque pièce, avec leur fréquence et leur prochaine échéance.",
@@ -283,6 +290,18 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       points_donnes: `le dernier cochage a rapporté 5 points : ${BOOL}`,
       ordre: "position dans la pièce",
       cree_le: ISO,
+      supprimee_le: "tâche supprimée (ISO) : elle n'est plus proposée, son historique reste",
+    },
+  },
+  menage_journal: {
+    table: "Ménage : une ligne par cochage (sert aux statistiques du Progrès et au calendrier).",
+    colonnes: {
+      id: "identifiant",
+      tache_id: "tâche (table menage_taches)",
+      piece_id: "pièce (table menage_pieces)",
+      jour: `jour du cochage, ${JOUR}`,
+      echeance: `échéance honorée, ${JOUR}`,
+      a_temps: `fait au plus tard un jour après l'échéance : ${BOOL}`,
     },
   },
   menage_faits: {
