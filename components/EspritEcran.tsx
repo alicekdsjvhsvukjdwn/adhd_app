@@ -6,9 +6,10 @@ import { useJourCourant } from "../hooks/useJourCourant";
 import { decalerJours } from "../lib/dates";
 import { ecrireBilan, humeursEntre, lireBilan, listerPensees } from "../lib/db/esprit";
 import { meditationsRecentes } from "../lib/db/meditations";
-import { prochaineSeanceTcc } from "../lib/db/tcc";
-import { bandeauSeance, moyenne, type SeanceTcc } from "../lib/esprit-regles";
+import { lireReglagesSeanceMoi, ouJenSuis, seancesMoi } from "../lib/db/tcc";
+import { moyenne } from "../lib/esprit-regles";
 import { semaineDe } from "../lib/regles-taches";
+import { lundiDe } from "../lib/tcc-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { HumeurRapide } from "./HumeurRapide";
 import { ChampTexte, Texte } from "./Texte";
@@ -98,21 +99,33 @@ function MaSemaine({ aujourdhui }: { aujourdhui: string }) {
 }
 
 /**
- * Suivi › Esprit : l'humeur d'abord, puis le journal de pensées, Ma TCC, Méditer et Ma vision.
+ * Suivi › Esprit : l'humeur d'abord, puis le journal de pensées, Mon programme (TCC en autonomie), Méditer et Ma vision.
  * Pas de points pour l'humeur ni le journal. Le 3114 reste en bas.
  */
 export function EspritEcran() {
   const router = useRouter();
   const t = useTheme();
   const aujourdhui = useJourCourant();
-  const [seance, setSeance] = useState<SeanceTcc | null>(null);
+  /** C'est le jour que j'ai choisi pour ma séance avec moi, et elle n'est pas encore faite cette semaine. */
+  const [jourDeSeance, setJourDeSeance] = useState(false);
+  const [programme, setProgramme] = useState("Anxiété sociale, confiance");
   const [meditations, setMeditations] = useState(0);
   const [entrees, setEntrees] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        setSeance(await prochaineSeanceTcc());
+        const r = await lireReglagesSeanceMoi();
+        const faite = (await seancesMoi()).some((s) => s.semaine === lundiDe(aujourdhui));
+        setJourDeSeance(r.actif && new Date(aujourdhui + "T00:00:00Z").getUTCDay() === r.jour && !faite);
+        const o = await ouJenSuis(aujourdhui);
+        setProgramme(
+          o.objectifs.length > 0
+            ? `Objectif : ${o.objectifs.filter((x) => x.atteint).length}/${o.objectifs.length} atteint${o.objectifs.length > 1 ? "s" : ""}`
+            : o.marches.total > 0
+              ? `${o.marches.franchies}/${o.marches.total} marches franchies`
+              : "Anxiété sociale, confiance",
+        );
         setMeditations(await meditationsRecentes(decalerJours(aujourdhui, -6)));
         setEntrees((await listerPensees()).length);
       })();
@@ -120,7 +133,6 @@ export function EspritEcran() {
   );
 
   const dimanche = new Date(aujourdhui + "T00:00:00Z").getUTCDay() === 0;
-  const bandeau = bandeauSeance(seance, aujourdhui);
   const aller = (route: string) => router.push(route as never);
 
   const tuile = (Icone: typeof Eye, couleur: string, titre: string, sous: string, route: string) => (
@@ -140,13 +152,13 @@ export function EspritEcran() {
     <ScrollView style={styles.ecran} contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }} keyboardShouldPersistTaps="handled">
       <Texte style={[styles.grandTitre, { color: t.textPrimary }]}>Esprit</Texte>
 
-      {bandeau && (
+      {jourDeSeance && (
         <TouchableOpacity
-          onPress={() => aller("/tcc")}
+          onPress={() => aller("/seance-moi")}
           style={[styles.bandeau, { backgroundColor: t.bgHighlight, borderColor: t.accent }]}
           accessibilityRole="button"
         >
-          <Texte style={{ color: t.textPrimary, fontSize: typography.bodySmall }}>{bandeau} · préparer</Texte>
+          <Texte style={{ color: t.textPrimary, fontSize: typography.bodySmall }}>C&apos;est le jour de ta séance avec toi · commencer</Texte>
         </TouchableOpacity>
       )}
 
@@ -161,7 +173,7 @@ export function EspritEcran() {
       <View style={styles.grille}>
         {tuile(PenLine, "#A78BFA", "Noter une pensée", "Étape par étape", "/pensee")}
         {tuile(BookHeart, "#F472B6", "Mon journal", entrees > 0 ? `${entrees} entrée${entrees > 1 ? "s" : ""}` : "Rien pour l'instant", "/journal")}
-        {tuile(HeartHandshake, "#60A5FA", "Ma TCC", seance ? "Séance à venir" : "Séances, exercices, notes", "/tcc")}
+        {tuile(HeartHandshake, "#60A5FA", "Mon programme", programme, "/tcc")}
         {tuile(Flower2, "#34D399", "Méditer", meditations > 0 ? `${meditations} cette semaine` : "1 min suffit", "/mediter")}
         {tuile(Eye, "#FACC15", "Ma vision", "Photos et phrases", "/vision")}
         {tuile(Eye, "#22D3EE", "Lire ma vision", "Plein écran, doucement", "/vision-lecture")}

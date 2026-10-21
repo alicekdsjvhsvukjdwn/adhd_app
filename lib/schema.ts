@@ -443,6 +443,75 @@ export const SQL_TABLES_ESPRIT = `
 `;
 
 /**
+ * Migration 33 : TCC en autonomie (anxiété sociale, confiance en soi). Données sensibles : elles restent
+ * sur l'appareil. Les anciennes tables de la TCC avec un thérapeute (tcc_seances, tcc_exercices,
+ * tcc_exercices_faits, a_dire) restent telles quelles : l'appli ne les lit plus, la sauvegarde et le CSV les gardent.
+ */
+export const SQL_TCC_AUTONOME = `
+  CREATE TABLE IF NOT EXISTS tcc_echelle (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    -- anxiété imaginée, 0 à 100
+    anxiete INTEGER NOT NULL DEFAULT 50,
+    -- pensée du journal que cette marche permet de tester
+    pensee_id INTEGER,
+    archivee INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS tcc_expositions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    situation_id INTEGER NOT NULL DEFAULT 0,
+    jour TEXT NOT NULL DEFAULT '',
+    anx_prevue INTEGER,
+    crainte TEXT NOT NULL DEFAULT '',
+    -- vide tant que l'exposition n'est pas terminée
+    anx_reelle INTEGER,
+    vecu TEXT NOT NULL DEFAULT '',
+    retenu TEXT NOT NULL DEFAULT '',
+    -- comportements de sécurité utilisés, séparés par des |
+    securite TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_tcc_expositions_jour ON tcc_expositions(jour);
+  CREATE TABLE IF NOT EXISTS tcc_confiance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour TEXT NOT NULL DEFAULT '',
+    texte TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_tcc_confiance_jour ON tcc_confiance(jour);
+  CREATE TABLE IF NOT EXISTS tcc_objectifs (
+    -- lundi de la semaine
+    semaine TEXT NOT NULL DEFAULT '',
+    -- 'expositions' | 'confiance' | 'experiences' | 'seance'
+    genre TEXT NOT NULL DEFAULT '',
+    cible INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (semaine, genre)
+  );
+  CREATE TABLE IF NOT EXISTS tcc_seances_moi (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour TEXT NOT NULL DEFAULT '',
+    semaine TEXT NOT NULL DEFAULT '',
+    humeur_moy REAL,
+    anx_prevue_moy REAL,
+    anx_reelle_moy REAL,
+    expositions INTEGER NOT NULL DEFAULT 0,
+    confiance INTEGER NOT NULL DEFAULT 0,
+    -- objectifs de la semaine et ce qui a été fait, en JSON
+    objectifs TEXT NOT NULL DEFAULT '',
+    retenu TEXT NOT NULL DEFAULT '',
+    prochain_pas TEXT NOT NULL DEFAULT '',
+    situation_id INTEGER,
+    -- objectifs choisis pour la semaine suivante, en JSON
+    objectifs_suivants TEXT NOT NULL DEFAULT '',
+    mot_gentil TEXT NOT NULL DEFAULT ''
+  );
+  -- Un jour avec exposition ou séance avec moi-même rapporte 5 points, une seule fois.
+  CREATE TABLE IF NOT EXISTS tcc_points_jours (
+    jour TEXT PRIMARY KEY NOT NULL DEFAULT ''
+  );
+`;
+
+/**
  * Migration 32 : ménage. Une couleur par pièce ; supprimer une pièce ou une tâche la retire
  * sans effacer son historique (supprimee_le) ; un journal des cochages pour les stats du Progrès.
  * Les couleurs de départ suivent l'ordre des pièces (8 teintes distinctes, voir lib/menage-regles.ts).

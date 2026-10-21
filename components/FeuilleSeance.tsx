@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import { decalerJours } from "../lib/dates";
 import { hhmmDe, minutesDe } from "../lib/suivi-regles";
-import { dateCourte } from "../lib/tcc-resume";
+import { dateCourte } from "../lib/esprit-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { PlusMoins } from "./PlusMoins";
 import { Texte } from "./Texte";

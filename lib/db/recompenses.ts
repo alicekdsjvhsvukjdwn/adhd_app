@@ -72,7 +72,7 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
     points: `+${POINTS_MEDITATION}`,
   },
   {
-    action: "Un exercice de TCC fait (une fois par jour, même s'il y en a plusieurs). Humeurs et journal : jamais de points",
+    action: "Une exposition ou ma séance avec moi-même (TCC en autonomie), une fois par jour. Humeur et journaux : jamais de points",
     points: `+${POINTS_TCC}`,
   },
   {

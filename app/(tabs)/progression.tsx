@@ -12,6 +12,7 @@ import { Texte } from "../../components/Texte";
 import Svg, { Circle } from "react-native-svg";
 import { CalendrierMois } from "../../components/CalendrierMois";
 import { SectionHumeur } from "../../components/SectionHumeur";
+import { SectionConfiance } from "../../components/SectionConfiance";
 import { SectionMenage } from "../../components/SectionMenage";
 import { LiensSommeilSport } from "../../components/LiensSommeilSport";
 import { remettreAFaire } from "../../lib/db/etapes";
@@ -369,6 +370,7 @@ export default function Progression() {
       <LiensSommeilSport />
 
       <SectionHumeur />
+      <SectionConfiance />
 
     </ScrollView>
   );

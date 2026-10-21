@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useJourCourant } from "../hooks/useJourCourant";
-import { ajouterADire } from "../lib/db/tcc";
 import { enregistrerHumeur, humeursEntre, majHumeur, supprimerHumeur } from "../lib/db/esprit";
 import {
   couleurHumeur,
@@ -32,7 +31,6 @@ export function HumeurRapide() {
   const [semaine, setSemaine] = useState<HumeurNotee[]>([]);
   /** L'humeur dont on complète les émotions et la note. */
   const [choisie, setChoisie] = useState<number | null>(null);
-  const [aDire, setADire] = useState(false);
 
   const charger = useCallback(async () => {
     const jours = semaineDe(aujourdhui);
@@ -55,7 +53,6 @@ export function HumeurRapide() {
     } else {
       setChoisie(await enregistrerHumeur(niveau));
     }
-    setADire(false);
     await charger();
   };
 
@@ -76,13 +73,6 @@ export function HumeurRapide() {
     if (!humeur) return;
     setSemaine((s) => s.map((h) => (h.id === humeur.id ? { ...h, note } : h)));
     await majHumeur(humeur.id, { note });
-  };
-
-  const onADire = async () => {
-    if (!humeur) return;
-    const n = HUMEURS[humeur.niveau - 1].libelle.toLowerCase();
-    await ajouterADire(`Humeur du ${humeur.jour.split("-").reverse().slice(0, 2).join("/")} à ${humeur.heure} : ${n}${humeur.note ? ` — ${humeur.note}` : ""}`, "humeur");
-    setADire(true);
   };
 
   const onSupprimer = async () => {
@@ -143,11 +133,7 @@ export function HumeurRapide() {
             style={[styles.champ, { color: t.textPrimary, borderColor: t.border, backgroundColor: t.bgApp }]}
           />
           <View style={styles.actions}>
-            <TouchableOpacity onPress={onADire} disabled={aDire} hitSlop={8} accessibilityRole="button">
-              <Texte style={{ color: aDire ? t.textMuted : t.accentText, fontSize: typography.small }}>
-                {aDire ? "✓ Ajouté à « À dire en séance »" : "＋ À dire en séance"}
-              </Texte>
-            </TouchableOpacity>
+            <View />
             <View style={styles.actions}>
               <TouchableOpacity onPress={onSupprimer} hitSlop={8}>
                 <Texte style={{ color: t.danger, fontSize: typography.small }}>Supprimer</Texte>

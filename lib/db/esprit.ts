@@ -119,15 +119,6 @@ export async function listerPensees(emotion?: string): Promise<Pensee[]> {
   return emotion ? toutes.filter((p) => p.emotions.split(",").includes(emotion)) : toutes;
 }
 
-export async function penseesMarquees(debut: string, fin: string): Promise<Pensee[]> {
-  const db = await getDatabase();
-  return db.getAllAsync<Pensee>(
-    `SELECT ${COLONNES} FROM pensees WHERE a_dire = 1 AND jour >= ? AND jour <= ? ORDER BY jour, heure, id`,
-    debut,
-    fin,
-  );
-}
-
 // ─── Ma semaine (dimanche) ──────────────────────────────────────────────
 
 export type Bilan = { semaine: string; aide: string; garder: string };

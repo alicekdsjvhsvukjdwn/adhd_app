@@ -112,57 +112,12 @@ export function liensHumeur(p: {
   ];
 }
 
-// ─── Séances de TCC et rappel ───────────────────────────────────────────
+// ─── Dates ──────────────────────────────────────────────────────────────
 
-export type SeanceTcc = { id: number; date: string; heure: string };
-
-/** La prochaine séance : la première dont le jour n'est pas passé. */
-export function prochaineSeance<T extends { date: string }>(seances: T[], aujourdhui: string): T | null {
-  return [...seances].filter((s) => s.date >= aujourdhui).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
-}
-
-/** La dernière séance passée (jour strictement avant `avant`). */
-export function derniereSeance<T extends { date: string }>(seances: T[], avant: string): T | null {
-  return [...seances].filter((s) => s.date < avant).sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-}
-
-/** Heure du rappel de la veille. */
-export const HEURE_RAPPEL_SEANCE = 18;
-
-/**
- * Moment de la notification de la veille (heure locale de l'appareil), ou null si c'est déjà passé.
- * `maintenant` en paramètre pour les tests.
- */
-export function rappelDeSeance(seance: { date: string }, maintenant: Date): Date | null {
-  const [a, m, j] = decalerJours(seance.date, -1).split("-").map(Number);
-  const d = new Date(a, m - 1, j, HEURE_RAPPEL_SEANCE, 0, 0);
-  return d.getTime() > maintenant.getTime() ? d : null;
-}
-
-/** Texte à afficher dans l'appli la veille et le jour de la séance (le web n'a pas de notification locale). */
-export function bandeauSeance(seance: SeanceTcc | null, aujourdhui: string): string | null {
-  if (!seance) return null;
-  if (seance.date === aujourdhui) return `Séance de TCC aujourd'hui à ${seance.heure}`;
-  if (seance.date === decalerJours(aujourdhui, 1)) return `Séance de TCC demain à ${seance.heure}`;
-  return null;
-}
-
-// ─── Exercices de la psy ────────────────────────────────────────────────
-
-export type ExerciceTcc = {
-  id: number;
-  nom: string;
-  consigne: string;
-  /** 'jour' : chaque jour ; 'semaine' : freq_n fois par semaine. */
-  freq_type: "jour" | "semaine";
-  freq_n: number;
-  /** '' | 'journal' | 'respiration' | 'meditation' */
-  lien: string;
+const JOURS_COURTS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
+const MOIS_COURTS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+/** « mer. 21 oct. » */
+export const dateCourte = (iso: string) => {
+  const d = new Date(iso + "T00:00:00Z");
+  return `${JOURS_COURTS[d.getUTCDay()]} ${d.getUTCDate()} ${MOIS_COURTS[d.getUTCMonth()]}`;
 };
-
-/** Pastilles de la semaine : combien visées, combien faites (jours de la semaine donnée). */
-export function progressionExercice(ex: Pick<ExerciceTcc, "freq_type" | "freq_n">, faits: string[], semaine: string[]) {
-  const cible = ex.freq_type === "jour" ? 7 : Math.min(7, Math.max(1, ex.freq_n));
-  const faitsCetteSemaine = new Set(faits.filter((j) => semaine.includes(j))).size;
-  return { cible, faits: Math.min(faitsCetteSemaine, 7) };
-}

@@ -261,7 +261,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   meta: {
     table: "Valeurs diverses, clé → valeur.",
     colonnes: {
-      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' et 'trois_compose:AAAA-MM-JJ' (anciens réglages de Mes 3, plus lus) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache)",
+      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' et 'trois_compose:AAAA-MM-JJ' (anciens réglages de Mes 3, plus lus) | 'tcc_seance_moi' (jour et rappel de ma séance avec moi-même, JSON) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache)",
       valeur:
         "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1 ; nuit_en_cours : jour et heure locaux du coucher, 'AAAA-MM-JJ HH:MM' ; nuit_reponses : JSON {qualite?, ecrans?}",
     },
@@ -336,15 +336,15 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       pieges: "pièges de pensée, séparés par des virgules",
       autre_vision: "une autre façon de voir, texte libre",
       intensite_apres: "force de l'émotion après, 0–100 ; vide si non notée",
-      a_dire: "0 rien | 1 à en parler en séance | 2 abordée",
+      a_dire: "ancien repère « à en parler en séance » (plus utilisé) : 0 rien | 1 marquée | 2 abordée",
     },
   },
   tcc_seances: {
-    table: "Ma TCC : les séances (dates et heures).",
+    table: "Ancienne TCC avec thérapeute (plus utilisée par l'appli, gardée dans la sauvegarde) : les séances (dates et heures).",
     colonnes: { id: "identifiant", date: JOUR, heure: "HH:MM" },
   },
   tcc_exercices: {
-    table: "Ma TCC : les exercices donnés par la psy.",
+    table: "Ancienne TCC avec thérapeute (plus utilisée) : les exercices donnés.",
     colonnes: {
       id: "identifiant",
       nom: "texte",
@@ -357,12 +357,68 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
     },
   },
   tcc_exercices_faits: {
-    table: "Ma TCC : un exercice fait un jour donné (+5 points par jour, au premier exercice).",
+    table: "Ancienne TCC avec thérapeute (plus utilisée) : un exercice fait un jour donné.",
     colonnes: { exercice_id: "exercice (table tcc_exercices)", jour: JOUR },
   },
   a_dire: {
-    table: "Ma TCC : notes « à dire en séance ».",
+    table: "Ancienne TCC avec thérapeute (plus utilisée) : notes « à dire en séance ».",
     colonnes: { id: "identifiant", texte: "texte libre", source: "'note' | 'humeur' | 'journal'", fait: `abordée : ${BOOL}`, cree_le: ISO },
+  },
+  tcc_echelle: {
+    table: "Mon programme (TCC en autonomie) : l'échelle d'exposition, les situations sociales de la plus facile à la plus dure. Données sensibles.",
+    colonnes: {
+      id: "identifiant",
+      nom: "texte",
+      anxiete: "anxiété imaginée, 0–100",
+      pensee_id: "pensée du journal que cette marche permet de tester (table pensees) ; vide sinon",
+      archivee: `retirée de l'échelle : ${BOOL}`,
+      cree_le: ISO,
+    },
+  },
+  tcc_expositions: {
+    table: "Mon programme : une ligne par exposition (avant / après). Données sensibles.",
+    colonnes: {
+      id: "identifiant",
+      situation_id: "marche (table tcc_echelle)",
+      jour: JOUR,
+      anx_prevue: "anxiété prévue avant, 0–100",
+      crainte: "ce que je craignais, texte libre",
+      anx_reelle: "anxiété réelle après, 0–100 ; vide tant que l'exposition n'est pas terminée",
+      vecu: "ce qui s'est passé, texte libre",
+      retenu: "ce que j'en retiens, texte libre",
+      securite: "comportements de sécurité utilisés, séparés par des |",
+    },
+  },
+  tcc_confiance: {
+    table: "Mon programme : le journal de confiance (1 à 3 lignes par jour). Données sensibles.",
+    colonnes: { id: "identifiant", jour: JOUR, texte: "une chose bien faite ou une qualité, texte libre", cree_le: ISO },
+  },
+  tcc_objectifs: {
+    table: "Mon programme : les objectifs de chaque semaine (1 à 3).",
+    colonnes: { semaine: `lundi de la semaine, ${JOUR}`, genre: "'expositions' | 'confiance' | 'experiences' | 'seance'", cible: "nombre visé" },
+  },
+  tcc_seances_moi: {
+    table: "Mon programme : les séances avec moi-même, avec le récap de la semaine tel qu'il était. Données sensibles.",
+    colonnes: {
+      id: "identifiant",
+      jour: JOUR,
+      semaine: `lundi de la semaine, ${JOUR}`,
+      humeur_moy: "humeur moyenne de la semaine, 1–5 ; vide si rien noté",
+      anx_prevue_moy: "anxiété prévue moyenne, 0–100",
+      anx_reelle_moy: "anxiété réelle moyenne, 0–100",
+      expositions: "expositions de la semaine",
+      confiance: "lignes de confiance de la semaine",
+      objectifs: "objectifs de la semaine et ce qui a été atteint, JSON",
+      retenu: "ce que j'en retiens, texte libre",
+      prochain_pas: "nom de la marche choisie comme prochain pas",
+      situation_id: "marche choisie (table tcc_echelle)",
+      objectifs_suivants: "objectifs choisis pour la semaine suivante, JSON",
+      mot_gentil: "un mot gentil pour moi, texte libre",
+    },
+  },
+  tcc_points_jours: {
+    table: "Mon programme : un jour avec exposition ou séance a rapporté 5 points (une seule fois par jour).",
+    colonnes: { jour: JOUR },
   },
   bilan_semaine: {
     table: "Esprit : « Ma semaine » du dimanche.",

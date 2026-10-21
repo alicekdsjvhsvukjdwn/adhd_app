@@ -3,7 +3,8 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Curseur } from "../components/Curseur";
 import { ChampTexte, Texte } from "../components/Texte";
-import { ajouterPensee, majPensee } from "../lib/db/esprit";
+import { ajouterPensee } from "../lib/db/esprit";
+import { situationDepuisPensee } from "../lib/db/tcc";
 import { EMOTIONS, emotionsEnTexte, PIEGES } from "../lib/esprit-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
@@ -33,7 +34,7 @@ export default function Pensee() {
   const [pieges, setPieges] = useState<string[]>([]);
   const [autre, setAutre] = useState("");
   const [apres, setApres] = useState<number | null>(null);
-  const [enregistree, setEnregistree] = useState<{ id: number; aDire: boolean } | null>(null);
+  const [enregistree, setEnregistree] = useState<{ id: number } | null>(null);
 
   const etape = ETAPES[i];
   const dernier = i === ETAPES.length - 1;
@@ -51,14 +52,13 @@ export default function Pensee() {
       autre_vision: autre,
       intensite_apres: apresFinal,
     });
-    setEnregistree({ id, aDire: false });
+    setEnregistree({ id });
   };
 
-  const basculerADire = async () => {
+  /** La pensée devient une marche à tester sur l'échelle d'exposition, avec la pensée comme prédiction. */
+  const tester = async () => {
     if (!enregistree) return;
-    const aDire = !enregistree.aDire;
-    await majPensee(enregistree.id, { a_dire: aDire ? 1 : 0 });
-    setEnregistree({ ...enregistree, aDire });
+    router.replace(`/exposition?situation=${await situationDepuisPensee(enregistree.id, { pensee, situation, avant })}` as never);
   };
 
   if (enregistree) {
@@ -70,16 +70,12 @@ export default function Pensee() {
             L&apos;émotion est passée de {avant} à {apres} sur 100.
           </Texte>
         )}
-        <TouchableOpacity
-          onPress={basculerADire}
-          style={[styles.option, { borderColor: enregistree.aDire ? t.accent : t.border, backgroundColor: enregistree.aDire ? t.bgHighlight : t.bgCard }]}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: enregistree.aDire }}
-        >
-          <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>
-            {enregistree.aDire ? "✓ " : ""}À en parler en séance
-          </Texte>
-        </TouchableOpacity>
+        {pensee.trim() ? (
+          <TouchableOpacity onPress={tester} style={[styles.option, { borderColor: t.accent, backgroundColor: t.bgCard }]} accessibilityRole="button">
+            <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>🧪 Tester cette pensée</Texte>
+            <Texte style={{ color: t.textMuted, fontSize: typography.small }}>En faire une marche de mon échelle d&apos;exposition</Texte>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity onPress={() => router.back()} style={[styles.suivant, { backgroundColor: t.accent }]} accessibilityRole="button">
           <Texte style={{ color: t.textOnAccent, fontWeight: "700", fontSize: typography.body }}>Fermer</Texte>
         </TouchableOpacity>

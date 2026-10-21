@@ -4,8 +4,8 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View
 import { Curseur } from "../components/Curseur";
 import { Texte } from "../components/Texte";
 import { listerPensees, majPensee, supprimerPensee, type Pensee } from "../lib/db/esprit";
-import { dateCourte } from "../lib/tcc-resume";
-import { emotionsDe } from "../lib/esprit-regles";
+import { situationDepuisPensee } from "../lib/db/tcc";
+import { dateCourte, emotionsDe } from "../lib/esprit-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /** Mon journal : les pensées notées, filtrables par émotion. Aucun point, aucun conseil. */
@@ -17,6 +17,10 @@ export default function Journal() {
   const [ouverte, setOuverte] = useState<number | null>(null);
 
   const charger = useCallback(async () => setToutes(await listerPensees()), []);
+  const tester = async (e: Pensee) => {
+    setOuverte(null);
+    router.push(`/exposition?situation=${await situationDepuisPensee(e)}` as never);
+  };
   useFocusEffect(
     useCallback(() => {
       charger();
@@ -97,7 +101,6 @@ export default function Journal() {
               <Texte style={{ color: t.textMuted, fontSize: typography.small, flex: 1 }}>
                 {dateCourte(e.jour)} · {e.heure}
               </Texte>
-              {e.a_dire === 1 && <Texte style={{ color: t.accentText, fontSize: typography.small }}>★ à en parler</Texte>}
             </View>
             <Texte style={{ color: t.textPrimary, fontSize: typography.body, marginTop: 2 }} numberOfLines={2}>
               {e.pensee || e.situation || "(entrée sans texte)"}
@@ -139,14 +142,16 @@ export default function Journal() {
                     <Texte style={{ color: t.textMuted, fontSize: typography.small, textAlign: "center" }}>Avant : {p.intensite_avant}</Texte>
                   </View>
                 )}
-                <TouchableOpacity
-                  onPress={() => changer({ a_dire: p.a_dire === 1 ? 0 : 1 })}
-                  style={[styles.option, { borderColor: p.a_dire === 1 ? t.accent : t.border }]}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: p.a_dire === 1 }}
-                >
-                  <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>{p.a_dire === 1 ? "★ " : "☆ "}À en parler en séance</Texte>
-                </TouchableOpacity>
+                {p.pensee ? (
+                  <TouchableOpacity
+                    onPress={() => tester(p)}
+                    style={[styles.option, { borderColor: t.accent }]}
+                    accessibilityRole="button"
+                  >
+                    <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>🧪 Tester cette pensée</Texte>
+                    <Texte style={{ color: t.textMuted, fontSize: typography.small }}>En faire une marche de mon échelle d&apos;exposition</Texte>
+                  </TouchableOpacity>
+                ) : null}
                 <View style={[styles.ligne, { marginTop: spacing.lg }]}>
                   <TouchableOpacity onPress={supprimer} hitSlop={8}>
                     <Texte style={{ color: t.danger, fontSize: typography.body }}>Supprimer</Texte>
