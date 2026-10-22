@@ -10,7 +10,7 @@ import { initialiserBase } from "../lib/db/demarrage.ts";
 import { addItem } from "../lib/db/items.ts";
 import { genererPropositions } from "../lib/db/moteur.ts";
 import { bonusDuJour, emplacementsDuJour, etoiler, faitesPour, placerDansTrois, placerEnBonus, planifications, retirerDesTrois, retirerDuBonus } from "../lib/db/trois.ts";
-import { composerBonus, composerTrois, faiteAvant, troisFaits } from "../lib/trois-regles.ts";
+import { composerBonus, composerTrois, etatBonus, faiteAvant, troisFaits } from "../lib/trois-regles.ts";
 
 const vide = { stockes: [], dus: [], veille: [], ordre: [] };
 
@@ -42,6 +42,17 @@ test("bonus : dans l'ordre où je les place, les faits restent, une tâche suppr
   const b = composerBonus({ stockes: [{ itemId: 8, rang: 1 }, { itemId: 7, rang: 0 }, { itemId: 9, rang: 2 }], ordre: [7, 8], faits: { 9: "j" } });
   assert.deepEqual(b.map((x) => [x.itemId, x.faite]), [[7, false], [8, false], [9, true]]);
   assert.deepEqual(composerBonus({ stockes: [{ itemId: 3, rang: 0 }], ordre: [] }), []);
+});
+
+test("bonus : en retrait tant que les 3 ne sont pas faits, en avant quand ils le sont, normal un autre jour", () => {
+  const faits = composerTrois({ ...vide, ordre: [], faits: { 1: "j", 2: "j", 3: "j" }, stockes: [1, 2, 3].map((id, rang) => ({ rang, itemId: id, source: "choisi" })) });
+  const deuxFaits = composerTrois({ ...vide, ordre: [3], faits: { 1: "j", 2: "j" }, stockes: [1, 2, 3].map((id, rang) => ({ rang, itemId: id, source: "choisi" })) });
+  const vides = composerTrois({ ...vide, proposer: false });
+  assert.equal(etatBonus(faits, true), "avant");
+  assert.equal(etatBonus(deuxFaits, true), "retrait");
+  assert.equal(etatBonus(vides, true), "retrait"); // un emplacement vide compte comme « pas fait »
+  assert.equal(etatBonus(faits, false), "normal");
+  assert.equal(etatBonus(vides, false), "normal");
 });
 
 // ─── Base en mémoire ───
@@ -206,4 +217,22 @@ test("migration 40 : les colonnes bonus, place_le et origine existent (et le CSV
   assert.match(txt, /place_le/);
   assert.match(txt, /origine/);
   assert.equal(nom([], 1), null);
+});
+
+test("créer une tâche depuis un emplacement vide (priorité) ou en bonus : elle est créée ET placée, origine « moi »", async () => {
+  await db.runAsync("DELETE FROM trois");
+  const jour = J(3);
+  const p = await addItem({ nom: "Créée dans l'emplacement", type: "tache", liste_id: null });
+  await placerDansTrois(jour, 2, p);
+  const b = await addItem({ nom: "Créée en bonus", type: "tache" });
+  await placerEnBonus(jour, b);
+  const classement = await genererPropositions();
+  assert.deepEqual((await emplacementsDuJour(jour, classement, false, AUJ)).map((e) => e.itemId), [null, null, p]);
+  assert.deepEqual((await bonusDuJour(jour, classement)).map((x) => x.itemId), [b]);
+  const lignes = await db.getAllAsync("SELECT item_id, bonus, origine FROM trois WHERE jour = ? AND item_id > 0 ORDER BY bonus", jour);
+  assert.deepEqual(lignes.map((l) => [l.item_id, l.bonus, l.origine]), [[p, 0, "moi"], [b, 1, "moi"]]);
+  // cochés : ils restent affichés, et le bonus n'est jamais reporté au lendemain
+  await completer(b, "complet");
+  assert.equal((await bonusDuJour(jour, await genererPropositions()))[0].faite, true);
+  assert.deepEqual(await bonusDuJour(J(4), classement), []);
 });

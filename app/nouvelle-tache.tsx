@@ -21,6 +21,7 @@ import {
   modifierItem,
   type Ancre,
 } from "../lib/db";
+import { placerDansTrois, placerEnBonus } from "../lib/db/trois";
 import { enregistrerEtapes, getEtapes } from "../lib/db/etapes";
 import { getListes, type Liste } from "../lib/db/listes";
 import { PlusMoins } from "../components/PlusMoins";
@@ -216,6 +217,8 @@ export default function Ajouter() {
     liste?: string;
     /** Domaine pré-rempli (« + Ajouter une routine ici » sur Routines). */
     domaine?: string;
+    /** Emplacement à remplir une fois la tâche créée : « AAAA-MM-JJ:rang » ou « AAAA-MM-JJ:bonus » (depuis « + Choisir »). */
+    place?: string;
   }>();
   const idModifie = params.id ? Number(params.id) : null;
   // Type en base au chargement (passer de l'un à l'autre réactive l'item).
@@ -406,6 +409,12 @@ export default function Ajouter() {
           liste_id: listeId,
         });
         if (etapes.length > 0) await enregistrerEtapes(id, etapes);
+        // Créée depuis un emplacement de Mes 3 : elle y est placée, et on revient à l'écran des tâches.
+        const [jourPlace, ou] = (params.place ?? "").split(":");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(jourPlace ?? "")) {
+          if (ou === "bonus") await placerEnBonus(jourPlace, id);
+          else if (/^[0-2]$/.test(ou ?? "")) await placerDansTrois(jourPlace, Number(ou), id);
+        }
       } else {
         const id = await addItem({
           ...commun,

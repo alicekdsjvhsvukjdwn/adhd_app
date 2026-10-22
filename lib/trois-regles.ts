@@ -107,5 +107,14 @@ export const rangDe = (e: Emplacement[], itemId: number): number | null => e.fin
 /** Les 3 sont-ils tous remplis et faits ? (un emplacement vide compte comme « pas fait ») */
 export const troisFaits = (e: Emplacement[]): boolean => e.length === NB_TROIS && e.every((x) => x.itemId !== null && x.faite);
 
+/**
+ * La section « Bonus » d'un jour : aujourd'hui, en retrait (« après tes 3 ») tant que les 3 ne sont pas faits, en avant quand ils le sont ;
+ * un autre jour (ou un jour passé), normale : rien n'y est fait, rien n'y bloque.
+ */
+export function etatBonus(prio: Emplacement[], estAujourdhui: boolean): "retrait" | "avant" | "normal" {
+  if (!estAujourdhui) return "normal";
+  return troisFaits(prio) ? "avant" : "retrait";
+}
+
 /** « déjà faite le ven. » : la tâche a été faite un autre jour que celui de l'emplacement. */
 export const faiteAvant = (e: { faite: boolean; faiteLe: string | null }, jour: string): boolean => e.faite && e.faiteLe !== null && e.faiteLe !== jour;

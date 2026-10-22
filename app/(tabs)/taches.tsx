@@ -66,11 +66,11 @@ import { joursAvecRdv, rdvDuJour, type Evenement } from "../../lib/agenda-regles
 import { agendaEnCache, chargerAgenda } from "../../lib/agenda";
 import { decalerJours } from "../../lib/dates";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
-import { bonusDuJour, emplacementsDuJour, placerDansTrois, planifications, retirerDesTrois, retirerDuBonus } from "../../lib/db/trois";
+import { bonusDuJour, emplacementsDuJour, placerDansTrois, placerEnBonus, planifications, retirerDesTrois, retirerDuBonus } from "../../lib/db/trois";
 import { getItem } from "../../lib/db/items";
 import { lireMeta, ecrireMeta } from "../../lib/db/meta";
 import { FeuilleEtoile, libelleJourPlan } from "../../components/FeuilleEtoile";
-import { candidatsOrdonnes, estPropose, faiteAvant, troisFaits, type Bonus, type Emplacement } from "../../lib/trois-regles";
+import { candidatsOrdonnes, estPropose, etatBonus, faiteAvant, troisFaits, type Bonus, type Emplacement } from "../../lib/trois-regles";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { avecAlpha, melanger, radius, spacing, typography, useTheme } from "../../lib/theme";
 import { useCouleurListe } from "../../lib/theme-listes";
@@ -127,7 +127,7 @@ function TachesContenu() {
   const [rdv, setRdv] = useState<Evenement[]>([]);
   const [rdvHorsLigne, setRdvHorsLigne] = useState(false);
   /** Feuille « Choisir » : l'emplacement à remplir. */
-  const [choixTrois, setChoixTrois] = useState<{ jour: string; rang: number } | null>(null);
+  const [choixTrois, setChoixTrois] = useState<{ jour: string; rang: number | null } | null>(null);
   /** Tâche dont le menu d'appui long est ouvert ; s'il vient d'un emplacement, lequel. */
   const [menuTache, setMenuTache] = useState<Proposition | null>(null);
   const [menuEmplacement, setMenuEmplacement] = useState<{ jour: string; rang: number } | null>(null);
@@ -364,6 +364,13 @@ function TachesContenu() {
   const placer3 = async (j: string, rang: number, itemId: number) => {
     await placerDansTrois(j, rang, itemId);
     await charger();
+  };
+  /** Un emplacement des 3 (rang) ou un bonus (rang null) reçoit la tâche. */
+  const placerChoix = async (j: string, rang: number | null, itemId: number) => {
+    if (rang === null) {
+      await placerEnBonus(j, itemId);
+      await charger();
+    } else await placer3(j, rang, itemId);
   };
   const listeActive = listes.find((l) => l.id === filtre) ?? null;
   /** Liseré de la carte : la couleur de sa liste. */
@@ -799,6 +806,38 @@ function TachesContenu() {
       if (!p) return lecture ? ligneLecture(b.itemId, false, null, j, null) : cartePlanifiee(b.itemId, j, null);
       return lecture ? ligneLecture(p.itemId, false, null, j, null) : carteGrande(p, null);
     });
+  /**
+   * La section « Bonus » d'un jour : autant de tâches que je veux. Aujourd'hui, tant que les 3 ne sont pas faites, elle est
+   * visible mais en retrait (« après tes 3 ») ; quand les 3 sont faits, elle passe en avant. Je peux cocher un bonus avant : pas de blocage.
+   * Un jour passé : lecture seule, seulement s'il y en avait.
+   */
+  const blocBonus = (j: string, lecture = false) => {
+    const liste = bonusDe(j);
+    if (lecture && liste.length === 0) return null;
+    const etat = lecture ? "normal" : etatBonus(emplacementsDe(j), j === jour);
+    const enRetrait = etat === "retrait";
+    const enAvant = etat === "avant";
+    return (
+      <View
+        key={`bonus-${j}`}
+        style={enAvant ? [styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent, borderWidth: 1 }] : undefined}
+      >
+        <View style={styles.bonusEntete}>
+          <Texte style={[styles.surtitre, { color: enAvant ? t.accentText : t.textMuted, marginTop: 0 }]}>BONUS</Texte>
+          {enRetrait && <Texte style={{ color: t.textMuted, fontSize: typography.small }}>après tes 3</Texte>}
+        </View>
+        {enAvant && <Texte style={{ color: t.accentText, fontSize: typography.body, fontWeight: "700", marginBottom: spacing.sm }}>Tes 3 sont faites ✓ — bonus ?</Texte>}
+        <View style={{ opacity: enRetrait ? 0.55 : 1 }}>
+          {sectionBonus(j, lecture)}
+          {!lecture && (
+            <TouchableOpacity onPress={() => setChoixTrois({ jour: j, rang: null })} style={[styles.caseVide, { borderColor: t.border }]} accessibilityRole="button" accessibilityLabel="Ajouter un bonus">
+              <Texte style={[styles.lien, { color: t.accentText }]}>+ Ajouter un bonus</Texte>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
   const aChoisiDemain = emplacementsDe(demain).some((e) => e.itemId !== null && !estPropose(e));
   /** Feuille « Choisir » : suggestions du moteur d'abord, puis toutes les tâches à faire par liste. */
   const groupesChoix = (j: string): { suggestions: GroupeChoix; groupes: GroupeChoix[] } => {
@@ -1044,16 +1083,14 @@ function TachesContenu() {
               <>
                 <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: spacing.md }]}>MES 3 POUR {jourCourt(jourChoisi).toUpperCase()}</Texte>
                 {sectionTrois(jourChoisi)}
-                {bonusDe(jourChoisi).length > 0 && <Texte style={[styles.surtitre, { color: t.textMuted }]}>BONUS</Texte>}
-                {sectionBonus(jourChoisi)}
+                {blocBonus(jourChoisi)}
               </>
             )}
             {jourChoisi !== null && jourChoisi < jour && (
               <>
                 <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: spacing.md }]}>CE QUI ÉTAIT PRÉVU</Texte>
                 {sectionTrois(jourChoisi, true)}
-                {bonusDe(jourChoisi).length > 0 && <Texte style={[styles.surtitre, { color: t.textMuted }]}>BONUS</Texte>}
-                {sectionBonus(jourChoisi, true)}
+                {blocBonus(jourChoisi, true)}
               </>
             )}
 
@@ -1103,8 +1140,7 @@ function TachesContenu() {
                   </View>
                 )}
                 {!jourDifficile && sectionTrois(jour)}
-                {!jourDifficile && bonusDe(jour).length > 0 && <Texte style={[styles.surtitre, { color: t.textMuted }]}>BONUS</Texte>}
-                {!jourDifficile && sectionBonus(jour)}
+                {!jourDifficile && blocBonus(jour)}
                 {!jourDifficile && new Date().getHours() >= 18 && !aChoisiDemain && carteDemain}
               </>
             )}
@@ -1171,15 +1207,33 @@ function TachesContenu() {
 
       <FeuilleChoixTache
         visible={choixTrois !== null}
-        titre={choixTrois ? `Choisir pour ${libelleJourPlan(choixTrois.jour, jour).toLowerCase()}` : "Choisir"}
+        titre={choixTrois ? `${choixTrois.rang === null ? "Un bonus" : "Choisir"} pour ${libelleJourPlan(choixTrois.jour, jour).toLowerCase()}` : "Choisir"}
         {...groupesChoix(choixTrois?.jour ?? jour)}
         onChoisir={async (id) => {
           if (!choixTrois) return;
           const c = choixTrois;
           setChoixTrois(null);
-          await placer3(c.jour, c.rang, id);
+          await placerChoix(c.jour, c.rang, id);
         }}
         onFermer={() => setChoixTrois(null)}
+        creation={{
+          listes: listes.map((l) => ({ id: l.id, nom: l.nom, couleur: couleurDe(l.id) })),
+          listeParDefaut: filtre ?? listes[0]?.id ?? null,
+          onCreer: async (nom, listeId) => {
+            if (!choixTrois) return;
+            const c = choixTrois;
+            setChoixTrois(null);
+            const id = await addItem({ nom, type: "tache", categorie: deviner(nom)?.categorie ?? null, liste_id: listeId });
+            await placerChoix(c.jour, c.rang, id);
+          },
+          onPlusOptions: (nom, listeId) => {
+            if (!choixTrois) return;
+            const c = choixTrois;
+            setChoixTrois(null);
+            const params = [nom ? `nom=${encodeURIComponent(nom)}` : null, listeId !== null ? `liste=${listeId}` : null, `place=${c.jour}:${c.rang === null ? "bonus" : c.rang}`].filter(Boolean);
+            router.push(`/nouvelle-tache?${params.join("&")}`);
+          },
+        }}
       />
 
       {etoilePour && (
@@ -1392,6 +1446,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
+  bonusEntete: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   grande: {
     minHeight: 78,
     borderRadius: radius.lg,
