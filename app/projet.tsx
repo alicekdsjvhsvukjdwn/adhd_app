@@ -17,7 +17,8 @@ import {
 } from "react-native";
 import { FeuilleAvance } from "../components/FeuilleAvance";
 import { IconeProjet } from "../components/IconeProjet";
-import { BoutonOptions, type Option } from "../components/Options";
+import { BoutonMenu } from "../components/BoutonMenu";
+import type { Option } from "../components/Options";
 import { ChampTexte, Texte } from "../components/Texte";
 import {
   ajouterEntree,
@@ -208,7 +209,7 @@ export default function FicheProjet() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
             <Texte style={{ color: t.accentText, fontSize: typography.body }}>← Projets</Texte>
           </TouchableOpacity>
-          <BoutonOptions options={optionsProjet} titre={projet.nom} />
+          <BoutonMenu options={optionsProjet} titre={projet.nom} />
         </View>
 
         {/* En-tête : couverture, nom, type, état, jauge, temps */}
@@ -332,7 +333,7 @@ export default function FicheProjet() {
               <TouchableOpacity onPress={() => deplacerEtape(e.id, 1).then(charger)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Descendre ${e.nom}`}>
                 <ArrowDown color={t.textMuted} size={18} />
               </TouchableOpacity>
-              <BoutonOptions options={optionsEtape(e)} titre={e.nom} />
+              <BoutonMenu options={optionsEtape(e)} titre={e.nom} />
             </View>
           );
         })}
@@ -410,7 +411,7 @@ export default function FicheProjet() {
                 {dateCourte(j.jour)}
                 {j.minutes > 0 ? ` · ${libelleDuree(j.minutes)}` : ""}
               </Texte>
-              <BoutonOptions options={[{ libelle: "Supprimer l'entrée", danger: true, onPress: () => confirmer("Supprimer cette entrée ?", "Ses photos aussi.", () => supprimerEntree(j.id)) }]} />
+              <BoutonMenu titre="Entrée du journal" options={[{ libelle: "Supprimer l'entrée", danger: true, onPress: () => confirmer("Supprimer cette entrée ?", "Ses photos aussi.", () => supprimerEntree(j.id)) }]} />
             </View>
             {j.photos.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginVertical: spacing.sm }}>

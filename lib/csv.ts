@@ -33,7 +33,7 @@ const BOOL = "0 = non, 1 = oui";
 
 /** Description de chaque table et de ses colonnes connues. */
 /** Colonnes d'images : jamais écrites dans les CSV (trop lourdes), gardées dans la sauvegarde JSON. */
-export const COLONNES_IMAGES: Record<string, string[]> = { projets: ["couverture"], projet_photos: ["data"] };
+export const COLONNES_IMAGES: Record<string, string[]> = { projets: ["couverture"], projet_photos: ["data"], recettes: ["photo"] };
 
 const DOC: Record<string, { table: string; colonnes: Record<string, string> }> = {
   items: {
@@ -499,6 +499,69 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   projet_liens: {
     table: "Projets créatifs : les liens gardés avec un projet.",
     colonnes: { id: "identifiant", projet_id: "projet (table projets)", titre: "texte", url: "adresse du lien" },
+  },
+  aliments: {
+    table: "Cuisine : l'inventaire (ce que j'ai vraiment).",
+    colonnes: {
+      id: "identifiant",
+      nom: "texte",
+      emplacement: "frigo, congelateur, placard ou epices",
+      categorie: "légumes, fruits, légumineuses… (clé interne)",
+      niveau: "plein, peu ou presque_fini",
+      peremption: `${JOUR}, vide si inconnue`,
+      ouvert_le: `${JOUR}, vide si inconnu`,
+      toujours_la: "1 = toujours là (sel, huile…), jamais proposé aux courses",
+      cree_le: ISO,
+    },
+  },
+  recettes: {
+    table: "Cuisine : mes recettes. La photo n'est pas dans ce fichier (elle reste dans la sauvegarde JSON).",
+    colonnes: {
+      id: "identifiant",
+      titre: "texte",
+      photo: "toujours vide ici : les images ne sont pas exportées en CSV",
+      portions: "nombre de portions de la recette",
+      prep_min: "préparation, minutes",
+      cuisson_min: "cuisson, minutes",
+      tags: "séparés par des virgules (rapide, batch, petit-déj…)",
+      notes: "texte libre",
+      favori: "1 = favori",
+      depart: "1 = idée de départ fournie par l'appli",
+      cree_le: ISO,
+      maj_le: `dernière modification, ${ISO}`,
+    },
+  },
+  recette_ingredients: {
+    table: "Cuisine : les ingrédients des recettes.",
+    colonnes: { id: "identifiant", recette_id: "recette (table recettes)", ordre: "position", nom: "texte", quantite: "nombre, vide si « au goût »", unite: "g, ml, c. à s.…, vide si sans unité", aliment: "aliment du catalogue relié, vide sinon" },
+  },
+  recette_etapes: {
+    table: "Cuisine : les étapes des recettes.",
+    colonnes: { id: "identifiant", recette_id: "recette (table recettes)", ordre: "position", texte: "texte", minuteur_min: "minuteur proposé, minutes (0 = aucun)" },
+  },
+  cuisines: {
+    table: "Cuisine : les repas cuisinés (« J'ai cuisiné »).",
+    colonnes: { id: "identifiant", recette_id: "recette (table recettes)", titre: "titre de la recette à ce moment-là", jour: JOUR, portions: "portions cuisinées", cree_le: ISO },
+  },
+  courses: {
+    table: "Cuisine : la liste de courses (les achats des projets sont dans la liste « Courses / achats » de la table items).",
+    colonnes: { id: "identifiant", nom: "texte", rayon: "fruits_legumes, vrac, frais, epicerie, surgeles, maison ou autre", cochee: "1 = dans le panier", source: "manuel, frigo, recette ou meal_prep", aliment_id: "aliment de l'inventaire (table aliments), vide sinon", cree_le: ISO },
+  },
+  meal_prep: {
+    table: "Cuisine : les recettes choisies pour une semaine de meal prep.",
+    colonnes: { id: "identifiant", semaine: `lundi de la semaine, ${JOUR}`, recette_id: "recette (table recettes)", portions: "portions voulues" },
+  },
+  meal_prep_semaines: {
+    table: "Cuisine : le jour de batch cooking d'une semaine.",
+    colonnes: { semaine: `lundi de la semaine, ${JOUR}`, jour_batch: `${JOUR}, vide si pas noté`, routine_id: "routine liée (table items), vide sinon" },
+  },
+  aliments_jetes: {
+    table: "Cuisine : les aliments retirés de l'inventaire (jetés ou finis).",
+    colonnes: { id: "identifiant", nom: "texte", jour: JOUR, raison: "jete ou fini" },
+  },
+  cuisine_points_jours: {
+    table: "Cuisine : un jour avec « J'ai cuisiné » a rapporté 5 points (une seule fois par jour).",
+    colonnes: { jour: JOUR },
   },
   vision_phrases: {
     table: "Ma vision : les phrases écrites au présent.",

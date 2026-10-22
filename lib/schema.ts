@@ -762,6 +762,101 @@ export const SQL_PROJETS_V2 = `
     );
 `;
 
+/** Migration 38 : Cuisine (vegan) : inventaire, recettes, repas cuisinés, courses, meal prep. */
+export const SQL_CUISINE = `
+  CREATE TABLE IF NOT EXISTS aliments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    -- 'frigo' | 'congelateur' | 'placard' | 'epices'
+    emplacement TEXT NOT NULL DEFAULT 'placard',
+    categorie TEXT NOT NULL DEFAULT 'conserves',
+    -- 'plein' | 'peu' | 'presque_fini'
+    niveau TEXT NOT NULL DEFAULT 'plein',
+    -- date de péremption (AAAA-MM-JJ), vide si inconnue
+    peremption TEXT NOT NULL DEFAULT '',
+    ouvert_le TEXT NOT NULL DEFAULT '',
+    -- 1 = toujours là (sel, huile…) : ne baisse jamais et n'est jamais proposé aux courses
+    toujours_la INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS recettes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titre TEXT NOT NULL DEFAULT '',
+    -- photo (data URI JPEG compressée), vide sinon
+    photo TEXT NOT NULL DEFAULT '',
+    portions INTEGER NOT NULL DEFAULT 2,
+    prep_min INTEGER NOT NULL DEFAULT 0,
+    cuisson_min INTEGER NOT NULL DEFAULT 0,
+    -- tags séparés par des virgules
+    tags TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    favori INTEGER NOT NULL DEFAULT 0,
+    -- 1 = idée de départ fournie par l'appli
+    depart INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT '',
+    maj_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS recette_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recette_id INTEGER NOT NULL DEFAULT 0,
+    ordre INTEGER NOT NULL DEFAULT 0,
+    nom TEXT NOT NULL DEFAULT '',
+    quantite REAL,
+    unite TEXT NOT NULL DEFAULT '',
+    -- nom de l'aliment du catalogue relié, vide sinon
+    aliment TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS recette_etapes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recette_id INTEGER NOT NULL DEFAULT 0,
+    ordre INTEGER NOT NULL DEFAULT 0,
+    texte TEXT NOT NULL DEFAULT '',
+    minuteur_min INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS cuisines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recette_id INTEGER NOT NULL DEFAULT 0,
+    titre TEXT NOT NULL DEFAULT '',
+    jour TEXT NOT NULL DEFAULT '',
+    portions INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS courses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    rayon TEXT NOT NULL DEFAULT 'autre',
+    cochee INTEGER NOT NULL DEFAULT 0,
+    -- 'manuel' | 'frigo' | 'recette' | 'meal_prep'
+    source TEXT NOT NULL DEFAULT 'manuel',
+    aliment_id INTEGER,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS meal_prep (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- lundi de la semaine, AAAA-MM-JJ
+    semaine TEXT NOT NULL DEFAULT '',
+    recette_id INTEGER NOT NULL DEFAULT 0,
+    portions INTEGER NOT NULL DEFAULT 2
+  );
+  CREATE TABLE IF NOT EXISTS meal_prep_semaines (
+    semaine TEXT PRIMARY KEY,
+    jour_batch TEXT NOT NULL DEFAULT '',
+    routine_id INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS aliments_jetes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    jour TEXT NOT NULL DEFAULT '',
+    -- 'jete' | 'fini'
+    raison TEXT NOT NULL DEFAULT 'jete'
+  );
+  CREATE TABLE IF NOT EXISTS cuisine_points_jours (
+    jour TEXT PRIMARY KEY
+  );
+  CREATE INDEX IF NOT EXISTS idx_recette_ingredients ON recette_ingredients (recette_id);
+  CREATE INDEX IF NOT EXISTS idx_recette_etapes ON recette_etapes (recette_id);
+`;
+
 /**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.

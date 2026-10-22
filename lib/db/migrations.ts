@@ -19,11 +19,13 @@ import {
   SQL_PLAN_SPORT,
   SQL_PROJETS,
   SQL_PROJETS_V2,
+  SQL_CUISINE,
   SQL_PROJET_TYPES_DEFAUT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
 import { getDatabase } from "./client";
+import { semerRecettesDepart } from "./cuisine-depart";
 
 /**
  * Migrations versionnées via PRAGMA user_version.
@@ -836,6 +838,15 @@ const MIGRATIONS: Migration[] = [
     nom: "projets : étapes et matériel liés aux tâches, points, projet d'exemple",
     run: async (db) => {
       await db.execAsync(SQL_PROJETS_V2);
+    },
+  },
+
+  {
+    version: 38,
+    nom: "cuisine : inventaire, recettes, courses, meal prep",
+    run: async (db) => {
+      await db.execAsync(SQL_CUISINE);
+      await semerRecettesDepart(db);
     },
   },
 ];

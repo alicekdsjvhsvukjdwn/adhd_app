@@ -1,3 +1,4 @@
+import { Cuisine } from "../../components/Cuisine";
 import { useCleReset } from "../../lib/reset-onglet";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
@@ -196,7 +197,7 @@ function MenageContenu() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.conteneurMaison}>
         <View style={styles.entete}>
           <Texte style={[styles.titre, { color: t.textPrimary }]}>Ménage</Texte>
           {bravo && <Texte style={{ color: t.accent, fontWeight: "700" }}>{bravo}</Texte>}
@@ -408,6 +409,9 @@ function MenageContenu() {
 
 const styles = StyleSheet.create({
   container: { paddingTop: 60, paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl * 2 },
+  conteneurMaison: { paddingTop: spacing.md, paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl * 2 },
+  selecteur: { flexDirection: "row", marginTop: 60, marginHorizontal: spacing.xl, borderWidth: 1, borderRadius: radius.pill, padding: 3 },
+  segmentVue: { flex: 1, alignItems: "center", borderRadius: radius.pill, paddingVertical: spacing.sm },
   entete: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
   titre: { fontSize: typography.h1, fontWeight: "600" },
   titrePiece: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.lg },
@@ -436,5 +440,34 @@ const styles = StyleSheet.create({
 
 /** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
 export default function Menage() {
-  return <MenageContenu key={useCleReset("menage")} />;
+  return <MaisonEtCuisine key={useCleReset("menage")} />;
+}
+
+/** En haut de l'onglet : « Maison » (le ménage) ou « Cuisine ». Le re-tap de l'onglet revient à « Maison ». */
+function MaisonEtCuisine() {
+  const t = useTheme();
+  const [vue, setVue] = useState<"maison" | "cuisine">("maison");
+  return (
+    <View style={{ flex: 1, backgroundColor: t.bgApp }}>
+      <View style={[styles.selecteur, { backgroundColor: t.bgCard, borderColor: t.border }]} accessibilityRole="tablist">
+        {(
+          [
+            ["maison", "Maison"],
+            ["cuisine", "Cuisine"],
+          ] as const
+        ).map(([cle, libelle]) => (
+          <TouchableOpacity
+            key={cle}
+            onPress={() => setVue(cle)}
+            style={[styles.segmentVue, vue === cle && { backgroundColor: t.accent }]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: vue === cle }}
+          >
+            <Texte style={{ color: vue === cle ? t.textOnAccent : t.textSecondary, fontSize: typography.bodySmall, fontWeight: "700" }}>{libelle}</Texte>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {vue === "maison" ? <MenageContenu /> : <Cuisine />}
+    </View>
+  );
 }
