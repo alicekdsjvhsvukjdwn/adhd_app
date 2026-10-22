@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import JSZip from "jszip";
-import { lisezmoi, versCsv } from "../csv";
+import { COLONNES_IMAGES, lisezmoi, versCsv } from "../csv";
 import { enregistrerFichier, lireFichierChoisi, noterSauvegardeFaite } from "../fichiers";
 import {
   APP,
@@ -79,7 +79,9 @@ export async function exporterCsv(): Promise<void> {
     const colonnes = (
       await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${nom}")`)
     ).map((c) => c.name);
-    zip.file(`${nom}.csv`, versCsv(colonnes, lignes));
+    const images = COLONNES_IMAGES[nom] ?? [];
+    const sansImages = images.length ? lignes.map((l) => ({ ...l, ...Object.fromEntries(images.map((c) => [c, ""])) })) : lignes;
+    zip.file(`${nom}.csv`, versCsv(colonnes, sansImages));
     resume.push({ nom, colonnes, lignes: lignes.length });
   }
   zip.file("LISEZMOI.txt", lisezmoi(resume, new Date().toISOString()));

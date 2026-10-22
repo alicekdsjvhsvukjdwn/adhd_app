@@ -32,6 +32,9 @@ const JOUR = "date du calendrier local, AAAA-MM-JJ";
 const BOOL = "0 = non, 1 = oui";
 
 /** Description de chaque table et de ses colonnes connues. */
+/** Colonnes d'images : jamais écrites dans les CSV (trop lourdes), gardées dans la sauvegarde JSON. */
+export const COLONNES_IMAGES: Record<string, string[]> = { projets: ["couverture"], projet_photos: ["data"] };
+
 const DOC: Record<string, { table: string; colonnes: Record<string, string> }> = {
   items: {
     table: "Routines et tâches (une ligne par élément).",
@@ -436,6 +439,60 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       data: "photo JPEG en data URI : 'data:image/jpeg;base64,…' (colonne très longue)",
       cree_le: ISO,
     },
+  },
+  projet_types: {
+    table: "Projets créatifs : les types (Électronique, Peinture…), avec leur icône et leur couleur.",
+    colonnes: { id: "identifiant", nom: "texte", icone: "nom de l'icône au trait (cpu, palette, scissors…)", couleur: "couleur #RRGGBB" },
+  },
+  projets: {
+    table: "Projets créatifs : un projet par ligne. La photo de couverture n'est pas dans ce fichier (elle reste dans la sauvegarde JSON).",
+    colonnes: {
+      id: "identifiant",
+      nom: "texte",
+      type_id: "type (table projet_types)",
+      etat: "idee, en_cours, en_pause ou fini",
+      pourquoi: "pourquoi je fais ce projet, une ligne",
+      couverture: "toujours vide ici : les images ne sont pas exportées en CSV",
+      notes: "notes et idées, texte libre",
+      cree_le: ISO,
+      maj_le: `dernière modification, ${ISO}`,
+      fini_le: `jour où le projet est devenu fini, ${JOUR}, vide sinon`,
+    },
+  },
+  projet_etapes: {
+    table: "Projets créatifs : les étapes, et leurs sous-étapes.",
+    colonnes: {
+      id: "identifiant",
+      projet_id: "projet (table projets)",
+      parent_id: "étape parente si c'est une sous-étape, vide sinon",
+      nom: "texte",
+      ordre: "position parmi les étapes de même niveau",
+      faite: "1 = faite, 0 = à faire",
+      faite_le: `${JOUR}, vide si pas faite`,
+    },
+  },
+  projet_journal: {
+    table: "Projets créatifs : le journal de bord (une entrée par séance de travail ou par note).",
+    colonnes: { id: "identifiant", projet_id: "projet (table projets)", jour: JOUR, note: "texte libre", minutes: "temps passé, minutes", cree_le: ISO },
+  },
+  projet_photos: {
+    table: "Projets créatifs : les photos du journal et les photos finales. Les images ne sont pas dans ce fichier (elles restent dans la sauvegarde JSON).",
+    colonnes: {
+      id: "identifiant",
+      projet_id: "projet (table projets)",
+      journal_id: "entrée du journal (table projet_journal), vide pour une photo finale",
+      data: "toujours vide ici : les images ne sont pas exportées en CSV",
+      finale: "1 = photo finale du projet, 0 = photo du journal",
+      cree_le: ISO,
+    },
+  },
+  projet_materiel: {
+    table: "Projets créatifs : le matériel d'un projet.",
+    colonnes: { id: "identifiant", projet_id: "projet (table projets)", nom: "texte", a_acheter: "1 = à acheter, 0 = je l'ai" },
+  },
+  projet_liens: {
+    table: "Projets créatifs : les liens gardés avec un projet.",
+    colonnes: { id: "identifiant", projet_id: "projet (table projets)", titre: "texte", url: "adresse du lien" },
   },
   vision_phrases: {
     table: "Ma vision : les phrases écrites au présent.",

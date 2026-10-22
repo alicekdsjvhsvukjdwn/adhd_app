@@ -657,6 +657,85 @@ export const SQL_JOURNAL_DEPUIS_FAITS = `
     WHERE NOT EXISTS (SELECT 1 FROM menage_journal j WHERE j.tache_id = f.tache_id AND j.echeance = f.echeance);
 `;
 
+/** Migration 36 : projets créatifs (galerie, étapes, journal de bord, matériel, notes et liens). */
+export const SQL_PROJETS = `
+  CREATE TABLE IF NOT EXISTS projet_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    icone TEXT NOT NULL DEFAULT 'sparkles',
+    couleur TEXT NOT NULL DEFAULT '#4ADE80'
+  );
+  CREATE TABLE IF NOT EXISTS projets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL DEFAULT '',
+    type_id INTEGER NOT NULL DEFAULT 0,
+    -- 'idee' | 'en_cours' | 'en_pause' | 'fini'
+    etat TEXT NOT NULL DEFAULT 'idee',
+    pourquoi TEXT NOT NULL DEFAULT '',
+    -- photo de couverture (data URI JPEG compressée), vide = icône du type
+    couverture TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT '',
+    maj_le TEXT NOT NULL DEFAULT '',
+    fini_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS projet_etapes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projet_id INTEGER NOT NULL DEFAULT 0,
+    -- sous-étape : l'étape parente (une seule profondeur)
+    parent_id INTEGER,
+    nom TEXT NOT NULL DEFAULT '',
+    ordre INTEGER NOT NULL DEFAULT 0,
+    faite INTEGER NOT NULL DEFAULT 0,
+    faite_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS projet_journal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projet_id INTEGER NOT NULL DEFAULT 0,
+    jour TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    minutes INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS projet_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projet_id INTEGER NOT NULL DEFAULT 0,
+    journal_id INTEGER,
+    data TEXT NOT NULL DEFAULT '',
+    -- 1 = photo finale (Mes réalisations)
+    finale INTEGER NOT NULL DEFAULT 0,
+    cree_le TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS projet_materiel (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projet_id INTEGER NOT NULL DEFAULT 0,
+    nom TEXT NOT NULL DEFAULT '',
+    -- 1 = à acheter, 0 = je l'ai
+    a_acheter INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE IF NOT EXISTS projet_liens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projet_id INTEGER NOT NULL DEFAULT 0,
+    titre TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_projet_etapes ON projet_etapes (projet_id);
+  CREATE INDEX IF NOT EXISTS idx_projet_journal ON projet_journal (projet_id);
+  CREATE INDEX IF NOT EXISTS idx_projet_photos ON projet_photos (projet_id);
+`;
+
+/** Types de départ, posés une fois (et reposés par listerTypes si la liste est vide, après la restauration d'une sauvegarde d'avant les projets). */
+export const SQL_PROJET_TYPES_DEFAUT = `
+  INSERT INTO projet_types (nom, icone, couleur)
+    SELECT nom, icone, couleur FROM (
+      SELECT 1 AS o, 'Électronique / Arduino' AS nom, 'cpu' AS icone, '#22D3EE' AS couleur
+      UNION ALL SELECT 2, 'Peinture & dessin', 'palette', '#F472B6'
+      UNION ALL SELECT 3, 'Artisanat', 'scissors', '#FB923C'
+      UNION ALL SELECT 4, 'Musique', 'music', '#A78BFA'
+      UNION ALL SELECT 5, 'Autre', 'sparkles', '#4ADE80'
+    ) WHERE NOT EXISTS (SELECT 1 FROM projet_types) ORDER BY o;
+`;
+
 /**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.

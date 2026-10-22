@@ -17,6 +17,8 @@ import {
   SQL_TCC_AUTONOME,
   SQL_SEANCES_SPORT,
   SQL_PLAN_SPORT,
+  SQL_PROJETS,
+  SQL_PROJET_TYPES_DEFAUT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
@@ -816,6 +818,15 @@ const MIGRATIONS: Migration[] = [
     nom: "sport : plan de 6 semaines, tests de niveau, bilans",
     run: async (db) => {
       await db.execAsync(SQL_PLAN_SPORT);
+    },
+  },
+
+  {
+    version: 36,
+    nom: "projets créatifs : galerie, étapes, journal de bord, matériel",
+    run: async (db) => {
+      await db.execAsync(SQL_PROJETS);
+      await db.execAsync(SQL_PROJET_TYPES_DEFAUT);
     },
   },
 ];

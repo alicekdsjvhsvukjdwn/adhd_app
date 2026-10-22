@@ -1,3 +1,4 @@
+import { ProjetsGalerie } from "../../components/ProjetsGalerie";
 import { useCleReset } from "../../lib/reset-onglet";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -737,7 +738,7 @@ function TachesContenu() {
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        style={styles.container}
+        style={[styles.container, { paddingTop: spacing.md }]}
         contentContainerStyle={{ paddingBottom: spacing.xxxl * 2 }}
       >
         {filtre !== null ? (
@@ -1152,6 +1153,8 @@ function TachesContenu() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
+  selecteur: { flexDirection: "row", marginTop: 60, marginHorizontal: spacing.xl, borderWidth: 1, borderRadius: radius.pill, padding: 3 },
+  segmentVue: { flex: 1, alignItems: "center", borderRadius: radius.pill, paddingVertical: spacing.sm },
 
   entete: {
     flexDirection: "row",
@@ -1387,5 +1390,34 @@ const styles = StyleSheet.create({
 
 /** Toucher l'onglet déjà ouvert remonte l'écran : retour à son accueil (voir lib/reset-onglet.ts). */
 export default function Taches() {
-  return <TachesContenu key={useCleReset("taches")} />;
+  return <TachesEtProjets key={useCleReset("taches")} />;
+}
+
+/** En haut de l'onglet : « Mes tâches » ou « Projets » (les projets créatifs). Le re-tap de l'onglet revient à « Mes tâches ». */
+function TachesEtProjets() {
+  const t = useTheme();
+  const [vue, setVue] = useState<"taches" | "projets">("taches");
+  return (
+    <View style={{ flex: 1, backgroundColor: t.bgApp }}>
+      <View style={[styles.selecteur, { backgroundColor: t.bgCard, borderColor: t.border }]} accessibilityRole="tablist">
+        {(
+          [
+            ["taches", "Mes tâches"],
+            ["projets", "Projets"],
+          ] as const
+        ).map(([cle, libelle]) => (
+          <TouchableOpacity
+            key={cle}
+            onPress={() => setVue(cle)}
+            style={[styles.segmentVue, vue === cle && { backgroundColor: t.accent }]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: vue === cle }}
+          >
+            <Texte style={{ color: vue === cle ? t.textOnAccent : t.textSecondary, fontSize: typography.bodySmall, fontWeight: "700" }}>{libelle}</Texte>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {vue === "taches" ? <TachesContenu /> : <ProjetsGalerie />}
+    </View>
+  );
 }
