@@ -313,7 +313,15 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   },
   trois: {
     table: "Mes 3 : les trois emplacements d'un jour.",
-    colonnes: { jour: JOUR, item_id: "tâche (table items)", rang: "emplacement, 0 à 2", source: "'choisi' (mon choix) | 'report' (pas faite la veille) | 'moteur' (proposée par l'appli) | 'vide' (emplacement vidé, item_id négatif)" },
+    colonnes: {
+      jour: JOUR,
+      item_id: "tâche (table items)",
+      rang: "emplacement, 0 à 2 (pour un bonus : l'ordre)",
+      source: "'choisi' (mon choix) | 'report' (pas faite la veille) | 'moteur' (proposée par l'appli) | 'vide' (emplacement vidé, item_id négatif)",
+      bonus: "1 = tâche bonus du jour, 0 = une des 3",
+      place_le: `moment où la tâche a été placée, ${ISO} (vide pour les anciennes lignes)`,
+      origine: "'moi' (je l'ai placée) | 'report' (pas faite la veille) | 'moteur' (proposée par l'appli) | 'prevue' (prévue ce jour-là) | vide (emplacement vidé ou ancienne ligne)",
+    },
   },
   humeurs: {
     table: "Esprit : une ligne par humeur notée (plusieurs par jour possibles). Données sensibles : elles restent sur l'appareil.",

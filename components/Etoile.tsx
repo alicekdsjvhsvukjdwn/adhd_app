@@ -5,13 +5,13 @@ import { Texte } from "./Texte";
 type Props = {
   /** La tâche est dans les 3 du jour. */
   active: boolean;
-  /** « aujourd'hui » ou « demain ». */
-  jour: string;
+  /** Inutilisé : l'étoile ouvre le choix du jour. */
+  jour?: string;
   onPress: () => void;
 };
 
-/** ☆ / ★ « Pour aujourd'hui » : ajoute la tâche aux 3 du jour ou la retire. */
-export function Etoile({ active, jour, onPress }: Props) {
+/** ☆ / ★ : planifier la tâche (aujourd'hui, demain, une date ; dans les 3 ou en bonus). ★ = déjà planifiée. */
+export function Etoile({ active, onPress }: Props) {
   const t = useTheme();
   return (
     <TouchableOpacity
@@ -19,7 +19,7 @@ export function Etoile({ active, jour, onPress }: Props) {
       hitSlop={10}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={active ? `Retirer des 3 pour ${jour}` : `Pour ${jour}`}
+      accessibilityLabel={active ? "Planifiée : modifier ou retirer" : "Planifier pour un jour"}
     >
       <Texte style={{ fontSize: 22, color: active ? t.accent : t.textMuted }}>{active ? "★" : "☆"}</Texte>
     </TouchableOpacity>

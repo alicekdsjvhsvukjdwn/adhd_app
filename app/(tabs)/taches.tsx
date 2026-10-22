@@ -66,8 +66,11 @@ import { joursAvecRdv, rdvDuJour, type Evenement } from "../../lib/agenda-regles
 import { agendaEnCache, chargerAgenda } from "../../lib/agenda";
 import { decalerJours } from "../../lib/dates";
 import { genererPropositions, type Proposition } from "../../lib/db/moteur";
-import { basculerEtoile, emplacementsDuJour, placerDansTrois, retirerDesTrois } from "../../lib/db/trois";
-import { candidatsOrdonnes, estPropose, rangDe, type Emplacement } from "../../lib/trois-regles";
+import { bonusDuJour, emplacementsDuJour, placerDansTrois, planifications, retirerDesTrois, retirerDuBonus } from "../../lib/db/trois";
+import { getItem } from "../../lib/db/items";
+import { lireMeta, ecrireMeta } from "../../lib/db/meta";
+import { FeuilleEtoile, libelleJourPlan } from "../../components/FeuilleEtoile";
+import { candidatsOrdonnes, estPropose, faiteAvant, troisFaits, type Bonus, type Emplacement } from "../../lib/trois-regles";
 import { ordreJourDifficile } from "../../lib/moteur-regles";
 import { avecAlpha, melanger, radius, spacing, typography, useTheme } from "../../lib/theme";
 import { useCouleurListe } from "../../lib/theme-listes";
@@ -108,15 +111,23 @@ function TachesContenu() {
   const [annulable, setAnnulable] = useState<Annulable | null>(null);
   /** Jour de la bande de la semaine choisi ; null = aujourd'hui (« Mes 3 »). */
   const [jourChoisi, setJourChoisi] = useState<string | null>(null);
-  /** Les 3 emplacements d'aujourd'hui et de demain (voir lib/db/trois.ts), et les rendez-vous. */
-  const [emplacements, setEmplacements] = useState<Emplacement[]>([]);
-  const [emplacementsDemain, setEmplacementsDemain] = useState<Emplacement[]>([]);
+  /** Les 3 emplacements et les bonus d'aujourd'hui, de demain et du jour choisi (voir lib/db/trois.ts), et les rendez-vous. */
+  const [plan, setPlan] = useState<Record<string, { prio: Emplacement[]; bonus: Bonus[] }>>({});
+  /** Nom et liste des tâches placées mais absentes du classement (déjà faites). */
+  const [infos, setInfos] = useState<Record<number, { nom: string; liste_id: number | null }>>({});
+  /** Où chaque tâche est placée (aujourd'hui et plus tard) : l'étoile ★. */
+  const [planifs, setPlanifs] = useState<Record<number, { jour: string; bonus: boolean }[]>>({});
+  /** La tâche dont l'étoile est ouverte. */
+  const [etoilePour, setEtoilePour] = useState<{ itemId: number; nom: string } | null>(null);
+  /** Menu d'une tâche faite affichée dans les 3 ou en bonus. */
+  const [menuFaite, setMenuFaite] = useState<{ itemId: number; nom: string; jour: string; rang: number | null; faiteLe: string | null } | null>(null);
+  /** Les 3 viennent d'être faits : le bandeau de célébration (une fois par jour). */
+  const [celebre, setCelebre] = useState(false);
+  const jourChoisiRef = useRef<string | null>(null);
   const [rdv, setRdv] = useState<Evenement[]>([]);
   const [rdvHorsLigne, setRdvHorsLigne] = useState(false);
   /** Feuille « Choisir » : l'emplacement à remplir. */
   const [choixTrois, setChoixTrois] = useState<{ jour: string; rang: number } | null>(null);
-  /** Les 3 sont pris : quelle tâche remplace l'étoile touchée ? */
-  const [aRemplacer, setARemplacer] = useState<{ jour: string; itemId: number } | null>(null);
   /** Tâche dont le menu d'appui long est ouvert ; s'il vient d'un emplacement, lequel. */
   const [menuTache, setMenuTache] = useState<Proposition | null>(null);
   const [menuEmplacement, setMenuEmplacement] = useState<{ jour: string; rang: number } | null>(null);
@@ -137,6 +148,47 @@ function TachesContenu() {
     [],
   );
 
+  /**
+   * Les 3 et les bonus d'aujourd'hui, de demain et du jour choisi. Les propositions d'aujourd'hui sont figées à l'ouverture
+   * (sauf jour difficile : une seule tâche) ; un autre jour n'affiche que ce que j'y ai placé.
+   */
+  const chargerPlan = useCallback(
+    async (toutes: Proposition[]) => {
+      const difficile = await estJourDifficile();
+      const jours = [...new Set([jour, decalerJours(jour, 1), ...(jourChoisiRef.current ? [jourChoisiRef.current] : [])])];
+      const entrees = await Promise.all(
+        jours.map(async (j) => [j, { prio: await emplacementsDuJour(j, toutes, j === jour && !difficile, jour), bonus: await bonusDuJour(j, toutes) }] as const),
+      );
+      setPlan(Object.fromEntries(entrees));
+      const ids = new Set(entrees.flatMap(([, v]) => [...v.prio.flatMap((e) => (e.itemId !== null ? [e.itemId] : [])), ...v.bonus.map((b) => b.itemId)]));
+      const autres = await Promise.all(
+        [...ids]
+          .filter((id) => !toutes.some((p) => p.itemId === id))
+          .map(async (id) => {
+            const it = await getItem(id);
+            return it ? ([id, { nom: it.nom, liste_id: it.liste_id }] as const) : null;
+          }),
+      );
+      setInfos(Object.fromEntries(autres.filter((x) => x !== null)));
+      setPlanifs(await planifications(jour));
+      // Les 3 sont faits : haptique et bandeau, une seule fois par jour.
+      const auj = entrees.find(([j]) => j === jour)?.[1].prio;
+      if (!difficile && auj && troisFaits(auj) && (await lireMeta(`trois_celebre:${jour}`)) === null) {
+        await ecrireMeta(`trois_celebre:${jour}`, "1");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        setCelebre(true);
+      }
+    },
+    [jour],
+  );
+
+  useEffect(() => {
+    jourChoisiRef.current = jourChoisi;
+    chargerPlan(classement).catch(() => {});
+    // Seulement au changement de jour choisi : le reste se recharge avec charger().
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jourChoisi]);
+
   const charger = useCallback(async () => {
     // Le mode du jour d'abord : il est lu en une requête, alors que le
     // classement (négligence, score, journal) prend du temps. En revenant
@@ -150,9 +202,7 @@ function TachesContenu() {
     const evenements = cache?.evenements ?? [];
     setRdv(evenements);
     setRdvHorsLigne(false);
-    // Les propositions d'aujourd'hui sont figées à l'ouverture (sauf jour difficile : une seule tâche).
-    setEmplacements(await emplacementsDuJour(jour, toutes, !(await estJourDifficile())));
-    setEmplacementsDemain(await emplacementsDuJour(decalerJours(jour, 1), toutes, false));
+    await chargerPlan(toutes);
     chargerAgenda()
       .then((a) => {
         if (!a) return;
@@ -173,7 +223,7 @@ function TachesContenu() {
         }),
       ),
     );
-  }, [jour]);
+  }, [jour, chargerPlan]);
 
   useFocusEffect(
     useCallback(() => {
@@ -207,6 +257,8 @@ function TachesContenu() {
   };
 
   const onTerminer = async (p: Proposition) => {
+    // Une proposition d'aujourd'hui est enregistrée avant d'être cochée : elle reste affichée, cochée.
+    if (!(await estJourDifficile())) await emplacementsDuJour(jour, classement, true, jour);
     await completer(p.itemId, "complet");
     proposerAnnulation({ type: "tache", id: p.itemId, texte: `✓ ${p.nom}` });
     setNoteOuverte({ itemId: p.itemId, nom: p.nom, date: getAujourdhui() });
@@ -298,16 +350,13 @@ function TachesContenu() {
   );
 
   const couleurListe = useCouleurListe();
-  // Mes 3 : l'étoile agit sur demain quand demain est choisi dans la bande, sinon sur aujourd'hui.
+  // Mes 3 : l'étoile ouvre le choix du jour (aujourd'hui, demain, une date) et de la place (dans les 3 ou en bonus).
   const demain = decalerJours(jour, 1);
-  const jourTrois = jourChoisi === demain ? demain : jour;
-  const nomJourTrois = jourTrois === demain ? "demain" : "aujourd'hui";
-  const emplacementsDe = (j: string) => (j === demain ? emplacementsDemain : emplacements);
-  const enTrois = (p: Proposition) => rangDe(emplacementsDe(jourTrois), p.itemId) !== null;
-  const onEtoile = async (p: Proposition) => {
-    if (await basculerEtoile(jourTrois, emplacementsDe(jourTrois), p.itemId)) await charger();
-    else setARemplacer({ jour: jourTrois, itemId: p.itemId });
-  };
+  const emplacementsDe = (j: string) => plan[j]?.prio ?? [];
+  const bonusDe = (j: string) => plan[j]?.bonus ?? [];
+  const enTrois = (p: Proposition) => (planifs[p.itemId]?.length ?? 0) > 0;
+  const onEtoile = (p: { itemId: number; nom: string }) => setEtoilePour({ itemId: p.itemId, nom: p.nom });
+  const nomTache = (id: number) => classement.find((p) => p.itemId === id)?.nom ?? infos[id]?.nom ?? "Tâche";
   const ouvrirMenu = (p: Proposition, emplacement: { jour: string; rang: number } | null) => {
     setMenuEmplacement(emplacement);
     setMenuTache(p);
@@ -401,7 +450,7 @@ function TachesContenu() {
                       {p.raison}
                     </Texte>
                   </View>
-                  <Etoile active={enTrois(p)} jour={nomJourTrois} onPress={() => onEtoile(p)} />
+                  <Etoile active={enTrois(p)} onPress={() => onEtoile(p)} />
                   <Texte style={[styles.duree, { color: t.textMuted }]}>
                     {filtre === null && nomListe(p.liste_id)
                       ? `${nomListe(p.liste_id)!.icone ?? ""} ${nomListe(p.liste_id)!.nom}`
@@ -596,7 +645,7 @@ function TachesContenu() {
                 <Texte style={{ fontSize: 22, color: t.textMuted }}>⋯</Texte>
               </TouchableOpacity>
             ) : (
-              <Etoile active={enTrois(p)} jour={nomJourTrois} onPress={() => onEtoile(p)} />
+              <Etoile active={enTrois(p)} onPress={() => onEtoile(p)} />
             )}
             <TouchableOpacity
               onPress={() => (suivante ? onEtape(p, suivante) : onTerminer(p))}
@@ -607,7 +656,7 @@ function TachesContenu() {
               accessibilityLabel={suivante ? `Cocher l'étape ${suivante.nom}` : `Cocher ${p.nom}`}
             />
           </View>
-          {rang === 0 && boutonJeCommence(p)}
+          {rang === 0 && (!slot || slot.jour === jour) && boutonJeCommence(p)}
         </View>
       </Glissable>
     );
@@ -649,16 +698,111 @@ function TachesContenu() {
       <Texte style={[styles.lien, { color: t.accentText }]}>+ Choisir</Texte>
     </TouchableOpacity>
   );
-  /** Les 3 emplacements d'un jour : tâche (cochable, ⋯ pour retirer ou remplacer) ou « + Choisir ». */
-  const sectionTrois = (j: string) =>
+  /** « ven. » : le jour où une tâche a été faite. */
+  const jourCourt = (iso: string) => libelleJourPlan(iso, jour);
+
+  /**
+   * Une tâche faite reste à sa place : cercle plein de la couleur de sa liste, titre barré, atténuée.
+   * Toucher : décocher, libérer l'emplacement. Faite un autre jour que le sien : « déjà faite le ven. » et « Libérer » d'un geste.
+   */
+  const carteFaite = (itemId: number, faiteLe: string, j: string, rang: number | null) => {
+    const couleur = couleurDe(classement.find((p) => p.itemId === itemId)?.liste_id ?? infos[itemId]?.liste_id ?? null);
+    const avant = faiteAvant({ faite: true, faiteLe }, j);
+    return (
+      <View key={`faite-${j}-${itemId}`} style={[styles.grande, { backgroundColor: t.bgCard, opacity: 0.65 }]}>
+        <View style={styles.grandeLigne}>
+          {rang !== null && <Texte style={[styles.numero, { color: couleur }]}>{rang + 1}</Texte>}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => setMenuFaite({ itemId, nom: nomTache(itemId), jour: j, rang, faiteLe })}
+            accessibilityRole="button"
+            accessibilityLabel={`${nomTache(itemId)}, faite. Toucher : décocher ou libérer`}
+          >
+            <Texte style={[styles.nom, { color: t.textPrimary, textDecorationLine: "line-through" }]} numberOfLines={2}>
+              {nomTache(itemId)}
+            </Texte>
+            <Texte style={[styles.raisonLigne, { color: t.textMuted }]}>{avant ? `déjà faite le ${jourCourt(faiteLe)}` : "faite ✓"}</Texte>
+          </TouchableOpacity>
+          {avant && (
+            <TouchableOpacity onPress={() => libererFaite(j, rang, itemId)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Libérer l'emplacement de ${nomTache(itemId)}`}>
+              <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "700" }}>Libérer</Texte>
+            </TouchableOpacity>
+          )}
+          <View style={[styles.cercle, { borderColor: couleur, backgroundColor: couleur, alignItems: "center", justifyContent: "center" }]}>
+            <Texte style={{ color: "#000", fontSize: 16, fontWeight: "700", lineHeight: 20 }}>✓</Texte>
+          </View>
+        </View>
+      </View>
+    );
+  };
+  const libererFaite = async (j: string, rang: number | null, itemId: number) => {
+    if (rang !== null) await retirerDesTrois(j, rang);
+    else await retirerDuBonus(j, itemId);
+    await charger();
+  };
+
+  /** Une tâche placée que le classement ne propose pas aujourd'hui (ex. récurrente d'un autre jour) : une carte simple, ⋯ pour la libérer. */
+  const cartePlanifiee = (itemId: number, j: string, rang: number | null) => (
+    <View key={`prevue-${j}-${rang ?? "b"}-${itemId}`} style={[styles.grande, { backgroundColor: t.bgCard }]}>
+      <View style={styles.grandeLigne}>
+        {rang !== null && <Texte style={[styles.numero, { color: couleurDe(infos[itemId]?.liste_id ?? null) }]}>{rang + 1}</Texte>}
+        <View style={{ flex: 1 }}>
+          <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={2}>
+            {nomTache(itemId)}
+          </Texte>
+          <Texte style={[styles.raisonLigne, { color: t.textMuted }]}>prévue ce jour-là</Texte>
+        </View>
+        <TouchableOpacity onPress={() => setMenuFaite({ itemId, nom: nomTache(itemId), jour: j, rang, faiteLe: null })} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Libérer ou modifier ${nomTache(itemId)}`}>
+          <Texte style={{ fontSize: 22, color: t.textMuted }}>⋯</Texte>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  /** Un jour passé : ce qui était prévu et ce qui a été fait, rien à modifier. */
+  const ligneLecture = (itemId: number, faite: boolean, faiteLe: string | null, j: string, rang: number | null) => (
+    <View key={`lecture-${j}-${rang ?? "b"}-${itemId}`} style={[styles.grande, { backgroundColor: t.bgCard, opacity: faite ? 0.8 : 1 }]}>
+      <View style={styles.grandeLigne}>
+        {rang !== null && <Texte style={[styles.numero, { color: couleurDe(classement.find((p) => p.itemId === itemId)?.liste_id ?? infos[itemId]?.liste_id ?? null) }]}>{rang + 1}</Texte>}
+        <View style={{ flex: 1 }}>
+          <Texte style={[styles.nom, { color: t.textPrimary, textDecorationLine: faite ? "line-through" : "none" }]} numberOfLines={2}>
+            {nomTache(itemId)}
+          </Texte>
+          <Texte style={[styles.raisonLigne, { color: t.textMuted }]}>{faite ? (faiteLe === j ? "faite ✓" : `faite le ${jourCourt(faiteLe ?? j)}`) : "pas faite"}</Texte>
+        </View>
+      </View>
+    </View>
+  );
+
+  /** Les 3 emplacements d'un jour : tâche (cochable, ⋯ pour retirer ou remplacer), tâche faite (restée, cochée) ou « + Choisir ». */
+  const sectionTrois = (j: string, lecture = false) =>
     emplacementsDe(j).map((e) => {
+      if (e.itemId !== null && e.faite) return lecture ? ligneLecture(e.itemId, true, e.faiteLe, j, e.rang) : carteFaite(e.itemId, e.faiteLe ?? j, j, e.rang);
       const p = e.itemId !== null ? classement.find((x) => x.itemId === e.itemId) : undefined;
+      if (lecture) {
+        return e.itemId !== null ? ligneLecture(e.itemId, false, null, j, e.rang) : (
+          <View key={`vide-${j}-${e.rang}`} style={[styles.caseVide, { borderColor: t.border }]}>
+            <Texte style={[styles.numero, { color: t.textMuted }]}>{e.rang + 1}</Texte>
+            <Texte style={[styles.vide, { color: t.textMuted }]}>rien de prévu</Texte>
+          </View>
+        );
+      }
+      if (!p && e.itemId !== null) return cartePlanifiee(e.itemId, j, e.rang);
       return p ? carteGrande(p, e.rang, { jour: j, propose: estPropose(e) }) : caseVide(j, e.rang);
     });
-  const aChoisiDemain = emplacementsDemain.some((e) => e.itemId !== null && !estPropose(e));
+
+  /** Les bonus d'un jour (autant que je veux), à la suite des 3. */
+  const sectionBonus = (j: string, lecture = false) =>
+    bonusDe(j).map((b) => {
+      if (b.faite) return lecture ? ligneLecture(b.itemId, true, b.faiteLe, j, null) : carteFaite(b.itemId, b.faiteLe ?? j, j, null);
+      const p = classement.find((x) => x.itemId === b.itemId);
+      if (!p) return lecture ? ligneLecture(b.itemId, false, null, j, null) : cartePlanifiee(b.itemId, j, null);
+      return lecture ? ligneLecture(p.itemId, false, null, j, null) : carteGrande(p, null);
+    });
+  const aChoisiDemain = emplacementsDe(demain).some((e) => e.itemId !== null && !estPropose(e));
   /** Feuille « Choisir » : suggestions du moteur d'abord, puis toutes les tâches à faire par liste. */
   const groupesChoix = (j: string): { suggestions: GroupeChoix; groupes: GroupeChoix[] } => {
-    const prises = new Set(emplacementsDe(j).flatMap((e) => (e.itemId !== null ? [e.itemId] : [])));
+    const prises = new Set([...emplacementsDe(j).flatMap((e) => (e.itemId !== null ? [e.itemId] : [])), ...bonusDe(j).map((b) => b.itemId)]);
     const libres = classement.filter((p) => !prises.has(p.itemId));
     const tache = (p: Proposition) => ({ itemId: p.itemId, nom: p.nom, duree_min: p.duree_min });
     const parRang = [...libres].sort((a, b) => a.rang - b.rang);
@@ -669,15 +813,21 @@ function TachesContenu() {
     })
       .slice(0, 5)
       .map((c) => libres.find((p) => p.itemId === c.itemId)!);
+    // Un jour futur : ses tâches prévues d'abord (« Prévues ce jour-là »), puis les suggestions du moteur.
+    const prevues = j > jour ? libres.filter((p) => prevueLe(p.jours, j) || p.echeance === j) : [];
+    const moteur: GroupeChoix = { titre: "Suggestions", couleur: t.accent, taches: suggeres.filter((p) => !prevues.includes(p)).map(tache) };
     return {
-      suggestions: { titre: "Suggestions", couleur: t.accent, taches: suggeres.map(tache) },
-      groupes: [...listes.map((l) => ({ id: l.id as number | null, titre: l.nom })), { id: null, titre: "Sans liste" }]
-        .map((g) => ({
-          titre: g.titre,
-          couleur: g.id === null ? t.textMuted : couleurDe(g.id),
-          taches: ordreManuel(libres.filter((p) => p.liste_id === g.id)).map(tache),
-        }))
-        .filter((g) => g.taches.length > 0),
+      suggestions: prevues.length > 0 ? { titre: "Prévues ce jour-là", couleur: t.accent, taches: prevues.map(tache) } : moteur,
+      groupes: [
+        ...(prevues.length > 0 ? [moteur] : []),
+        ...[...listes.map((l) => ({ id: l.id as number | null, titre: l.nom })), { id: null as number | null, titre: "Sans liste" }]
+          .map((g) => ({
+            titre: g.titre,
+            couleur: g.id === null ? t.textMuted : couleurDe(g.id),
+            taches: ordreManuel(libres.filter((p) => p.liste_id === g.id)).map(tache),
+          }))
+          .filter((g) => g.taches.length > 0),
+      ],
     };
   };
   const blocRdv = rdvVus.length > 0 && (
@@ -890,10 +1040,20 @@ function TachesContenu() {
 
             {blocRdv}
 
-            {jourChoisi === demain && (
+            {jourChoisi !== null && jourChoisi > jour && (
               <>
-                <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: spacing.md }]}>MES 3 POUR DEMAIN</Texte>
-                {sectionTrois(demain)}
+                <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: spacing.md }]}>MES 3 POUR {jourCourt(jourChoisi).toUpperCase()}</Texte>
+                {sectionTrois(jourChoisi)}
+                {bonusDe(jourChoisi).length > 0 && <Texte style={[styles.surtitre, { color: t.textMuted }]}>BONUS</Texte>}
+                {sectionBonus(jourChoisi)}
+              </>
+            )}
+            {jourChoisi !== null && jourChoisi < jour && (
+              <>
+                <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: spacing.md }]}>CE QUI ÉTAIT PRÉVU</Texte>
+                {sectionTrois(jourChoisi, true)}
+                {bonusDe(jourChoisi).length > 0 && <Texte style={[styles.surtitre, { color: t.textMuted }]}>BONUS</Texte>}
+                {sectionBonus(jourChoisi, true)}
               </>
             )}
 
@@ -937,7 +1097,14 @@ function TachesContenu() {
                     Aucune tâche en cours.
                   </Texte>
                 )}
+                {!jourDifficile && celebre && (
+                  <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent, borderWidth: 1 }]}>
+                    <Texte style={{ color: t.accentText, fontSize: typography.body, fontWeight: "700" }}>Les 3 sont faites ✓</Texte>
+                  </View>
+                )}
                 {!jourDifficile && sectionTrois(jour)}
+                {!jourDifficile && bonusDe(jour).length > 0 && <Texte style={[styles.surtitre, { color: t.textMuted }]}>BONUS</Texte>}
+                {!jourDifficile && sectionBonus(jour)}
                 {!jourDifficile && new Date().getHours() >= 18 && !aChoisiDemain && carteDemain}
               </>
             )}
@@ -1004,7 +1171,7 @@ function TachesContenu() {
 
       <FeuilleChoixTache
         visible={choixTrois !== null}
-        titre={choixTrois && choixTrois.jour === demain ? "Choisir pour demain" : "Choisir pour aujourd'hui"}
+        titre={choixTrois ? `Choisir pour ${libelleJourPlan(choixTrois.jour, jour).toLowerCase()}` : "Choisir"}
         {...groupesChoix(choixTrois?.jour ?? jour)}
         onChoisir={async (id) => {
           if (!choixTrois) return;
@@ -1015,17 +1182,43 @@ function TachesContenu() {
         onFermer={() => setChoixTrois(null)}
       />
 
+      {etoilePour && (
+        <FeuilleEtoile
+          key={etoilePour.itemId}
+          tache={etoilePour}
+          aujourdhui={jour}
+          classement={classement}
+          placements={planifs[etoilePour.itemId] ?? []}
+          nomDe={nomTache}
+          onFini={() => {
+            setEtoilePour(null);
+            charger();
+          }}
+        />
+      )}
+
       <MenuOptions
-        titre="Les 3 sont pris : laquelle remplacer ?"
+        titre={menuFaite?.nom ?? ""}
         options={
-          aRemplacer
-            ? emplacementsDe(aRemplacer.jour).flatMap((e) => {
-                const p = classement.find((x) => x.itemId === e.itemId);
-                return p ? [{ libelle: p.nom, onPress: () => placer3(aRemplacer.jour, e.rang, aRemplacer.itemId) }] : [];
-              })
+          menuFaite
+            ? [
+                ...(menuFaite.faiteLe
+                  ? [
+                      {
+                        libelle: "Décocher (remettre à faire)",
+                        onPress: async () => {
+                          await annulerCompletion(menuFaite.itemId, menuFaite.faiteLe ?? undefined);
+                          await charger();
+                        },
+                      },
+                    ]
+                  : []),
+                { libelle: "Libérer l'emplacement", onPress: () => libererFaite(menuFaite.jour, menuFaite.rang, menuFaite.itemId) },
+                { libelle: "Modifier la tâche", onPress: () => router.push(`/nouvelle-tache?id=${menuFaite.itemId}`) },
+              ]
             : []
         }
-        onFermer={() => setARemplacer(null)}
+        onFermer={() => setMenuFaite(null)}
       />
 
       {/* Bouton « + » : noter vite, tâche complète, listes */}
@@ -1099,8 +1292,13 @@ function TachesContenu() {
         couleur={detail ? couleurDe(detail.liste_id) : t.accent}
         jour={jour}
         enTrois={detail ? enTrois(detail) : false}
-        nomJourTrois={nomJourTrois}
-        onEtoile={() => detail && onEtoile(detail)}
+        nomJourTrois=""
+        onEtoile={() => {
+          if (!detail) return;
+          const d = detail;
+          setDetailId(null);
+          onEtoile(d);
+        }}
         onFermer={() => setDetailId(null)}
         onEtape={async (e) => {
           if (detail && (await onEtape(detail, e))) setDetailId(null);

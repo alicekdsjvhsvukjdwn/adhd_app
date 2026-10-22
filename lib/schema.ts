@@ -863,6 +863,17 @@ export const SQL_COURSES_V2 = `
 `;
 
 /**
+ * Migration 40 : « Mes 3 » planifiables et bonus. bonus = 1 pour une tâche bonus (rang = l'ordre) ; place_le = le moment où la tâche
+ * a été placée ; origine = d'où elle vient : 'moi' | 'report' | 'moteur' | 'prevue' (pour comparer plus tard planifier à l'avance et réaliser).
+ */
+export const SQL_TROIS_V2 = `
+  ALTER TABLE trois ADD COLUMN bonus INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE trois ADD COLUMN place_le TEXT NOT NULL DEFAULT '';
+  ALTER TABLE trois ADD COLUMN origine TEXT NOT NULL DEFAULT '';
+  UPDATE trois SET origine = CASE source WHEN 'choisi' THEN 'moi' WHEN 'report' THEN 'report' WHEN 'moteur' THEN 'moteur' ELSE '' END;
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */
