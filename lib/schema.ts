@@ -737,6 +737,32 @@ export const SQL_PROJET_TYPES_DEFAUT = `
 `;
 
 /**
+ * Migration 37 : les étapes et le matériel d'un projet peuvent devenir des tâches (liste « Projets » et « Courses / achats »),
+ * points par jour de projet, et un projet d'exemple (créé une seule fois, supprimable).
+ */
+export const SQL_PROJETS_V2 = `
+  ALTER TABLE projet_etapes ADD COLUMN item_id INTEGER;
+  ALTER TABLE projet_materiel ADD COLUMN item_id INTEGER;
+  ALTER TABLE projets ADD COLUMN points_fini INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE IF NOT EXISTS projets_points_jours (
+    jour TEXT PRIMARY KEY
+  );
+  INSERT INTO projets (nom, type_id, etat, pourquoi, cree_le, maj_le)
+    SELECT 'Réveil lumineux ESP32',
+           COALESCE((SELECT id FROM projet_types WHERE nom LIKE 'Électronique%' ORDER BY id LIMIT 1), 0),
+           'idee', 'Un exemple pour voir comment ça marche : tu peux le supprimer.',
+           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+  INSERT INTO projet_etapes (projet_id, nom, ordre)
+    SELECT (SELECT MAX(id) FROM projets), nom, ordre FROM (
+      SELECT 0 AS ordre, 'Choisir les composants' AS nom
+      UNION ALL SELECT 1, 'Commander'
+      UNION ALL SELECT 2, 'Faire clignoter une LED'
+      UNION ALL SELECT 3, 'Connecter au Wi-Fi'
+      UNION ALL SELECT 4, 'Relier à l''appli'
+    );
+`;
+
+/**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
  */

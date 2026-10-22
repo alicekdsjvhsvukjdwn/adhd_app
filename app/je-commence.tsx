@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { FeuilleAvance } from "../components/FeuilleAvance";
 import { Texte } from "../components/Texte";
 import { ZoneNote } from "../components/ZoneNote";
 import { completer, getAujourdhui, getItem } from "../lib/db";
 import { cocherEtape, getEtapes } from "../lib/db/etapes";
+import { rattraperProjets } from "../lib/db/projets";
 import { demarrerSession, terminerSession } from "../lib/db/sessions";
 import {
   dureeParDefaut,
@@ -30,7 +32,8 @@ import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
  * « Je commence » : une seule tâche (ou la prochaine étape) et un minuteur.
- * - ?id=12 : la tâche ; &etape=34 : seulement cette étape.
+ * - ?id=12 : la tâche ; &etape=34 : seulement cette étape ; &projet=5 : la tâche vient d'un projet créatif,
+ *   et la séance finit par la feuille « J'ai avancé » (cocher, photo, une ligne).
  * Trois sorties, aucune n'est un échec : C'est fait, Encore un peu, J'arrête là.
  * Quitter l'écran compte comme « J'arrête là » (sortie « retour » dans le journal).
  */
@@ -85,12 +88,14 @@ function Bouton({
 export default function JeCommence() {
   const router = useRouter();
   const t = useTheme();
-  const params = useLocalSearchParams<{ id?: string; etape?: string }>();
+  const params = useLocalSearchParams<{ id?: string; etape?: string; projet?: string }>();
 
   const [cible, setCible] = useState<Cible | null>(null);
   const [duree, setDuree] = useState(dureeParDefaut(null));
   const [session, setSession] = useState<SessionOuverte | null>(null);
   const [arrete, setArrete] = useState(false);
+  /** Projet créatif : minutes de la séance, pour la feuille « J'ai avancé » ; null = pas ouverte. */
+  const [avance, setAvance] = useState<number | null>(null);
   /** Date de la complétion à noter dans le carnet, après « C'est fait ». */
   const [noteOuverte, setNoteOuverte] = useState<string | null>(null);
   const [maintenant, setMaintenant] = useState(() => Date.now());
@@ -219,14 +224,21 @@ export default function JeCommence() {
         tacheFaite = true;
       }
     }
+    if (params.projet) {
+      // La tâche faite coche l'étape du projet, puis « J'ai avancé ».
+      await rattraperProjets();
+      setAvance(minutes);
+      return;
+    }
     // Tâche faite : la note du carnet est proposée, comme dans Tâches.
     if (tacheFaite) setNoteOuverte(getAujourdhui());
     else router.back();
   };
 
   const jArreteLa = async () => {
-    await fermer("arret");
+    const minutes = await fermer("arret");
     setArrete(true);
+    if (params.projet) setAvance(minutes);
   };
 
   const restant = session ? restantMs(session.fin, maintenant) : 0;
@@ -354,6 +366,17 @@ export default function JeCommence() {
             </View>
           )}
         </>
+      )}
+      {params.projet && (
+        <FeuilleAvance
+          projetId={Number(params.projet)}
+          minutes={avance ?? 0}
+          visible={avance !== null}
+          onFerme={() => {
+            setAvance(null);
+            if (!arrete) router.back();
+          }}
+        />
       )}
     </ScrollView>
   );

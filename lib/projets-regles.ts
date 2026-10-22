@@ -130,3 +130,41 @@ export function urlValide(brut: string): string | null {
   const complete = /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `https://${u}`;
   return /^https?:\/\/[^./]+\.[^/]+/i.test(complete) ? complete : null;
 }
+
+// ─── Points, suivi ──────────────────────────────────────────────────────
+
+/** +5 par jour où un projet avance (une séance ou une étape cochée), une seule fois par jour. */
+export const POINTS_PROJET_JOUR = 5;
+/** +50 une seule fois, quand un projet devient « Fini ». */
+export const POINTS_PROJET_FINI = 50;
+/** Un projet en cours sans rien depuis plus de 2 semaines est signalé (sans reproche). */
+export const JOURS_OUBLIE = 14;
+
+const joursEntre = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000);
+const decaler = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+/** Lundi de la semaine d'un jour AAAA-MM-JJ. */
+export const lundiDeSemaine = (iso: string) => decaler(iso, -((new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7));
+
+/** Les projets « en cours » que je n'ai pas touchés depuis plus de 2 semaines, du plus oublié au moins oublié. */
+export function projetsOublies<T extends { etat: string; derniere: string }>(projets: T[], aujourdhui: string, seuil = JOURS_OUBLIE): (T & { jours: number })[] {
+  return projets
+    .filter((p) => p.etat === "en_cours")
+    .map((p) => ({ ...p, jours: joursEntre(p.derniere, aujourdhui) }))
+    .filter((p) => p.jours > seuil)
+    .sort((a, b) => b.jours - a.jours);
+}
+
+export type SemaineProjets = { lundi: string; total: number; parType: Record<number, number> };
+
+/** Les minutes de projet des `nb` dernières semaines (la plus ancienne d'abord, la semaine en cours en dernier), par type. */
+export function minutesParSemaine(entrees: { jour: string; minutes: number; type_id: number }[], aujourdhui: string, nb = 8): SemaineProjets[] {
+  const debut = lundiDeSemaine(aujourdhui);
+  const semaines: SemaineProjets[] = Array.from({ length: nb }, (_, i) => ({ lundi: decaler(debut, -7 * (nb - 1 - i)), total: 0, parType: {} }));
+  for (const e of entrees) {
+    const s = semaines.find((x) => e.jour >= x.lundi && e.jour < decaler(x.lundi, 7));
+    if (!s || e.minutes <= 0) continue;
+    s.total += e.minutes;
+    s.parType[e.type_id] = (s.parType[e.type_id] ?? 0) + e.minutes;
+  }
+  return semaines;
+}

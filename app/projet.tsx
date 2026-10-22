@@ -15,6 +15,7 @@ import {
   View,
   type GestureResponderEvent,
 } from "react-native";
+import { FeuilleAvance } from "../components/FeuilleAvance";
 import { IconeProjet } from "../components/IconeProjet";
 import { BoutonOptions, type Option } from "../components/Options";
 import { ChampTexte, Texte } from "../components/Texte";
@@ -29,6 +30,10 @@ import {
   changerEtat,
   deplacerEtape,
   enregistrerNotes,
+  estPourAujourdhui,
+  pourAujourdhui,
+  rattraperProjets,
+  tacheDeLEtape,
   lireProjet,
   listerEtapes,
   listerJournal,
@@ -52,6 +57,7 @@ import {
   type Projet,
   type TypeProjet,
 } from "../lib/db/projets";
+import { getAujourdhui } from "../lib/db/completions";
 import { dateCourte } from "../lib/esprit-regles";
 import { choisirPhotos } from "../lib/photos";
 import { avancement, avantMaintenant, ETATS_PROJET, etapesOrdonnees, libelleDuree, prochaineEtape, tempsTotal, toutEstFait, urlValide } from "../lib/projets-regles";
@@ -81,10 +87,14 @@ export default function FicheProjet() {
   const [lienUrl, setLienUrl] = useState("");
   const [saisie, setSaisie] = useState<Saisie | null>(null);
   const [entree, setEntree] = useState<{ note: string; minutes: string; photos: string[] } | null>(null);
+  const [avance, setAvance] = useState(false);
+  const [dansTrois, setDansTrois] = useState(false);
+  const [message, setMessage] = useState("");
   const [curseur, setCurseur] = useState(50);
   const [largeur, setLargeur] = useState(0);
 
   const charger = useCallback(async () => {
+    await rattraperProjets();
     const p = await lireProjet(projetId);
     setProjet(p);
     if (!p) return;
@@ -105,6 +115,8 @@ export default function FicheProjet() {
     setMateriel(m);
     setLiens(l);
     setNotes(p.notes);
+    const suivante = prochaineEtape(e);
+    setDansTrois(suivante ? await estPourAujourdhui(suivante.id, getAujourdhui()) : false);
   }, [projetId]);
   useFocusEffect(
     useCallback(() => {
@@ -127,8 +139,20 @@ export default function FicheProjet() {
     ]);
 
   const cocher = async (idEtape: number) => {
+    setMessage("");
     await basculerEtape(idEtape);
     await charger();
+  };
+
+  const pourAujourdhuiClic = async (idEtape: number) => {
+    const ok = await pourAujourdhui(idEtape, getAujourdhui());
+    setMessage(ok ? "Ajoutée à Mes 3 d'aujourd'hui." : "Tes 3 emplacements du jour sont déjà pris.");
+    await charger();
+  };
+
+  const jeMyMets = async (idEtape: number) => {
+    const item = await tacheDeLEtape(idEtape);
+    if (item !== null) router.push(`/je-commence?id=${item}&projet=${projetId}` as never);
   };
 
   const ajouterPhotoFin = async () => {
@@ -229,10 +253,19 @@ export default function FicheProjet() {
           {prochaine ? (
             <>
               <Texte style={{ color: t.textPrimary, fontSize: typography.h3, fontWeight: "600" }}>{prochaine.nom}</Texte>
-              <TouchableOpacity onPress={() => cocher(prochaine.id)} style={[styles.action, { backgroundColor: couleur }]} accessibilityRole="button">
-                <Check color="#000" size={18} />
-                <Texte style={{ color: "#000", fontWeight: "700" }}>C&apos;est fait</Texte>
+              <TouchableOpacity onPress={() => jeMyMets(prochaine.id)} style={[styles.action, { backgroundColor: couleur }]} accessibilityRole="button">
+                <Texte style={{ color: "#000", fontWeight: "700" }}>▶ Je m&apos;y mets</Texte>
               </TouchableOpacity>
+              <View style={styles.ligne}>
+                <TouchableOpacity onPress={() => pourAujourdhuiClic(prochaine.id)} style={[styles.secondaire, { borderColor: couleur }]} accessibilityRole="button">
+                  <Texte style={{ color: t.textPrimary, fontWeight: "600", fontSize: typography.bodySmall }}>{dansTrois ? "★ Dans Mes 3" : "★ Pour aujourd'hui"}</Texte>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => cocher(prochaine.id)} style={[styles.secondaire, { borderColor: t.border }]} accessibilityRole="button">
+                  <Check color={t.textSecondary} size={16} />
+                  <Texte style={{ color: t.textSecondary, fontWeight: "600", fontSize: typography.bodySmall }}>C&apos;est fait</Texte>
+                </TouchableOpacity>
+              </View>
+              {message ? <Texte style={{ color: t.textMuted, fontSize: typography.small }}>{message}</Texte> : null}
             </>
           ) : toutEstFait(etapes) ? (
             <>
@@ -254,6 +287,10 @@ export default function FicheProjet() {
             <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall }}>Ajoute une première étape ci-dessous, même toute petite.</Texte>
           )}
         </View>
+
+        <TouchableOpacity onPress={() => setAvance(true)} style={[styles.bouton, { borderColor: t.accent }]} accessibilityRole="button">
+          <Texte style={{ color: t.accentText, fontWeight: "600" }}>J&apos;ai avancé</Texte>
+        </TouchableOpacity>
 
         {/* Réalisation : photos finales d'un projet fini */}
         {projet.etat === "fini" && (
@@ -447,6 +484,17 @@ export default function FicheProjet() {
         </View>
       </ScrollView>
 
+      <FeuilleAvance
+        projetId={projetId}
+        minutes={0}
+        visible={avance}
+        onFerme={() => {
+          setAvance(false);
+          setMessage("");
+          charger();
+        }}
+      />
+
       {/* Saisie d'un texte (modifier une étape, ajouter une sous-étape) */}
       <Modal visible={saisie !== null} transparent animationType="slide" onRequestClose={() => setSaisie(null)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -557,6 +605,7 @@ const styles = StyleSheet.create({
   piste: { height: 8, borderRadius: 4, overflow: "hidden" },
   etiquette: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginTop: spacing.xl, marginBottom: spacing.sm },
   carte: { borderWidth: 1, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
+  secondaire: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs, borderWidth: 1, borderRadius: radius.pill, paddingVertical: spacing.md },
   action: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, borderRadius: radius.pill, paddingVertical: spacing.md },
   etape: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   case: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },

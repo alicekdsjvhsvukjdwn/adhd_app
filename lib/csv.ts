@@ -457,6 +457,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       cree_le: ISO,
       maj_le: `dernière modification, ${ISO}`,
       fini_le: `jour où le projet est devenu fini, ${JOUR}, vide sinon`,
+      points_fini: "1 = les 50 points de « projet fini » ont été donnés (une seule fois)",
     },
   },
   projet_etapes: {
@@ -469,6 +470,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       ordre: "position parmi les étapes de même niveau",
       faite: "1 = faite, 0 = à faire",
       faite_le: `${JOUR}, vide si pas faite`,
+      item_id: "tâche qui reflète l'étape (« Pour aujourd'hui »), table items, vide sinon",
     },
   },
   projet_journal: {
@@ -488,7 +490,11 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   },
   projet_materiel: {
     table: "Projets créatifs : le matériel d'un projet.",
-    colonnes: { id: "identifiant", projet_id: "projet (table projets)", nom: "texte", a_acheter: "1 = à acheter, 0 = je l'ai" },
+    colonnes: { id: "identifiant", projet_id: "projet (table projets)", nom: "texte", a_acheter: "1 = à acheter, 0 = je l'ai", item_id: "tâche de la liste Courses / achats (table items), vide sinon" },
+  },
+  projets_points_jours: {
+    table: "Projets créatifs : un jour où un projet a avancé a rapporté 5 points (une seule fois par jour).",
+    colonnes: { jour: JOUR },
   },
   projet_liens: {
     table: "Projets créatifs : les liens gardés avec un projet.",

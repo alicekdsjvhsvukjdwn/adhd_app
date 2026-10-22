@@ -7,6 +7,7 @@ import {
 } from "../regles-taches";
 import { POINTS_MEDITATION } from "../meditations";
 import { POINTS_MENAGE } from "../menage-regles";
+import { POINTS_PROJET_FINI, POINTS_PROJET_JOUR } from "../projets-regles";
 import { POINTS_TCC } from "../tcc-points";
 import { POINTS_ETAPE_SKILL, POINTS_MAITRISE } from "../skills";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
@@ -74,6 +75,14 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
   {
     action: "Une exposition ou ma séance avec moi-même (TCC en autonomie), une fois par jour. Humeur et journaux : jamais de points",
     points: `+${POINTS_TCC}`,
+  },
+  {
+    action: "Un projet créatif qui avance : une séance ou une étape cochée (une fois par jour)",
+    points: `+${POINTS_PROJET_JOUR}`,
+  },
+  {
+    action: "Un projet créatif qui passe en « Fini » (une seule fois par projet)",
+    points: `+${POINTS_PROJET_FINI}`,
   },
   {
     action: "Une tâche de ménage due ou en retard (une fois par tâche et par échéance ; rien si elle n'était pas encore due)",

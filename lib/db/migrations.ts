@@ -18,6 +18,7 @@ import {
   SQL_SEANCES_SPORT,
   SQL_PLAN_SPORT,
   SQL_PROJETS,
+  SQL_PROJETS_V2,
   SQL_PROJET_TYPES_DEFAUT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
@@ -827,6 +828,14 @@ const MIGRATIONS: Migration[] = [
     run: async (db) => {
       await db.execAsync(SQL_PROJETS);
       await db.execAsync(SQL_PROJET_TYPES_DEFAUT);
+    },
+  },
+
+  {
+    version: 37,
+    nom: "projets : étapes et matériel liés aux tâches, points, projet d'exemple",
+    run: async (db) => {
+      await db.execAsync(SQL_PROJETS_V2);
     },
   },
 ];
