@@ -2,8 +2,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { BoutonMenu } from "../components/BoutonMenu";
+import { FeuilleCuisine } from "../components/FeuilleCuisine";
 import { Texte } from "../components/Texte";
 import { libelleQuantite, presenceIngredients, quantitePourPortions, tagsDe, tempsTotalRecette } from "../lib/cuisine-regles";
+import { ajouterManquantsAuxCourses } from "../lib/db/cuisine-courses";
 import { basculerFavori, dupliquerRecette, lireRecette, listerAliments, supprimerRecette, type RecetteComplete } from "../lib/db/cuisine";
 import { libelleDuree } from "../lib/projets-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -19,6 +21,8 @@ export default function Recette() {
   const [r, setR] = useState<RecetteComplete | null>(null);
   const [inventaire, setInventaire] = useState<{ nom: string; toujours_la: number }[]>([]);
   const [portions, setPortions] = useState<number | null>(null);
+  const [cuisine, setCuisine] = useState(false);
+  const [message, setMessage] = useState("");
 
   const charger = useCallback(async () => {
     const [x, inv] = await Promise.all([lireRecette(recetteId), listerAliments()]);
@@ -102,6 +106,10 @@ export default function Recette() {
         {portions !== recette.portions && <Texte style={{ color: t.textMuted, fontSize: typography.small }}>(recette pour {recette.portions})</Texte>}
       </View>
 
+      <TouchableOpacity onPress={() => setCuisine(true)} style={[styles.cuisine, { borderColor: t.accent }]} accessibilityRole="button">
+        <Texte style={{ color: t.accentText, fontWeight: "700", fontSize: typography.body }}>J&apos;ai cuisiné</Texte>
+      </TouchableOpacity>
+
       <Texte style={[styles.etiquette, { color: t.textMuted }]}>INGRÉDIENTS{ingredients.length > 0 ? (manque === 0 ? " · TOUT EST LÀ" : ` · IL MANQUE ${manque}`) : ""}</Texte>
       {presences.map(({ ingredient: i, present }, k) => (
         <View key={k} style={[styles.ingredient, { borderColor: t.border }]}>
@@ -113,6 +121,25 @@ export default function Recette() {
           </Texte>
         </View>
       ))}
+
+      {manque > 0 && (
+        <>
+          <TouchableOpacity
+            onPress={async () => {
+              const n = await ajouterManquantsAuxCourses(
+                presences.filter((p) => !p.present).map((p) => ({ nom: p.ingredient.nom, aliment: p.ingredient.aliment, quantite: quantitePourPortions(p.ingredient.quantite, recette.portions, portions), unite: p.ingredient.unite })),
+                "recette",
+              );
+              setMessage(n > 0 ? `${n} article${n > 1 ? "s" : ""} ajouté${n > 1 ? "s" : ""} aux courses.` : "Déjà sur ta liste de courses.");
+            }}
+            style={{ marginTop: spacing.md }}
+            accessibilityRole="button"
+          >
+            <Texte style={{ color: t.accentText, fontWeight: "600", fontSize: typography.bodySmall }}>+ Mettre ce qui manque dans les courses</Texte>
+          </TouchableOpacity>
+          {message ? <Texte style={{ color: t.textMuted, fontSize: typography.small, marginTop: 4 }}>{message}</Texte> : null}
+        </>
+      )}
 
       <Texte style={[styles.etiquette, { color: t.textMuted }]}>ÉTAPES</Texte>
       {etapes.map((e, k) => (
@@ -128,6 +155,7 @@ export default function Recette() {
           <Texte style={{ color: t.textSecondary, fontSize: typography.body, lineHeight: 22 }}>{recette.notes}</Texte>
         </>
       ) : null}
+      <FeuilleCuisine recetteId={recetteId} portions={portions} visible={cuisine} onFerme={() => { setCuisine(false); charger(); }} />
     </ScrollView>
   );
 }
@@ -138,6 +166,7 @@ const styles = StyleSheet.create({
   ligne: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   photo: { width: "100%", height: 200, borderRadius: radius.lg, marginBottom: spacing.md },
   titre: { fontSize: typography.h1, fontWeight: "600" },
+  cuisine: { borderWidth: 1, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: "center", marginTop: spacing.sm },
   cuisiner: { borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: "center", marginTop: spacing.lg },
   etiquette: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginTop: spacing.xl, marginBottom: spacing.sm },
   rond: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center" },

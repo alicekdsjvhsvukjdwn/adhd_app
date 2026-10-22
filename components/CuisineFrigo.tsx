@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, Keybo
 import { useJourCourant } from "../hooks/useJourCourant";
 import { CATEGORIES, EMPLACEMENTS, type Categorie, type Emplacement } from "../lib/cuisine-catalogue";
 import { alerteDate, jaugeDe, NIVEAUX, rechercherCatalogue, type Niveau } from "../lib/cuisine-regles";
+import { ajouterAlimentAuxCourses } from "../lib/db/cuisine-courses";
 import { ajouterAliment, basculerToujoursLa, changerNiveau, listerAliments, modifierAliment, retirerAliment, type Aliment } from "../lib/db/cuisine";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { BoutonMenu } from "./BoutonMenu";
@@ -20,6 +21,7 @@ export function CuisineFrigo() {
   const [aliments, setAliments] = useState<Aliment[]>([]);
   const [q, setQ] = useState("");
   const [filtre, setFiltre] = useState<Emplacement | null>(null);
+  const [aAjoute, setAAjoute] = useState<number[]>([]);
   const [edition, setEdition] = useState<{ id: number; nom: string; emplacement: Emplacement; categorie: Categorie; peremption: string } | null>(null);
 
   const charger = useCallback(() => listerAliments().then(setAliments), []);
@@ -38,7 +40,13 @@ export function CuisineFrigo() {
     await charger();
   };
 
+  const versCourses = async (id: number) => {
+    await ajouterAlimentAuxCourses(id);
+    setAAjoute((l) => [...l, id]);
+  };
+
   const options = (a: Aliment): Option[] => [
+    { libelle: "+ Ajouter aux courses", onPress: () => versCourses(a.id) },
     { libelle: "Modifier", onPress: () => setEdition({ id: a.id, nom: a.nom, emplacement: a.emplacement, categorie: a.categorie, peremption: a.peremption }) },
     { libelle: a.toujours_la ? "Plus « toujours là »" : "Toujours là (sel, huile…)", onPress: () => basculerToujoursLa(a.id).then(charger) },
     { libelle: "Fini, plus rien", onPress: () => retirerAliment(a.id, "fini").then(charger) },
@@ -114,6 +122,11 @@ export function CuisineFrigo() {
                             {a.nom}
                             {a.toujours_la ? "  ∞" : ""}
                           </Texte>
+                          {a.niveau === "presque_fini" && !a.toujours_la && (
+                            <TouchableOpacity onPress={() => versCourses(a.id)} disabled={aAjoute.includes(a.id)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Ajouter ${a.nom} aux courses`}>
+                              <Texte style={{ color: aAjoute.includes(a.id) ? t.textMuted : t.accentText, fontSize: typography.small, fontWeight: "600" }}>{aAjoute.includes(a.id) ? "sur la liste de courses" : "+ Ajouter aux courses"}</Texte>
+                            </TouchableOpacity>
+                          )}
                           {alerte && <Texte style={{ color: ORANGE, fontSize: typography.small }}>{alerte === "vite" ? "à utiliser vite" : "date passée : à vérifier"}</Texte>}
                         </View>
                         {!a.toujours_la && <Jauge niveau={a.niveau} onChoisir={(n) => changerNiveau(a.id, n).then(charger)} nom={a.nom} />}

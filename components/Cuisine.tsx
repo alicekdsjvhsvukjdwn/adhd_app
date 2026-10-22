@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
+import { CuisineCourses } from "./CuisineCourses";
 import { CuisineFrigo } from "./CuisineFrigo";
 import { CuisineRecettes } from "./CuisineRecettes";
 import { Texte } from "./Texte";
@@ -8,9 +9,10 @@ import { Texte } from "./Texte";
 const PARTIES = [
   ["frigo", "Frigo & placards"],
   ["recettes", "Recettes"],
+  ["courses", "Courses"],
 ] as const;
 
-/** Ménage › Cuisine : Frigo & placards · Recettes. */
+/** Ménage › Cuisine : Frigo & placards · Recettes · Courses. */
 export function Cuisine() {
   const t = useTheme();
   const [partie, setPartie] = useState<(typeof PARTIES)[number][0]>("frigo");
@@ -26,7 +28,7 @@ export function Cuisine() {
           );
         })}
       </View>
-      {partie === "frigo" ? <CuisineFrigo /> : <CuisineRecettes />}
+      {partie === "frigo" ? <CuisineFrigo /> : partie === "recettes" ? <CuisineRecettes /> : <CuisineCourses />}
     </View>
   );
 }

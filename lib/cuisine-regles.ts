@@ -2,7 +2,7 @@
  * Cuisine (vegan) sans accès à la base : testable seul (tests/cuisine.test.mjs).
  * Inventaire sans chiffres (3 niveaux), recettes avec portions, comparaison recette ↔ inventaire.
  */
-import { CATALOGUE, type AlimentCatalogue } from "./cuisine-catalogue";
+import { CATALOGUE, RAYONS, type AlimentCatalogue, type Rayon } from "./cuisine-catalogue";
 
 // ─── Inventaire ─────────────────────────────────────────────────────────
 
@@ -108,13 +108,16 @@ export function libelleQuantite(q: number | null): string {
   return String(Math.round(q * 100) / 100).replace(".", ",");
 }
 
+/** L'eau du robinet ne s'achète pas : elle n'est jamais « manquante ». */
+const estEau = (nom: string) => normaliser(nom) === "eau";
+
 export type Presence = { ingredient: IngredientRecette; present: boolean };
 
 /** Chaque ingrédient est-il dans l'inventaire ? Un aliment « toujours là » (sel, huile…) est toujours présent s'il est dans la liste. */
 export function presenceIngredients(ingredients: IngredientRecette[], inventaire: AlimentInv[]): Presence[] {
   return ingredients.map((ingredient) => ({
     ingredient,
-    present: inventaire.some((a) => memeAliment(a.nom, ingredient.aliment || ingredient.nom) || (!!ingredient.aliment && memeAliment(a.nom, ingredient.nom))),
+    present: estEau(ingredient.nom) || inventaire.some((a) => memeAliment(a.nom, ingredient.aliment || ingredient.nom) || (!!ingredient.aliment && memeAliment(a.nom, ingredient.nom))),
   }));
 }
 
@@ -220,3 +223,83 @@ export function minuteurDeLEtape(texte: string): number {
 }
 
 export const tempsTotalRecette = (prep: number, cuisson: number) => Math.max(0, prep) + Math.max(0, cuisson);
+
+// ─── Courses, meal prep, « j'ai cuisiné », suivi ────────────────────────
+
+
+/** +5 par jour où j'ai cuisiné (« J'ai cuisiné » validé), une seule fois par jour. */
+export const POINTS_CUISINE = 5;
+
+/** Le rayon des courses d'un aliment : celui du catalogue, sinon « Autre ». */
+export function rayonDe(nom: string): Rayon {
+  return CATALOGUE.find((a) => memeAliment(a.nom, nom))?.rayon ?? "autre";
+}
+export const nomRayon = (r: string) => RAYONS.find((x) => x.cle === r)?.nom ?? "Autre";
+
+export type IngredientCalcule = { nom: string; aliment: string; quantite: number | null; unite: string };
+
+/**
+ * Additionne les ingrédients de plusieurs recettes pour les portions voulues.
+ * Un même aliment (nom du catalogue ou, à défaut, nom écrit) dans la même unité s'additionne ; sans quantité, il reste « au goût ».
+ */
+export function additionnerIngredients(recettes: { ingredients: IngredientRecette[]; portionsRecette: number; portionsVoulues: number }[]): IngredientCalcule[] {
+  const sortie: IngredientCalcule[] = [];
+  for (const r of recettes) {
+    for (const i of r.ingredients) {
+      const cle = i.aliment || i.nom;
+      const q = quantitePourPortions(i.quantite, r.portionsRecette, r.portionsVoulues);
+      const trouve = sortie.find((x) => memeAliment(x.aliment || x.nom, cle) && normaliser(x.unite) === normaliser(i.unite));
+      if (trouve) {
+        if (q !== null) trouve.quantite = Math.round(((trouve.quantite ?? 0) + q) * 100) / 100;
+      } else sortie.push({ nom: i.nom, aliment: i.aliment, quantite: q, unite: i.unite });
+    }
+  }
+  return sortie;
+}
+
+/** Ce qui manque : les ingrédients additionnés moins ce qui est dans l'inventaire (« presque fini » compte comme présent). */
+export function ingredientsManquants(calcules: IngredientCalcule[], inventaire: AlimentInv[]): IngredientCalcule[] {
+  return calcules.filter((c) => !estEau(c.nom) && !inventaire.some((a) => memeAliment(a.nom, c.aliment || c.nom) || (!!c.aliment && memeAliment(a.nom, c.nom))));
+}
+
+/** « 250 g », « 2 », « » : la quantité écrite à côté d'un article de courses. */
+export const libelleCourse = (q: number | null, unite: string): string => [libelleQuantite(q), unite].filter(Boolean).join(" ");
+
+export type Baisse = { alimentId: number; nom: string; de: Niveau; vers: Niveau };
+
+/**
+ * « J'ai cuisiné » : les aliments de l'inventaire utilisés par la recette passent d'un cran (plein → un peu → presque fini).
+ * Ceux « toujours là » ne bougent pas ; ceux déjà « presque fini » restent tels quels. L'utilisatrice confirme chaque ligne.
+ */
+export function baissesProposees(ingredients: IngredientRecette[], inventaire: (AlimentInv & { id: number; niveau: string })[]): Baisse[] {
+  const vues = new Set<number>();
+  const sortie: Baisse[] = [];
+  for (const i of ingredients) {
+    const a = inventaire.find((x) => memeAliment(x.nom, i.aliment || i.nom) || (!!i.aliment && memeAliment(x.nom, i.nom)));
+    if (!a || a.toujours_la || vues.has(a.id)) continue;
+    vues.add(a.id);
+    const de = niveauValide(a.niveau);
+    const vers = baisser(de);
+    if (vers !== de) sortie.push({ alimentId: a.id, nom: a.nom, de, vers });
+  }
+  return sortie;
+}
+
+/** Les `nb` dernières semaines (la plus ancienne d'abord) : nombre de repas cuisinés. Jours AAAA-MM-JJ. */
+export function repasParSemaine(jours: string[], aujourdhui: string, nb = 8): { lundi: string; n: number }[] {
+  const decaler = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+  const lundi = decaler(aujourdhui, -((new Date(aujourdhui + "T00:00:00Z").getUTCDay() + 6) % 7));
+  const semaines = Array.from({ length: nb }, (_, i) => ({ lundi: decaler(lundi, -7 * (nb - 1 - i)), n: 0 }));
+  for (const j of jours) {
+    const s = semaines.find((x) => j >= x.lundi && j < decaler(x.lundi, 7));
+    if (s) s.n++;
+  }
+  return semaines;
+}
+
+/** Les recettes les plus cuisinées (égalité : ordre alphabétique), `max` au plus. */
+export function recettesLesPlusFaites(titres: string[], max = 5): { titre: string; n: number }[] {
+  const n = new Map<string, number>();
+  for (const t of titres) n.set(t, (n.get(t) ?? 0) + 1);
+  return [...n.entries()].map(([titre, c]) => ({ titre, n: c })).sort((a, b) => b.n - a.n || a.titre.localeCompare(b.titre, "fr")).slice(0, max);
+}

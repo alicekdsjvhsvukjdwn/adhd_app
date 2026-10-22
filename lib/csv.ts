@@ -545,7 +545,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   },
   courses: {
     table: "Cuisine : la liste de courses (les achats des projets sont dans la liste « Courses / achats » de la table items).",
-    colonnes: { id: "identifiant", nom: "texte", rayon: "fruits_legumes, vrac, frais, epicerie, surgeles, maison ou autre", cochee: "1 = dans le panier", source: "manuel, frigo, recette ou meal_prep", aliment_id: "aliment de l'inventaire (table aliments), vide sinon", cree_le: ISO },
+    colonnes: { id: "identifiant", nom: "texte", rayon: "fruits_legumes, vrac, frais, epicerie, surgeles, maison ou autre", cochee: "1 = dans le panier", source: "manuel, frigo, recette ou meal_prep", aliment_id: "aliment de l'inventaire (table aliments), vide sinon", cree_le: ISO, quantite: "quantité écrite à côté de l'article (« 250 g »), vide sinon" },
   },
   meal_prep: {
     table: "Cuisine : les recettes choisies pour une semaine de meal prep.",

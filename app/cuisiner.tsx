@@ -2,6 +2,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { FeuilleCuisine } from "../components/FeuilleCuisine";
 import { Texte } from "../components/Texte";
 import { libelleQuantite, quantitePourPortions } from "../lib/cuisine-regles";
 import { lireRecette, type RecetteComplete } from "../lib/db/cuisine";
@@ -22,6 +23,7 @@ export default function Cuisiner() {
   const [ingredients, setIngredients] = useState(false);
   const [fin, setFin] = useState<number | null>(null);
   const [maintenant, setMaintenant] = useState(0);
+  const [termine, setTermine] = useState(false);
 
   useEffect(() => {
     lireRecette(Number(p.id)).then(setR);
@@ -108,7 +110,7 @@ export default function Cuisiner() {
           <Texte style={{ color: t.textPrimary, fontWeight: "600", fontSize: typography.body }}>Précédente</Texte>
         </TouchableOpacity>
         {dernier ? (
-          <TouchableOpacity onPress={() => router.back()} style={[styles.bouton, { backgroundColor: t.accent }]} accessibilityRole="button">
+          <TouchableOpacity onPress={() => setTermine(true)} style={[styles.bouton, { backgroundColor: t.accent }]} accessibilityRole="button">
             <Texte style={{ color: t.textOnAccent, fontWeight: "700", fontSize: typography.body }}>Terminé</Texte>
           </TouchableOpacity>
         ) : (
@@ -117,6 +119,7 @@ export default function Cuisiner() {
           </TouchableOpacity>
         )}
       </View>
+      <FeuilleCuisine recetteId={Number(p.id)} portions={portions} visible={termine} onFerme={() => router.back()} />
     </ScrollView>
   );
 }

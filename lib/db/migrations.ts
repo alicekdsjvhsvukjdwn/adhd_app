@@ -20,6 +20,7 @@ import {
   SQL_PROJETS,
   SQL_PROJETS_V2,
   SQL_CUISINE,
+  SQL_COURSES_V2,
   SQL_PROJET_TYPES_DEFAUT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
@@ -847,6 +848,14 @@ const MIGRATIONS: Migration[] = [
     run: async (db) => {
       await db.execAsync(SQL_CUISINE);
       await semerRecettesDepart(db);
+    },
+  },
+
+  {
+    version: 39,
+    nom: "cuisine : quantité des articles de courses",
+    run: async (db) => {
+      await db.execAsync(SQL_COURSES_V2);
     },
   },
 ];

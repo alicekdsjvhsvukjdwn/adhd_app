@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { faisabilite, tagsDe, tempsTotalRecette, TAGS_RECETTE } from "../lib/cuisine-regles";
+import { ajouterManquantsAuxCourses } from "../lib/db/cuisine-courses";
 import { basculerFavori, listerAliments, recettesAvecIngredients, type Aliment, type Recette } from "../lib/db/cuisine";
 import { libelleDuree } from "../lib/projets-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -18,6 +19,7 @@ export function CuisineRecettes() {
   const [inventaire, setInventaire] = useState<Aliment[]>([]);
   const [tag, setTag] = useState<string | null>(null);
   const [charge, setCharge] = useState(false);
+  const [message, setMessage] = useState("");
 
   const charger = useCallback(async () => {
     const [r, a] = await Promise.all([recettesAvecIngredients(), listerAliments()]);
@@ -32,6 +34,18 @@ export function CuisineRecettes() {
   );
 
   const visibles = recettes.filter((r) => !tag || tagsDe(r.recette.tags).includes(tag));
+  // « Avec ce que j'ai » : prêtes d'abord, puis celles où il manque 1 ou 2 ingrédients.
+  const evaluees = recettes.filter((r) => r.ingredients.length > 0).map((r) => ({ ...r, f: faisabilite(r.ingredients, inventaire) }));
+  const pretes = inventaire.length > 0 ? evaluees.filter((r) => r.f.niveau === "pret") : [];
+  const presque = inventaire.length > 0 ? evaluees.filter((r) => r.f.niveau === "presque") : [];
+
+  const manquantsAuxCourses = async (r: (typeof evaluees)[number]) => {
+    const n = await ajouterManquantsAuxCourses(
+      r.f.manque.map((i) => ({ nom: i.nom, aliment: i.aliment, quantite: i.quantite, unite: i.unite })),
+      "recette",
+    );
+    setMessage(n > 0 ? `${n} article${n > 1 ? "s" : ""} ajouté${n > 1 ? "s" : ""} aux courses pour « ${r.recette.titre} ».` : "Déjà sur ta liste de courses.");
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.ecran} keyboardShouldPersistTaps="handled">
@@ -43,6 +57,31 @@ export function CuisineRecettes() {
           <Texte style={{ color: t.accentText, fontWeight: "700" }}>Coller une recette</Texte>
         </TouchableOpacity>
       </View>
+
+      {(pretes.length > 0 || presque.length > 0) && (
+        <View>
+          <Texte style={[styles.etiquette, { color: t.textMuted }]}>AVEC CE QUE J&apos;AI</Texte>
+          {pretes.map((r) => (
+            <TouchableOpacity key={r.recette.id} onPress={() => router.push(`/recette?id=${r.recette.id}` as never)} style={[styles.mini, { backgroundColor: t.bgCard, borderColor: VERT }]} accessibilityRole="button">
+              <Texte style={{ color: t.textPrimary, fontSize: typography.body, fontWeight: "600", flex: 1 }}>✅ {r.recette.titre}</Texte>
+              <Texte style={{ color: VERT, fontSize: typography.small }}>tout est là</Texte>
+            </TouchableOpacity>
+          ))}
+          {presque.map((r) => (
+            <View key={r.recette.id} style={[styles.mini, { backgroundColor: t.bgCard, borderColor: t.border, flexDirection: "column", alignItems: "stretch", gap: 4 }]}>
+              <TouchableOpacity onPress={() => router.push(`/recette?id=${r.recette.id}` as never)} accessibilityRole="button">
+                <Texte style={{ color: t.textPrimary, fontSize: typography.body, fontWeight: "600" }}>{r.recette.titre}</Texte>
+                <Texte style={{ color: t.textMuted, fontSize: typography.small }}>il manque : {r.f.manque.map((i) => i.nom).join(", ")}</Texte>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => manquantsAuxCourses(r)} hitSlop={8} accessibilityRole="button">
+                <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>+ Mettre ce qui manque dans les courses</Texte>
+              </TouchableOpacity>
+            </View>
+          ))}
+          {message ? <Texte style={{ color: t.textSecondary, fontSize: typography.small, marginTop: spacing.xs }}>{message}</Texte> : null}
+          <Texte style={[styles.etiquette, { color: t.textMuted }]}>TOUTES MES RECETTES</Texte>
+        </View>
+      )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pastilles}>
         {[null, ...TAGS_RECETTE].map((x) => {
@@ -95,4 +134,6 @@ const styles = StyleSheet.create({
   pastille: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
   carte: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
   photo: { width: 64, height: 64, borderRadius: radius.md },
+  etiquette: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginTop: spacing.xl, marginBottom: spacing.sm },
+  mini: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.xs },
 });

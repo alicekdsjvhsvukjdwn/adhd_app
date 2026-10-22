@@ -857,6 +857,11 @@ export const SQL_CUISINE = `
   CREATE INDEX IF NOT EXISTS idx_recette_etapes ON recette_etapes (recette_id);
 `;
 
+/** Migration 39 : la quantité écrite à côté d'un article de courses (« 250 g »). */
+export const SQL_COURSES_V2 = `
+  ALTER TABLE courses ADD COLUMN quantite TEXT NOT NULL DEFAULT '';
+`;
+
 /**
  * Transformations de données à rejouer après la restauration d'une sauvegarde
  * plus ancienne : ses lignes arrivent telles qu'elles étaient.
