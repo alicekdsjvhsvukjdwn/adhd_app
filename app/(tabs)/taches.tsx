@@ -22,6 +22,7 @@ import { JOURS_LONGS, MOIS } from "../../components/CalendrierMois";
 import { BandeJours } from "../../components/BandeJours";
 import { Etoile } from "../../components/Etoile";
 import { FeuilleChoixTache, type GroupeChoix } from "../../components/FeuilleChoixTache";
+import { BoutonMenu } from "../../components/BoutonMenu";
 import { MenuOptions } from "../../components/MenuOptions";
 import { PlusMoins } from "../../components/PlusMoins";
 import { ZoneNote } from "../../components/ZoneNote";
@@ -947,7 +948,26 @@ function TachesContenu() {
               >
                 <Texte style={[styles.lien, { color: t.accentText }]}>‹ Tâches</Texte>
               </TouchableOpacity>
-              {boutonPlus}
+              <View style={styles.enteteDroite}>
+                {/* L'objectif de la liste se règle ici ; les barres ne s'affichent que si la liste en a un. */}
+                <BoutonMenu
+                  titre={listeActive?.nom ?? "Liste"}
+                  options={[
+                    {
+                      libelle: listeActive?.objectif ? "Changer l'objectif" : "Fixer un objectif",
+                      onPress: () =>
+                        setEditionObjectif({
+                          cible: listeActive?.objectif ?? 3,
+                          periode: listeActive?.objectif_periode ?? "semaine",
+                        }),
+                    },
+                    ...(listeActive?.objectif
+                      ? [{ libelle: "Retirer l'objectif", danger: true, onPress: () => enregistrerObjectif(null, "semaine") }]
+                      : []),
+                  ]}
+                />
+                {boutonPlus}
+              </View>
             </View>
             <Texte style={[styles.section, { color: t.textPrimary }]}>
               {listeActive?.icone ? `${listeActive.icone} ` : ""}
@@ -956,33 +976,16 @@ function TachesContenu() {
             {suivi && (
               <BarresObjectif suivi={suivi} couleur={couleurListe(listeActive?.couleur ?? null).fond} />
             )}
-            <View style={styles.liensListe}>
-              <TouchableOpacity
-                onPress={() =>
-                  setEditionObjectif(
-                    editionObjectif
-                      ? null
-                      : {
-                          cible: listeActive?.objectif ?? 3,
-                          periode: listeActive?.objectif_periode ?? "semaine",
-                        },
-                  )
-                }
-                hitSlop={8}
-              >
-                <Texte style={[styles.lien, { color: t.accentText }]}>
-                  🎯 {listeActive?.objectif ? "Changer l'objectif" : "Fixer un objectif"}
-                </Texte>
-              </TouchableOpacity>
-              {MODULES.carnet && (
+            {MODULES.carnet && (
+              <View style={[styles.liensListe, { justifyContent: "flex-end" }]}>
                 <TouchableOpacity
                   onPress={() => listeActive && router.push(`/historique?liste=${listeActive.id}`)}
                   hitSlop={8}
                 >
                   <Texte style={[styles.lien, { color: t.accentText }]}>📓 Carnet</Texte>
                 </TouchableOpacity>
-              )}
-            </View>
+              </View>
+            )}
             {editionObjectif && (
               <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
                 <Texte style={[styles.premiere, { color: t.textSecondary, marginTop: 0 }]}>
@@ -1020,13 +1023,10 @@ function TachesContenu() {
                   ))}
                 </View>
                 <View style={styles.liensListe}>
-                  {listeActive?.objectif ? (
-                    <TouchableOpacity onPress={() => enregistrerObjectif(null, "semaine")} hitSlop={8}>
-                      <Texte style={[styles.lien, { color: t.danger }]}>Retirer l&apos;objectif</Texte>
-                    </TouchableOpacity>
-                  ) : (
-                    <View />
-                  )}
+                  {/* « Retirer l'objectif » est dans le menu ⋯ de la liste. */}
+                  <TouchableOpacity onPress={() => setEditionObjectif(null)} hitSlop={8}>
+                    <Texte style={[styles.lien, { color: t.textSecondary }]}>Annuler</Texte>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => enregistrerObjectif(editionObjectif.cible, editionObjectif.periode)}
                     hitSlop={8}
@@ -1421,6 +1421,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing.md,
   },
+  enteteDroite: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   jourSemaine: { fontSize: typography.small, fontWeight: "700", letterSpacing: 1 },
   date: { fontSize: 30, fontWeight: "600" },
   plus: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
