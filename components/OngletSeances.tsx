@@ -21,6 +21,7 @@ import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
 import { ChoixExercices } from "./ChoixExercices";
 import { FigureSkill } from "./FigureSkill";
 import { MesSeances } from "./MesSeances";
+import { MODULES } from "../lib/modules-visibles";
 import { SeanceDuPlan } from "./SeanceDuPlan";
 import { SeancesProposees } from "./SeancesProposees";
 import { PlusMoins } from "./PlusMoins";
@@ -110,7 +111,7 @@ export function OngletSeances({ materiel }: { materiel: Materiel }) {
       >
         <Texte style={[styles.noterTexte, { color: t.textOnAccent }]}>+ J&apos;ai fait une séance</Texte>
       </TouchableOpacity>
-      {recentes.length > 0 && (
+      {MODULES.sportSeanceAilleurs && recentes.length > 0 && (
         <View>
           <Texte style={[styles.surtitre, { color: t.textMuted }]}>RÉCENTES · 1 TAP POUR REFAIRE</Texte>
           <View style={styles.puces}>
@@ -119,10 +120,11 @@ export function OngletSeances({ materiel }: { materiel: Materiel }) {
         </View>
       )}
       <FeuilleSeanceNotee visible={notee} onFermer={() => setNotee(false)} onEnregistre={charger} />
-      <SeanceDuPlan />
+      {MODULES.sportPlan && <SeanceDuPlan />}
 
-      <Texte style={[styles.surtitre, { color: t.textMuted }]}>RÉVEIL DU CORPS · MA ROUTINE DU MATIN</Texte>
-      {perso && !b && (
+      {/* Réveil du corps, séances proposées : masqués dans lib/modules-visibles.ts ; tout passe par Mes séances. */}
+      {MODULES.sportReveil && <Texte style={[styles.surtitre, { color: t.textMuted }]}>RÉVEIL DU CORPS · MA ROUTINE DU MATIN</Texte>}
+      {MODULES.sportReveil && perso && !b && (
         <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent }]}>
           <View style={styles.ligne}>
             <View style={{ flex: 1 }}>
@@ -163,7 +165,7 @@ export function OngletSeances({ materiel }: { materiel: Materiel }) {
         </View>
       )}
 
-      {b && (
+      {MODULES.sportReveil && b && (
         <View style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.border }]}>
           {b.exercices.map((id, i) => (
             <View key={`${id}-${i}`} style={[styles.ligne, styles.ligneEx]}>
@@ -232,7 +234,7 @@ export function OngletSeances({ materiel }: { materiel: Materiel }) {
       )}
 
       <MesSeances onChange={charger} />
-      <SeancesProposees materiel={materiel} onChange={charger} />
+      {MODULES.sportSeancesProposees && <SeancesProposees materiel={materiel} onChange={charger} />}
     </View>
   );
 }

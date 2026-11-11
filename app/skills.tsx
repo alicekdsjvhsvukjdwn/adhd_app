@@ -8,6 +8,7 @@ import { BoutonOptions } from "../components/Options";
 import { MaterielEditeur } from "../components/MaterielEditeur";
 import { OngletExercices } from "../components/OngletExercices";
 import { OngletPlan } from "../components/OngletPlan";
+import { MODULES } from "../lib/modules-visibles";
 import { OngletSeances } from "../components/OngletSeances";
 import { Texte } from "../components/Texte";
 import {
@@ -41,7 +42,7 @@ export default function Skills() {
   const [essaiPour, setEssaiPour] = useState<string | null>(null);
   /** « Mettre à jour mon niveau » : l'étape choisie pour chaque skill, null = fermé. */
   const [niveau, setNiveau] = useState<Record<string, number> | null>(null);
-  const [onglet, setOnglet] = useState<"skills" | "workout" | "exercices" | "plan">("skills");
+  const [onglet, setOnglet] = useState<"skills" | "workout" | "exercices" | "plan">(MODULES.sportSkills ? "skills" : "workout");
   /** Mon matériel : celui qui filtre tout le sport, et le brouillon en cours de réglage (⚙️ ou premier lancement). */
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_DEFAUT);
   const [materielOk, setMaterielOk] = useState(true);
@@ -133,7 +134,10 @@ export default function Skills() {
             ["exercices", "Exercices"],
             ["plan", "Plan"],
           ] as const
-        ).map(([cle, libelle]) => (
+        )
+          // Onglets masqués dans lib/modules-visibles.ts.
+          .filter(([cle]) => (cle !== "skills" || MODULES.sportSkills) && (cle !== "plan" || MODULES.sportPlan))
+          .map(([cle, libelle]) => (
           <TouchableOpacity
             key={cle}
             onPress={() => setOnglet(cle)}

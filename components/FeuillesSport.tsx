@@ -36,6 +36,7 @@ import {
   type Zone,
   ZONES,
 } from "../lib/seances";
+import { MODULES } from "../lib/modules-visibles";
 import { critere, skill as skillDe } from "../lib/skills";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
 import { FigureSkill } from "./FigureSkill";
@@ -126,8 +127,9 @@ const hier = () => decalerJours(getAujourdhui(), -1);
 // ─── Noter une séance faite ailleurs ────────────────────────────────────
 
 /**
- * « J'ai fait une séance » : zones, durée, quand, puis Enregistrer. Source,
- * lien, ressenti et note sont dans « Plus ». `depart` pré-remplit (séance récente).
+ * « J'ai fait une séance » : mes séances en un tap (« comme prévu », ou « Détailler » série par série).
+ * Avec sportSeanceAilleurs (lib/modules-visibles.ts), aussi une séance faite ailleurs : zones, durée, quand, puis
+ * Enregistrer ; source, lien, ressenti et note sont dans « Plus ». `depart` pré-remplit (séance récente).
  */
 export function FeuilleSeanceNotee({
   visible,
@@ -191,6 +193,18 @@ export function FeuilleSeanceNotee({
   };
 
   const minutes = autre ? autreMin : duree;
+  const ailleurs = MODULES.sportSeanceAilleurs;
+  const avecReveil = MODULES.sportReveil && reveil !== null && reveil.exercices.length > 0;
+  const blocQuand = (
+    <View>
+      <Surtitre>QUAND</Surtitre>
+      <View style={styles.pastilles}>
+        {QUAND.map((q) => (
+          <Pastille key={q.cle} actif={quand === q.cle} libelle={q.nom} onPress={() => setQuand(q.cle)} />
+        ))}
+      </View>
+    </View>
+  );
 
   const enregistrer = async () => {
     if (!minutes || enCours) return;
@@ -216,7 +230,7 @@ export function FeuilleSeanceNotee({
       titre="J'ai fait une séance"
       onFermer={onFermer}
       pied={
-        <TouchableOpacity
+        !ailleurs ? undefined : <TouchableOpacity
           onPress={enregistrer}
           disabled={!minutes || enCours}
           style={[styles.bouton, { backgroundColor: t.accent, opacity: minutes ? 1 : 0.4 }]}
@@ -226,10 +240,29 @@ export function FeuilleSeanceNotee({
         </TouchableOpacity>
       }
     >
-      {!depart && (reveil !== null || mes.length > 0) && (
+      {/* Sans « ailleurs » : le jour d'abord, puis mes séances ; aucune encore : on propose d'en créer une. */}
+      {!ailleurs && blocQuand}
+      {!ailleurs && !avecReveil && mes.length === 0 && (
         <View>
-          <Surtitre>EN 1 TAP</Surtitre>
-          {reveil && reveil.exercices.length > 0 && (
+          <Texte style={{ color: t.textSecondary, fontSize: typography.bodySmall, lineHeight: 20, marginTop: spacing.lg }}>
+            Tu n&apos;as pas encore de séance. Crée-la une fois, avec le lien de ta vidéo et ses exercices : ensuite, un tap suffit.
+          </Texte>
+          <TouchableOpacity
+            onPress={() => {
+              onFermer();
+              router.push("/seance-edition" as never);
+            }}
+            style={[styles.bouton, { backgroundColor: t.accent }]}
+            accessibilityRole="button"
+          >
+            <Texte style={[styles.boutonTexte, { color: t.textOnAccent }]}>＋ Créer ma séance</Texte>
+          </TouchableOpacity>
+        </View>
+      )}
+      {!depart && (avecReveil || mes.length > 0) && (
+        <View>
+          <Surtitre>{ailleurs ? "EN 1 TAP" : "MES SÉANCES · 1 TAP"}</Surtitre>
+          {avecReveil && reveil && (
             <TouchableOpacity
               onPress={noterReveil}
               style={[styles.raccourci, { borderColor: t.accent, backgroundColor: t.bgHighlight }]}
@@ -249,10 +282,12 @@ export function FeuilleSeanceNotee({
               </TouchableOpacity>
             </View>
           ))}
-          <Texte style={{ color: t.textMuted, fontSize: typography.tiny, marginTop: spacing.xs }}>Ou ailleurs : choisis ci-dessous.</Texte>
+          {ailleurs && <Texte style={{ color: t.textMuted, fontSize: typography.tiny, marginTop: spacing.xs }}>Ou ailleurs : choisis ci-dessous.</Texte>}
         </View>
       )}
 
+      {ailleurs && (
+      <View>
       <Surtitre>ZONES</Surtitre>
       <View style={styles.pastilles}>
         {ZONES.map((z) => {
@@ -295,12 +330,7 @@ export function FeuilleSeanceNotee({
         </View>
       )}
 
-      <Surtitre>QUAND</Surtitre>
-      <View style={styles.pastilles}>
-        {QUAND.map((q) => (
-          <Pastille key={q.cle} actif={quand === q.cle} libelle={q.nom} onPress={() => setQuand(q.cle)} />
-        ))}
-      </View>
+      {blocQuand}
 
       <TouchableOpacity onPress={() => setPlus(!plus)} hitSlop={8} style={{ marginTop: spacing.lg }}>
         <Texte style={[styles.lien, { color: t.accentText }]}>{plus ? "− Moins" : "+ Plus (source, lien, ressenti, note)"}</Texte>
@@ -348,6 +378,8 @@ export function FeuilleSeanceNotee({
             multiline
           />
         </View>
+      )}
+      </View>
       )}
     </FeuilleBas>
   );
