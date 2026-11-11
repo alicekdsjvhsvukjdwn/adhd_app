@@ -101,6 +101,17 @@ export async function supprimerListe(id: number): Promise<void> {
   await db.runAsync("DELETE FROM listes WHERE id = ?", id);
 }
 
+/**
+ * « Déplacer ses tâches vers… » : tout ce que contient la liste (tâches en cours et déjà faites) passe dans
+ * une autre. La liste d'origine reste, vide. Renvoie le nombre de lignes déplacées.
+ */
+export async function deplacerTaches(de: number, vers: number): Promise<number> {
+  if (de === vers) return 0;
+  const db = await getDatabase();
+  if (!(await db.getFirstAsync("SELECT 1 FROM listes WHERE id = ?", vers))) return 0;
+  return (await db.runAsync("UPDATE items SET liste_id = ? WHERE liste_id = ?", vers, de)).changes;
+}
+
 /** Objectif de la liste : x tâches faites par semaine ou par mois ; null l'enlève. */
 export async function definirObjectif(
   id: number,

@@ -2,9 +2,11 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Keyboard, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { ChampTexte, Texte } from "../components/Texte";
+import { MenuOptions } from "../components/MenuOptions";
 import {
   ajouterListe,
   compterTaches,
+  deplacerTaches,
   getListes,
   listeDeRepli,
   modifierListe,
@@ -26,6 +28,9 @@ export default function ListesScreen() {
   const [noms, setNoms] = useState<Record<number, string>>({});
   const [icones, setIcones] = useState<Record<number, string>>({});
   const [nouvelle, setNouvelle] = useState("");
+  /** « Déplacer ses tâches vers… » : la liste d'origine dont on choisit la destination. */
+  const [aDeplacer, setADeplacer] = useState<Liste | null>(null);
+  const [message, setMessage] = useState("");
 
   const charger = useCallback(async () => {
     const l = await getListes();
@@ -44,6 +49,26 @@ export default function ListesScreen() {
     setNouvelle("");
     Keyboard.dismiss();
     await charger();
+  };
+
+  /** Rien ne bouge sans confirmation ; la liste d'origine reste, vide. */
+  const deplacer = async (de: Liste, vers: Liste) => {
+    const n = await compterTaches(de.id);
+    Alert.alert(
+      `Déplacer les tâches de « ${de.nom} » vers « ${vers.nom} » ?`,
+      `${n} tâche${n > 1 ? "s" : ""} en cours, et celles déjà faites. La liste « ${de.nom} » reste, vide.`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Déplacer",
+          onPress: async () => {
+            await deplacerTaches(de.id, vers.id);
+            setMessage(`Les tâches de « ${de.nom} » sont maintenant dans « ${vers.nom} ».`);
+            await charger();
+          },
+        },
+      ],
+    );
   };
 
   const supprimer = async (l: Liste) => {
@@ -83,6 +108,8 @@ export default function ListesScreen() {
       <Texte style={[styles.intro, { color: t.textSecondary }]}>
         Les catégories de tes tâches. Leur couleur se règle ici seulement ; dans Tâches, elles s&apos;affichent telles quelles.
       </Texte>
+
+      {message ? <Texte style={[styles.intro, { color: t.accentText }]}>{message}</Texte> : null}
 
       {listes.map((l) => (
         <View key={l.id} style={[styles.bloc, { backgroundColor: t.bgCard }]}>
@@ -137,8 +164,26 @@ export default function ListesScreen() {
               );
             })}
           </View>
+          {listes.length > 1 && (
+            <TouchableOpacity onPress={() => setADeplacer(l)} hitSlop={8} style={styles.deplacer} accessibilityRole="button">
+              <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>Déplacer ses tâches vers…</Texte>
+            </TouchableOpacity>
+          )}
         </View>
       ))}
+
+      <MenuOptions
+        titre={aDeplacer ? `Déplacer les tâches de « ${aDeplacer.nom} » vers…` : ""}
+        options={
+          aDeplacer
+            ? listes
+                .filter((x) => x.id !== aDeplacer.id)
+                // Le numéro distingue deux listes du même nom (le menu identifie ses lignes par leur libellé).
+                .map((x, i) => ({ libelle: `${i + 1}. ${x.icone ? `${x.icone} ` : ""}${x.nom}`, onPress: () => setTimeout(() => deplacer(aDeplacer, x), 350) })) // le menu se ferme d'abord
+            : []
+        }
+        onFermer={() => setADeplacer(null)}
+      />
 
       <View style={styles.ligne}>
         <Texte style={{ fontSize: 18, color: t.textMuted }}>＋</Texte>
@@ -182,4 +227,5 @@ const styles = StyleSheet.create({
   supprimer: { fontSize: 16, paddingHorizontal: 4 },
   couleurs: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginLeft: 52 },
   couleur: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
+  deplacer: { marginLeft: 52, marginTop: spacing.md },
 });
