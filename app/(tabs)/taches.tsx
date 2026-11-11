@@ -1653,10 +1653,20 @@ export default function Taches() {
   return <TachesEtProjets key={useCleReset("taches")} />;
 }
 
-/** En haut de l'onglet : « Mes tâches » ou « Projets » (les projets créatifs). Le re-tap de l'onglet revient à « Mes tâches ». */
+/**
+ * En haut de l'onglet : « Mes tâches » ou « Projets » (les projets créatifs). Le re-tap de l'onglet revient à « Mes tâches ».
+ * Projets masqués (lib/modules-visibles.ts) : pas de sélecteur, les tâches directement.
+ */
 function TachesEtProjets() {
   const t = useTheme();
   const [vue, setVue] = useState<"taches" | "projets">("taches");
+  if (!MODULES.projets) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.bgApp, paddingTop: 60 - spacing.md }}>
+        <TachesContenu />
+      </View>
+    );
+  }
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
       <View style={[styles.selecteur, { backgroundColor: t.bgCard, borderColor: t.border }]} accessibilityRole="tablist">

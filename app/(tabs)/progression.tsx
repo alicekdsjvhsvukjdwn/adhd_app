@@ -31,6 +31,7 @@ import {
   type Periode,
   type TacheFaite,
 } from "../../lib/db/progression";
+import { MODULES } from "../../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 import {
   ICONES_CATEGORIE,
@@ -390,7 +391,7 @@ export default function Progression() {
 
       <SectionHumeur />
       <SectionConfiance />
-      <SectionProjets />
+      {MODULES.projets && <SectionProjets />}
       <SectionCuisine />
 
     </ScrollView>

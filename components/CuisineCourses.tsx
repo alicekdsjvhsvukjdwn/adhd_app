@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { RAYONS } from "../lib/cuisine-catalogue";
 import { achatsDesProjets, acheterPourProjet, ajouterCourse, cocherCourse, coursesFaites, listerCourses, remettreEnInventaire, retirerCourse, type AchatProjet, type Course } from "../lib/db/cuisine-courses";
+import { MODULES } from "../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { ChampTexte, Texte } from "./Texte";
 
@@ -20,7 +21,8 @@ export function CuisineCourses() {
   const [remis, setRemis] = useState<number[]>([]);
 
   const charger = useCallback(async () => {
-    const [c, p] = await Promise.all([listerCourses(), achatsDesProjets()]);
+    // Projets masqués (lib/modules-visibles.ts) : pas de section « Projets » ; leurs achats restent des tâches dans Tâches.
+    const [c, p] = await Promise.all([listerCourses(), MODULES.projets ? achatsDesProjets() : []]);
     setCourses(c);
     setProjets(p);
   }, []);

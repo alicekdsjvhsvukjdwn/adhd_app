@@ -14,7 +14,7 @@ export const MODULES = {
   /** Carnet / historique d'une tâche. */
   carnet: false,
   /** Projets créatifs (vue « Projets » de Tâches). */
-  projets: true,
+  projets: false,
   /** Cuisine › Frigo et placards (l'inventaire). */
   frigo: true,
   /** Énergie du jour « En forme » (troisième niveau, sans effet aujourd'hui). */
