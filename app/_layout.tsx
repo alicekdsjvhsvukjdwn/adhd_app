@@ -24,6 +24,7 @@ import { getConfigRappel } from "../lib/db/stats";
 import "../lib/alerte-web";
 import { demarrerPwa } from "../lib/pwa-web";
 import { ecouterNotifications, permissionAccordee, reprogrammerRappel } from "../lib/notifications";
+import { synchroniserRappelsEsprit } from "../lib/rappels-esprit";
 import { spacing, typography, useTheme } from "../lib/theme";
 
 export default function RootLayout() {
@@ -64,6 +65,8 @@ function Contenu() {
         if (rappel.actif && (await permissionAccordee())) {
           reprogrammerRappel(rappel).catch(() => {});
         }
+        // Rappels de l'Esprit : annulés tant que le module est masqué (lib/modules-visibles.ts).
+        synchroniserRappelsEsprit().catch(() => {});
       } catch (e) {
         console.error("[db] initialisation impossible", e);
         setErreur(String(e));

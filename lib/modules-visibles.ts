@@ -4,9 +4,9 @@
  */
 export const MODULES = {
   /** Suivi › Esprit : humeur, bilan du dimanche, pensées, journal, TCC, séance avec moi, méditer, vision. */
-  esprit: true,
+  esprit: false,
   /** Suivi › Progrès (et la route cachée progression). */
-  progres: true,
+  progres: false,
   /** Moments repères (ancres). */
   ancres: true,
   /** « Je commence » (minuteur). */

@@ -22,6 +22,9 @@ export async function ecrireRappelEsprit(c: RappelEsprit): Promise<boolean> {
   return c.actif ? activer(reglages) : true;
 }
 
+/** Rien à annuler ni à reprogrammer sur le web : aucune notification locale, le serveur suit les réglages de Rappels. */
+export async function synchroniserRappelsEsprit(): Promise<void> {}
+
 /** Pas de notification locale sur le web : le bandeau du jour (Esprit) tient lieu de rappel. */
 export async function programmerRappelSeanceMoi(_r: { actif: boolean; jour: number; heure: string }): Promise<boolean> {
   return true;

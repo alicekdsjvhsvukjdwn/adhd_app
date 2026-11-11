@@ -27,6 +27,7 @@ import {
   type Nuit,
 } from "../../lib/db/sommeil";
 import { getReglages, seancesCetteSemaine } from "../../lib/db/sport";
+import { MODULES } from "../../lib/modules-visibles";
 import { semaineDe } from "../../lib/regles-taches";
 import Progression from "./progression";
 import {
@@ -403,38 +404,46 @@ const styles = StyleSheet.create({
   petiteCarte: { flex: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 6 },
 });
 
-const PARTIES = [
-  { cle: "corps", libelle: "Corps" },
-  { cle: "esprit", libelle: "Esprit" },
-  { cle: "progres", libelle: "Progrès" },
-] as const;
+/** Les parties affichées : Corps toujours, Esprit et Progrès selon lib/modules-visibles.ts. */
+const PARTIES = (
+  [
+    { cle: "corps", libelle: "Corps" },
+    { cle: "esprit", libelle: "Esprit" },
+    { cle: "progres", libelle: "Progrès" },
+  ] as const
+).filter((p) => p.cle === "corps" || MODULES[p.cle]);
 
-/** Suivi : trois parties, un sélecteur en haut. */
+/** Suivi : un sélecteur en haut s'il y a plusieurs parties, sinon Corps directement. */
 function SuiviContenu({ rappel }: { rappel: boolean }) {
   const t = useTheme();
   // ?partie=esprit : le rappel du soir ouvre directement l'Esprit.
   const { partie: demandee } = useLocalSearchParams<{ partie?: string }>();
-  const [partie, setPartie] = useState<(typeof PARTIES)[number]["cle"]>(rappel && demandee === "esprit" ? "esprit" : "corps");
+  const [partie, setPartie] = useState<(typeof PARTIES)[number]["cle"]>(
+    rappel && demandee === "esprit" && MODULES.esprit ? "esprit" : "corps",
+  );
+  const seule = PARTIES.length === 1;
   return (
-    <View style={[styles.ecran, { backgroundColor: t.bgApp }]}>
-      <View style={[styles.selecteur, { borderColor: t.border, backgroundColor: t.bgCard }]}>
-        {PARTIES.map((p) => {
-          const actif = p.cle === partie;
-          return (
-            <TouchableOpacity
-              key={p.cle}
-              onPress={() => setPartie(p.cle)}
-              style={[styles.segment, actif && { backgroundColor: t.accentFonce }]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: actif }}
-            >
-              <Texte style={{ color: actif ? t.textOnAccentFonce : t.textSecondary, fontWeight: "600", fontSize: typography.small }}>
-                {p.libelle}
-              </Texte>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+    <View style={[styles.ecran, { backgroundColor: t.bgApp }, seule && { paddingTop: 56 - spacing.md }]}>
+      {!seule && (
+        <View style={[styles.selecteur, { borderColor: t.border, backgroundColor: t.bgCard }]}>
+          {PARTIES.map((p) => {
+            const actif = p.cle === partie;
+            return (
+              <TouchableOpacity
+                key={p.cle}
+                onPress={() => setPartie(p.cle)}
+                style={[styles.segment, actif && { backgroundColor: t.accentFonce }]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: actif }}
+              >
+                <Texte style={{ color: actif ? t.textOnAccentFonce : t.textSecondary, fontWeight: "600", fontSize: typography.small }}>
+                  {p.libelle}
+                </Texte>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
       {partie === "corps" ? <Corps /> : partie === "esprit" ? <EspritEcran /> : <Progression />}
     </View>
   );

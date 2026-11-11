@@ -1,6 +1,8 @@
 import * as Notifications from "expo-notifications";
 import { ecrireMeta, lireMeta } from "./db/meta";
-import { demanderPermissionNotifications } from "./notifications";
+import { lireReglagesSeanceMoi } from "./db/tcc";
+import { MODULES } from "./modules-visibles";
+import { demanderPermissionNotifications, permissionAccordee } from "./notifications";
 import { minutesDe } from "./suivi-regles";
 
 /**
@@ -30,20 +32,45 @@ export async function ecrireRappelEsprit(c: RappelEsprit): Promise<boolean> {
   await Notifications.cancelScheduledNotificationAsync(ID_ESPRIT).catch(() => {});
   if (c.actif) {
     if (!(await demanderPermissionNotifications())) return false;
-    const min = minutesDe(c.heure);
-    await Notifications.scheduleNotificationAsync({
-      identifier: ID_ESPRIT,
-      content: { title: "30 secondes pour toi ?", body: "Un tap pour dire comment ça va.", sound: "default" },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-        hour: Math.floor(min / 60),
-        minute: min % 60,
-        repeats: true,
-      },
-    });
+    await programmerEsprit(c.heure);
   }
   await ecrireMeta("rappel_esprit", JSON.stringify(c));
   return true;
+}
+
+/** Programme « 30 secondes pour toi » chaque soir ; le même identifiant remplace l'ancien. */
+async function programmerEsprit(heure: string) {
+  const min = minutesDe(heure);
+  await Notifications.scheduleNotificationAsync({
+    identifier: ID_ESPRIT,
+    content: { title: "30 secondes pour toi ?", body: "Un tap pour dire comment ça va.", sound: "default" },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+      hour: Math.floor(min / 60),
+      minute: min % 60,
+      repeats: true,
+    },
+  });
+}
+
+/**
+ * Au démarrage : met les rappels de l'appareil en accord avec lib/modules-visibles.ts, sans rien
+ * écrire dans les réglages enregistrés.
+ *  - Esprit masqué : les deux rappels sont annulés sur l'appareil.
+ *  - Esprit visible : ils sont reprogrammés d'après les réglages (si la permission est déjà
+ *    accordée), pour que tout revienne en remettant `esprit: true`.
+ */
+export async function synchroniserRappelsEsprit(): Promise<void> {
+  if (!MODULES.esprit) {
+    for (const id of [ID_ESPRIT, ID_SEANCE, ID_ANCIEN_SEANCE]) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+    }
+    return;
+  }
+  if (!(await permissionAccordee())) return;
+  const esprit = await lireRappelEsprit();
+  if (esprit.actif) await programmerEsprit(esprit.heure);
+  await programmerRappelSeanceMoi(await lireReglagesSeanceMoi());
 }
 
 /**

@@ -15,6 +15,7 @@ import {
     getConfigRappel,
     setConfigRappel,
 } from "../lib/db";
+import { MODULES } from "../lib/modules-visibles";
 import {
     demanderPermissionNotifications,
     envoyerNotificationTest,
@@ -207,7 +208,7 @@ export default function RappelsScreen() {
         </>
       )}
 
-      <CarteRappelEsprit />
+      {MODULES.esprit && <CarteRappelEsprit />}
     </ScrollView>
   );
 }

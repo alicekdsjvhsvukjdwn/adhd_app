@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Gift, Moon, SprayCan, Sun, SquareCheck, User, type LucideIcon } from "lucide-react-native";
 import { Platform, type ColorValue } from "react-native";
+import { MODULES } from "../../lib/modules-visibles";
 import { resetOnglet } from "../../lib/reset-onglet";
 import { policeDe, typography, useTheme } from "../../lib/theme";
 
@@ -78,8 +79,13 @@ export default function TabsLayout() {
           tabBarIcon: icone(Gift),
         }}
       />
-      {/* Progression vit dans Suivi › Progrès : la route reste, sans onglet. */}
-      <Tabs.Screen name="progression" options={{ href: null }} />
+      {/*
+        Progression vit dans Suivi › Progrès : jamais d'onglet (href: null). Module masqué : la route
+        est fermée. La ligne doit rester : sans elle, le fichier progression.tsx deviendrait un onglet.
+      */}
+      <Tabs.Protected guard={MODULES.progres}>
+        <Tabs.Screen name="progression" options={{ href: null }} />
+      </Tabs.Protected>
       <Tabs.Screen
         name="profil"
         options={{

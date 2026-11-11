@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from "react-native";
 import { SelecteurHeure } from "../components/SelecteurHeure";
 import { Texte } from "../components/Texte";
+import { MODULES } from "../lib/modules-visibles";
 import {
   activer,
   desactiver,
@@ -99,7 +100,9 @@ export default function RappelsWeb() {
       )}
 
       {etat === "actif" &&
-        (["quotidien", "soir", "esprit"] as const).map((type) => (
+        (["quotidien", "soir", "esprit"] as const)
+          .filter((type) => type !== "esprit" || MODULES.esprit)
+          .map((type) => (
           <View key={type} style={[styles.carte, { backgroundColor: t.bgCard }]}>
             <View style={styles.ligne}>
               <View style={{ flex: 1 }}>
