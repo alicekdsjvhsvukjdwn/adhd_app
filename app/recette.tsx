@@ -6,13 +6,17 @@ import { FeuilleCuisine } from "../components/FeuilleCuisine";
 import { Texte } from "../components/Texte";
 import { libelleQuantite, presenceIngredients, quantitePourPortions, tagsDe, tempsTotalRecette } from "../lib/cuisine-regles";
 import { ajouterManquantsAuxCourses } from "../lib/db/cuisine-courses";
-import { basculerFavori, dupliquerRecette, lireRecette, listerAliments, supprimerRecette, type RecetteComplete } from "../lib/db/cuisine";
+import { basculerFavori, dupliquerRecette, inventaireVu, lireRecette, supprimerRecette, type RecetteComplete } from "../lib/db/cuisine";
+import { MODULES } from "../lib/modules-visibles";
 import { libelleDuree } from "../lib/projets-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 const VERT = "#4ADE80";
 
-/** La fiche d'une recette : portions réglables (quantités recalculées), ingrédients ✓ / ✗ selon mon inventaire, étapes. */
+/**
+ * La fiche d'une recette : portions réglables (quantités recalculées), ingrédients ✓ / ✗ selon mon inventaire, étapes.
+ * Frigo & placards masqué (lib/modules-visibles.ts) : pas de ✓ / ✗, et tous les ingrédients peuvent partir aux courses.
+ */
 export default function Recette() {
   const t = useTheme();
   const router = useRouter();
@@ -25,7 +29,7 @@ export default function Recette() {
   const [message, setMessage] = useState("");
 
   const charger = useCallback(async () => {
-    const [x, inv] = await Promise.all([lireRecette(recetteId), listerAliments()]);
+    const [x, inv] = await Promise.all([lireRecette(recetteId), inventaireVu()]);
     setR(x);
     setInventaire(inv);
     setPortions((p) => p ?? x?.recette.portions ?? null);
@@ -73,7 +77,7 @@ export default function Recette() {
     <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.ecran}>
       <View style={styles.entete}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Texte style={{ color: t.accentText, fontSize: typography.body }}>← Recettes</Texte>
+          <Texte style={{ color: t.accentText, fontSize: typography.body }}>{MODULES.frigo ? "← Recettes" : "← Retour"}</Texte>
         </TouchableOpacity>
         <View style={styles.ligne}>
           <TouchableOpacity onPress={() => basculerFavori(recetteId).then(charger)} hitSlop={10} accessibilityRole="button" accessibilityLabel={recette.favori ? "Retirer des favoris" : "Mettre en favori"}>
@@ -110,12 +114,14 @@ export default function Recette() {
         <Texte style={{ color: t.accentText, fontWeight: "700", fontSize: typography.body }}>J&apos;ai cuisiné</Texte>
       </TouchableOpacity>
 
-      <Texte style={[styles.etiquette, { color: t.textMuted }]}>INGRÉDIENTS{ingredients.length > 0 ? (manque === 0 ? " · TOUT EST LÀ" : ` · IL MANQUE ${manque}`) : ""}</Texte>
+      <Texte style={[styles.etiquette, { color: t.textMuted }]}>INGRÉDIENTS{MODULES.frigo && ingredients.length > 0 ? (manque === 0 ? " · TOUT EST LÀ" : ` · IL MANQUE ${manque}`) : ""}</Texte>
       {presences.map(({ ingredient: i, present }, k) => (
         <View key={k} style={[styles.ingredient, { borderColor: t.border }]}>
-          <Texte style={{ color: present ? VERT : t.danger, fontWeight: "700", width: 22 }} accessibilityLabel={present ? "dans l'inventaire" : "manque"}>
-            {present ? "✓" : "✗"}
-          </Texte>
+          {MODULES.frigo && (
+            <Texte style={{ color: present ? VERT : t.danger, fontWeight: "700", width: 22 }} accessibilityLabel={present ? "dans l'inventaire" : "manque"}>
+              {present ? "✓" : "✗"}
+            </Texte>
+          )}
           <Texte style={{ flex: 1, color: t.textPrimary, fontSize: typography.body }}>
             {[libelleQuantite(quantitePourPortions(i.quantite, recette.portions, portions)), i.unite, i.nom].filter(Boolean).join(" ")}
           </Texte>
@@ -135,7 +141,9 @@ export default function Recette() {
             style={{ marginTop: spacing.md }}
             accessibilityRole="button"
           >
-            <Texte style={{ color: t.accentText, fontWeight: "600", fontSize: typography.bodySmall }}>+ Mettre ce qui manque dans les courses</Texte>
+            <Texte style={{ color: t.accentText, fontWeight: "600", fontSize: typography.bodySmall }}>
+              {MODULES.frigo ? "+ Mettre ce qui manque dans les courses" : "+ Mettre les ingrédients dans les courses"}
+            </Texte>
           </TouchableOpacity>
           {message ? <Texte style={{ color: t.textMuted, fontSize: typography.small, marginTop: 4 }}>{message}</Texte> : null}
         </>

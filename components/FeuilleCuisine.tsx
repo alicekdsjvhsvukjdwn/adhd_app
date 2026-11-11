@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { NIVEAUX, type Baisse } from "../lib/cuisine-regles";
 import { baissesDeLaRecette, jAiCuisine } from "../lib/db/cuisine-courses";
+import { MODULES } from "../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { Texte } from "./Texte";
 
@@ -64,7 +65,10 @@ export function FeuilleCuisine({ recetteId, portions, visible, onFerme }: { rece
                   </ScrollView>
                 </>
               ) : (
-                <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall, marginTop: spacing.sm }}>Rien à mettre à jour dans ton inventaire. Le repas est quand même noté.</Texte>
+                <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall, marginTop: spacing.sm }}>
+                  {/* Frigo & placards masqué : aucune baisse proposée (inventaire considéré vide), l'étape inventaire est sautée. */}
+                  {MODULES.frigo ? "Rien à mettre à jour dans ton inventaire. Le repas est quand même noté." : "Valide pour noter ce repas."}
+                </Texte>
               )}
               <View style={styles.boutons}>
                 <TouchableOpacity onPress={onFerme} hitSlop={8}>

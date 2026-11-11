@@ -16,7 +16,7 @@ export const MODULES = {
   /** Projets créatifs (vue « Projets » de Tâches). */
   projets: false,
   /** Cuisine › Frigo et placards (l'inventaire). */
-  frigo: true,
+  frigo: false,
   /** Énergie du jour « En forme » (troisième niveau, sans effet aujourd'hui). */
   energieEnForme: true,
 } as const;

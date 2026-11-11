@@ -63,6 +63,7 @@ import {
   suiviCuisine,
 } from "../lib/db/cuisine-courses.ts";
 import { initialiserBase } from "../lib/db/demarrage.ts";
+import { MODULES } from "../lib/modules-visibles.ts";
 import { ajouterMateriel, creerProjet, listerMateriel, listerTypes, supprimerProjet } from "../lib/db/projets.ts";
 import { construireSauvegarde, validerSauvegarde } from "../lib/sauvegarde-format.ts";
 
@@ -171,6 +172,9 @@ test("minuteur deviné dans une étape", () => {
 
 // ─── Base en mémoire ───
 
+// Ces tests décrivent la Cuisine avec Frigo & placards visible, quel que soit le réglage de lib/modules-visibles.ts.
+// Le cas « masqué » a son propre test, plus bas.
+MODULES.frigo = true;
 await initialiserBase();
 const db = await getDatabase();
 const AUJ = getAujourdhui();
@@ -428,6 +432,24 @@ test("j'ai cuisiné : le repas est gardé, l'inventaire baisse seulement de ce q
   assert.equal(await points(), avant + 5);
   assert.equal((await db.getAllAsync("SELECT * FROM cuisines")).length, 2);
   assert.equal(await jAiCuisine(999999, 1, []), 0); // recette inconnue : rien
+});
+
+test("Frigo & placards masqué : inventaire considéré vide (tout le meal prep part aux courses, aucune baisse proposée), rien n'est effacé", async () => {
+  const dahl = (await listerRecettes()).find((r) => r.titre === "Dahl de lentilles corail");
+  await choisirPourMealPrep(MARDI, dahl.id, 4);
+  const avant = await listerAliments(); // Lentilles corail, Lait de coco, Sel : laissés par le test précédent
+  assert.ok(avant.length >= 3);
+  assert.ok((await calculerMealPrep(MARDI)).manquants.length < (await calculerMealPrep(MARDI)).total.length); // visible : l'inventaire est retiré
+  MODULES.frigo = false;
+  try {
+    const { total, manquants } = await calculerMealPrep(MARDI);
+    assert.ok(total.length > 0);
+    assert.equal(manquants.length, total.filter((x) => x.nom !== "Eau").length); // tout, sauf l'eau (jamais achetée)
+    assert.deepEqual(await baissesDeLaRecette(dahl.id), []);
+    assert.deepEqual(await listerAliments(), avant); // la table aliments n'a pas bougé
+  } finally {
+    MODULES.frigo = true;
+  }
 });
 
 test("suivi Cuisine : repas par semaine, recettes les plus faites, aliments jetés et finis", async () => {

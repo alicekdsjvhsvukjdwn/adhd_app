@@ -49,7 +49,9 @@ export function CuisineCourses() {
     <ScrollView contentContainerStyle={styles.ecran} keyboardShouldPersistTaps="handled">
       <TouchableOpacity onPress={() => router.push("/meal-prep" as never)} style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.accent }]} accessibilityRole="button">
         <Texte style={{ color: t.textPrimary, fontSize: typography.body, fontWeight: "600" }}>Meal prep de la semaine</Texte>
-        <Texte style={{ color: t.textMuted, fontSize: typography.small }}>Choisis tes recettes : l&apos;appli ajoute aux courses ce qui te manque.</Texte>
+        <Texte style={{ color: t.textMuted, fontSize: typography.small }}>
+          {MODULES.frigo ? "Choisis tes recettes : l'appli ajoute aux courses ce qui te manque." : "Choisis tes recettes : l'appli met leurs ingrédients dans les courses."}
+        </Texte>
       </TouchableOpacity>
 
       <ChampTexte
@@ -65,7 +67,9 @@ export function CuisineCourses() {
 
       {courses.length === 0 && projets.length === 0 && (
         <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall, marginTop: spacing.lg, lineHeight: 20 }}>
-          La liste est vide. Elle se remplit avec les aliments « presque fini », ce qui manque à tes recettes, et ce que tu ajoutes ici.
+          {MODULES.frigo
+            ? "La liste est vide. Elle se remplit avec les aliments « presque fini », ce qui manque à tes recettes, et ce que tu ajoutes ici."
+            : "La liste est vide. Elle se remplit avec le meal prep, les ingrédients de tes recettes, et ce que tu ajoutes ici."}
         </Texte>
       )}
 
@@ -83,7 +87,7 @@ export function CuisineCourses() {
                     {c.nom}
                     {c.quantite ? `  ·  ${c.quantite}` : ""}
                   </Texte>
-                  {c.cochee === 1 && !remis.includes(c.id) && (
+                  {MODULES.frigo && c.cochee === 1 && !remis.includes(c.id) && (
                     <TouchableOpacity
                       onPress={async () => {
                         await remettreEnInventaire(c.id);
@@ -96,7 +100,7 @@ export function CuisineCourses() {
                       <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>+ Remettre dans l&apos;inventaire</Texte>
                     </TouchableOpacity>
                   )}
-                  {c.cochee === 1 && remis.includes(c.id) && <Texte style={{ color: t.textMuted, fontSize: typography.small }}>dans l&apos;inventaire</Texte>}
+                  {MODULES.frigo && c.cochee === 1 && remis.includes(c.id) && <Texte style={{ color: t.textMuted, fontSize: typography.small }}>dans l&apos;inventaire</Texte>}
                 </View>
                 <TouchableOpacity onPress={() => retirerCourse(c.id).then(charger)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Retirer ${c.nom}`}>
                   <Texte style={{ color: t.textMuted, fontSize: 20 }}>×</Texte>

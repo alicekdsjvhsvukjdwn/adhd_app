@@ -13,7 +13,7 @@ import {
 } from "../cuisine-regles";
 import { getDatabase } from "./client";
 import { completer, getAujourdhui } from "./completions";
-import { ajouterAliment, changerNiveau, lireRecette, listerAliments, recettesAvecIngredients } from "./cuisine";
+import { ajouterAliment, changerNiveau, inventaireVu, lireRecette, recettesAvecIngredients } from "./cuisine";
 import { LISTE_COURSES, listeSysteme } from "./listes-systeme";
 import { rattraperProjets } from "./projets";
 import { addPoints } from "./stats";
@@ -157,7 +157,7 @@ export async function calculerMealPrep(semaine: string): Promise<{ total: Ingred
       return r ? [{ ingredients: r.ingredients, portionsRecette: r.recette.portions, portionsVoulues: l.portions }] : [];
     }),
   );
-  return { total, manquants: ingredientsManquants(total, await listerAliments()) };
+  return { total, manquants: ingredientsManquants(total, await inventaireVu()) };
 }
 
 /** Le reste à acheter part dans les courses. Renvoie combien d'articles ont été ajoutés. */
@@ -170,7 +170,7 @@ export async function mealPrepVersCourses(semaine: string): Promise<number> {
 /** Les baisses d'inventaire proposées pour cette recette (à confirmer une par une). */
 export async function baissesDeLaRecette(recetteId: number): Promise<Baisse[]> {
   const r = await lireRecette(recetteId);
-  return r ? baissesProposees(r.ingredients, await listerAliments()) : [];
+  return r ? baissesProposees(r.ingredients, await inventaireVu()) : [];
 }
 
 /**

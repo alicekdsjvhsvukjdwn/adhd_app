@@ -1,5 +1,6 @@
 import { CATALOGUE, type Categorie, type Emplacement } from "../cuisine-catalogue";
 import { memeAliment, minuteurDeLEtape, niveauValide, type IngredientRecette, type Niveau } from "../cuisine-regles";
+import { MODULES } from "../modules-visibles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -28,6 +29,12 @@ export async function listerAliments(): Promise<Aliment[]> {
   const db = await getDatabase();
   return db.getAllAsync<Aliment>("SELECT * FROM aliments ORDER BY nom COLLATE NOCASE");
 }
+
+/**
+ * L'inventaire tel que le voient les recettes, le meal prep et « J'ai cuisiné ». Frigo & placards masqué
+ * (lib/modules-visibles.ts) : il est considéré vide, sans rien effacer (la table aliments ne bouge pas).
+ */
+export const inventaireVu = async (): Promise<Aliment[]> => (MODULES.frigo ? listerAliments() : []);
 
 /**
  * Ajoute un aliment (le catalogue donne sa catégorie et son emplacement s'ils ne sont pas précisés).

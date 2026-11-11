@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { MODULES } from "../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { CuisineCourses } from "./CuisineCourses";
 import { CuisineFrigo } from "./CuisineFrigo";
@@ -16,6 +17,14 @@ const PARTIES = [
 export function Cuisine() {
   const t = useTheme();
   const [partie, setPartie] = useState<(typeof PARTIES)[number][0]>("frigo");
+  // Frigo & placards masqué (lib/modules-visibles.ts) : seulement les Courses ; les recettes s'ouvrent depuis Meal prep.
+  if (!MODULES.frigo) {
+    return (
+      <View style={{ flex: 1 }}>
+        <CuisineCourses />
+      </View>
+    );
+  }
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.onglets}>
