@@ -12,8 +12,10 @@ const r = spawnSync("npx", ["expo", "export", "--platform", "web", "--clear"], {
 });
 if (r.status !== 0) process.exit(r.status ?? 1);
 
+// maximum-scale=1 : sur iPhone, un champ de saisie de moins de 16 px fait zoomer la page au focus,
+// et elle reste décalée ensuite (le haut de l'écran passe sous la barre d'état).
 const BALISES = `
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no" />
 <meta name="robots" content="noindex, nofollow" />
 <meta name="theme-color" content="#05080A" />
 <link rel="manifest" href="/manifest.webmanifest" />
