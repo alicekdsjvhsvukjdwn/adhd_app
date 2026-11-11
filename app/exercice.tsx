@@ -6,7 +6,7 @@ import { Texte } from "../components/Texte";
 import { getMateriel } from "../lib/db/sport-materiel";
 import { historiqueExercice, type HistoriqueExercice } from "../lib/db/exercices-historique";
 import { dateCourte } from "../lib/esprit-regles";
-import { alternativeA, exercice, faisable } from "../lib/exercices";
+import { alternativeA, estPerso, exercice, faisable } from "../lib/exercices";
 import { libellePoids, manquants, MATERIEL_DEFAUT, MATERIELS, nomMateriel, type Materiel } from "../lib/materiel";
 import { zone } from "../lib/seances";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -44,6 +44,8 @@ export default function FicheExercice() {
     );
   }
 
+  // Exercice libre (ajouté par moi) : ni muscles, ni matériel, ni consignes ; seulement mon historique.
+  const libre = estPerso(e.id);
   const ok = faisable(e, materiel);
   const alt = alternativeA(e, materiel);
   const couleur = zone(e.zones[0]).couleur;
@@ -71,14 +73,14 @@ export default function FicheExercice() {
       </View>
       <Texte style={[styles.titre, { color: t.textPrimary }]}>{e.nom}</Texte>
       <Texte style={{ color: t.textSecondary, fontSize: typography.bodySmall }}>
-        {e.zones.map((z) => NOM_ZONE[z]).join(" · ")} · niveau {e.niveau} sur 5 · en {MODES[e.mode]}
+        {libre ? "Exercice ajouté par moi" : `${e.zones.map((z) => NOM_ZONE[z]).join(" · ")} · niveau ${e.niveau} sur 5`} · en {MODES[e.mode]}
       </Texte>
 
-      {etiquette("MUSCLES PRINCIPAUX")}
-      <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>{e.muscles.join(", ")}</Texte>
+      {!libre && etiquette("MUSCLES PRINCIPAUX")}
+      {!libre && <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>{e.muscles.join(", ")}</Texte>}
 
-      {etiquette("MATÉRIEL")}
-      {e.materiel.length === 0 ? (
+      {!libre && etiquette("MATÉRIEL")}
+      {libre ? null : e.materiel.length === 0 ? (
         <Texte style={{ color: t.textPrimary, fontSize: typography.body }}>Aucun : le sol suffit.</Texte>
       ) : (
         e.materiel.map((m) => (
@@ -100,7 +102,7 @@ export default function FicheExercice() {
       )}
       {alt && lien(alt.id, "Alternative avec mon matériel")}
 
-      {etiquette("CONSIGNES")}
+      {!libre && etiquette("CONSIGNES")}
       {e.consignes.map((c) => (
         <Texte key={c} style={{ color: t.textPrimary, fontSize: typography.body, lineHeight: 22, marginBottom: 2 }}>
           • {c}

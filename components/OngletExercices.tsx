@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
-import { alternativeA, EXERCICES, faisable, filtrer } from "../lib/exercices";
+import { alternativeA, estPerso, faisable, filtrer, tousLesExercices } from "../lib/exercices";
 import { nomMateriel, manquants, type Materiel } from "../lib/materiel";
 import { ZONES, zone, type Zone } from "../lib/seances";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -56,7 +56,7 @@ export function OngletExercices({ materiel }: { materiel: Materiel }) {
       <View style={styles.puces}>{puce(dispoSeulement, "Matériel dispo seulement", () => setDispoSeulement(!dispoSeulement))}</View>
 
       <Texte style={{ color: t.textMuted, fontSize: typography.small, marginVertical: spacing.sm }}>
-        {liste.length} exercice{liste.length > 1 ? "s" : ""} sur {EXERCICES.length}
+        {liste.length} exercice{liste.length > 1 ? "s" : ""} sur {tousLesExercices().length}
       </Texte>
 
       {liste.length === 0 && <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall }}>Aucun exercice avec ces filtres.</Texte>}
@@ -79,7 +79,7 @@ export function OngletExercices({ materiel }: { materiel: Materiel }) {
                 {e.nom}
               </Texte>
               <Texte style={{ color: t.textMuted, fontSize: typography.small }} numberOfLines={1}>
-                {zonesE.map((z) => NOM_ZONE[z]).join(" · ")} · niveau {e.niveau}
+                {estPerso(e.id) ? "Ajouté par moi" : `${zonesE.map((z) => NOM_ZONE[z]).join(" · ")} · niveau ${e.niveau}`}
               </Texte>
               {!ok && (
                 <>

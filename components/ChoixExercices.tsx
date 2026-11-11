@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
-import { faisable, filtrer } from "../lib/exercices";
+import { creerExercicePerso } from "../lib/db/exercices-perso";
+import { estPerso, faisable, filtrer, type ModeExercice } from "../lib/exercices";
 import type { Materiel } from "../lib/materiel";
 import { zone, type Zone } from "../lib/seances";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
@@ -14,7 +15,16 @@ const ZONES: { cle: Zone; nom: string }[] = [
   { cle: "mobilite", nom: "Mobilité" },
 ];
 
-/** Feuille « Ajouter un exercice » : recherche, zones, un tap ajoute. Le matériel manquant est grisé. */
+const MODES_LIBRES: [ModeExercice, string][] = [
+  ["reps", "en répétitions"],
+  ["s", "en secondes"],
+  ["reps_poids", "avec un poids"],
+];
+
+/**
+ * Feuille « Ajouter un exercice » : recherche, zones, un tap ajoute. Le matériel manquant est grisé.
+ * Un exercice absent de la bibliothèque se crée ici, à partir du texte cherché.
+ */
 export function ChoixExercices({
   visible,
   materiel,
@@ -30,6 +40,13 @@ export function ChoixExercices({
   const [texte, setTexte] = useState("");
   const [zoneChoisie, setZoneChoisie] = useState<Zone | null>(null);
   const liste = filtrer({ texte, zone: zoneChoisie }, materiel);
+  const nomLibre = texte.trim();
+  const creer = async (mode: ModeExercice) => {
+    const id = await creerExercicePerso(nomLibre, mode);
+    if (!id) return;
+    setTexte("");
+    onChoisir(id);
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onFermer}>
@@ -79,7 +96,7 @@ export function ChoixExercices({
                         {e.nom}
                       </Texte>
                       <Texte style={{ color: t.textMuted, fontSize: typography.tiny }}>
-                        niveau {e.niveau}
+                        {estPerso(e.id) ? "ajouté par moi" : `niveau ${e.niveau}`}
                         {ok ? "" : " · matériel manquant"}
                       </Texte>
                     </View>
@@ -87,7 +104,28 @@ export function ChoixExercices({
                   </TouchableOpacity>
                 );
               })}
-              {liste.length === 0 && <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall }}>Aucun exercice.</Texte>}
+              {liste.length === 0 && nomLibre === "" && <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall }}>Aucun exercice.</Texte>}
+              {/* Pas dans la bibliothèque : je l'ajoute moi-même, en disant comment il se compte. */}
+              {nomLibre !== "" && !liste.some((e) => e.nom.trim().toLowerCase() === nomLibre.toLowerCase()) && (
+                <View style={styles.libre}>
+                  <Texte style={{ color: t.textSecondary, fontSize: typography.bodySmall }}>
+                    Pas dans la liste ? Ajoute « {nomLibre} » comme exercice à toi, compté :
+                  </Texte>
+                  <View style={[styles.puces, { flexWrap: "wrap", marginBottom: 0 }]}>
+                    {MODES_LIBRES.map(([mode, libelle]) => (
+                      <TouchableOpacity
+                        key={mode}
+                        onPress={() => creer(mode)}
+                        style={[styles.puce, { borderColor: t.accent }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ajouter ${nomLibre}, ${libelle}`}
+                      >
+                        <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>＋ {libelle}</Texte>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </ScrollView>
             <TouchableOpacity onPress={onFermer} hitSlop={8} style={styles.fermer}>
               <Texte style={{ color: t.textSecondary, fontSize: typography.body }}>Fermer</Texte>
@@ -108,4 +146,5 @@ const styles = StyleSheet.create({
   puce: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
   ligne: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, paddingVertical: spacing.sm },
   fermer: { alignSelf: "center", marginTop: spacing.lg },
+  libre: { paddingVertical: spacing.md },
 });

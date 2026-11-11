@@ -171,7 +171,40 @@ export const EXERCICES: Exercice[] = [
   x("planche_straddle", "Planche straddle", ["haut", "abdos"], 5, "s", "planche", ["parallettes"], ["épaules", "gainage", "poignets"], ["Jambes écartées tendues", "Corps à l'horizontale"], { facile: "adv_tuck_planche", alt: "planche_lean" }),
 ];
 
-export const exercice = (id: string): Exercice | undefined => EXERCICES.find((e) => e.id === id);
+// ─── Exercices libres ───────────────────────────────────────────────────
+
+/**
+ * Exercices ajoutés par l'utilisatrice (ceux de ses vidéos qui ne sont pas dans la bibliothèque). Leur identifiant
+ * est « perso:3 ». La liste vit dans la base (lib/db/exercices-perso.ts) et est recopiée ici au démarrage, pour
+ * que `exercice(id)` reste une simple lecture. Ils n'entrent jamais dans les séances proposées ni dans le plan,
+ * qui ne piochent que dans EXERCICES.
+ */
+export type ExercicePerso = { id: string; nom: string; mode: ModeExercice };
+
+export const estPerso = (id: string): boolean => id.startsWith("perso:");
+
+let PERSO: Exercice[] = [];
+
+export function definirExercicesPerso(liste: ExercicePerso[]): void {
+  PERSO = liste.map((p) => ({
+    id: p.id,
+    nom: p.nom,
+    // Une zone est nécessaire à l'affichage (couleur) ; « complet » n'est proposée par aucun filtre de zone.
+    zones: ["complet"],
+    muscles: [],
+    materiel: [],
+    niveau: 1,
+    mode: p.mode,
+    consignes: [],
+    consigne: "",
+    figure: "",
+  }));
+}
+
+/** La bibliothèque, puis mes exercices libres. */
+export const tousLesExercices = (): Exercice[] => [...EXERCICES, ...PERSO];
+
+export const exercice = (id: string): Exercice | undefined => EXERCICES.find((e) => e.id === id) ?? PERSO.find((e) => e.id === id);
 
 // ─── Matériel et alternatives ───────────────────────────────────────────
 
@@ -213,7 +246,7 @@ export type FiltreExercices = {
 
 const sansAccents = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export function filtrer(f: FiltreExercices, m: Materiel, liste: Exercice[] = EXERCICES): Exercice[] {
+export function filtrer(f: FiltreExercices, m: Materiel, liste: Exercice[] = tousLesExercices()): Exercice[] {
   const q = sansAccents((f.texte ?? "").trim());
   return liste.filter(
     (e) =>

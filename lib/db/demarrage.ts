@@ -1,6 +1,7 @@
 import { SQL_LIGNES_DE_BASE } from "../schema";
 import { definirDebutJour } from "../dates";
 import { getDatabase } from "./client";
+import { chargerExercicesPerso } from "./exercices-perso";
 import { lireMeta } from "./meta";
 import { runMigrations } from "./migrations";
 
@@ -15,4 +16,5 @@ export async function initialiserBase(): Promise<void> {
   const db = await getDatabase();
   await db.execAsync(SQL_LIGNES_DE_BASE);
   definirDebutJour(Number(await lireMeta("debut_jour")));
+  await chargerExercicesPerso();
 }
