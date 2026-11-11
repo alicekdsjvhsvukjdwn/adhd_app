@@ -105,14 +105,14 @@ Ouvre l'adresse du site dans le navigateur de l'ordinateur pour vérifier qu'ell
 1. Ouvre l'adresse du site dans **Safari** (pas dans une autre appli).
 2. Bouton **Partager** › **Sur l'écran d'accueil** › **Ajouter**.
 3. Ferme Safari et ouvre **Routines** depuis son icône.
-4. Profil › **Rappels quotidiens** › **Activer les rappels** › autorise les notifications. Choisis l'heure du rappel quotidien et, si tu veux, celui du soir. « Tester une notification » en envoie une tout de suite.
+4. Profil › **Rappels** › **Activer les rappels** › autorise les notifications. Choisis l'heure du rappel quotidien et, si tu veux, celui du soir. « Tester une notification » en envoie une tout de suite.
 
 ## 6. Reprendre tes données depuis Expo Go
 
-1. Dans Expo Go : Profil › **Exporter** › enregistre le fichier dans Fichiers / iCloud Drive.
-2. Dans l'appli installée : Profil › **Restaurer** › choisis ce fichier. Même format, toutes les tables.
+1. Dans Expo Go : Profil › **Sauvegarde et export** › **Exporter** › enregistre le fichier dans Fichiers / iCloud Drive.
+2. Dans l'appli installée : Profil › **Sauvegarde et export** › **Restaurer** › choisis ce fichier. Même format, toutes les tables.
 
-Ensuite, exporte régulièrement (Profil › **Exporter**) : les données vivent dans le navigateur de l'iPhone, et l'appli te le rappelle si ta dernière sauvegarde a plus de 7 jours.
+Ensuite, exporte régulièrement (Profil › **Sauvegarde et export** › **Exporter**) : les données vivent dans le navigateur de l'iPhone, et l'appli te le rappelle si ta dernière sauvegarde a plus de 7 jours.
 
 ## 7. Republier après une modification
 

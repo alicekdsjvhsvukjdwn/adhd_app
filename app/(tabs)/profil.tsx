@@ -1,16 +1,16 @@
 import { useCleReset } from "../../lib/reset-onglet";
 import Constants from "expo-constants";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Texte } from "../../components/Texte";
-import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
-import { CarteDebutJour } from "../../components/CarteDebutJour";
-import { CarteSauvegarde } from "../../components/CarteSauvegarde";
+import { joursDepuisSauvegarde } from "../../lib/fichiers";
 import { MODULES } from "../../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
@@ -20,13 +20,12 @@ type Entree = {
   route: string;
 };
 
-// « Idées de routines » n'a qu'une entrée : en bas de la liste de l'onglet Routines.
+/**
+ * Profil : 5 lignes. « Sauvegarde et export » vient en premier, mise en avant (sa description est
+ * calculée à l'affichage, voir plus bas). « Idées de routines » n'a qu'une entrée : en bas de la liste
+ * de l'onglet Routines.
+ */
 const ENTREES: Entree[] = [
-  {
-    titre: "Mes moments repères",
-    description: "Les ancres auxquelles rattacher les routines.",
-    route: "/ancres",
-  },
   {
     titre: "Mes listes",
     description: "Les catégories de tes tâches : noms, icônes, couleurs.",
@@ -38,20 +37,55 @@ const ENTREES: Entree[] = [
     route: "/agenda",
   },
   {
-    titre: "Rappels quotidiens",
+    titre: "Rappels",
     description: "Quand l'appli te fait signe.",
     route: "/rappels",
   },
+  {
+    titre: "Début de journée",
+    description: "L'heure où la journée de l'appli commence.",
+    route: "/debut-journee",
+  },
+  // Sixième ligne seulement si le module est remis (lib/modules-visibles.ts).
+  {
+    titre: "Mes moments repères",
+    description: "Les ancres auxquelles rattacher les routines.",
+    route: "/ancres",
+  },
 ].filter((e) => e.route !== "/ancres" || MODULES.ancres);
+
+/** Sur le web, les données vivent dans le navigateur : la ligne rappelle l'âge de la dernière copie. */
+function descriptionSauvegarde(): string {
+  const jours = Platform.OS === "web" ? joursDepuisSauvegarde() : -1;
+  if (jours === null) return "Pas encore de sauvegarde : exporte-en une.";
+  if (jours > 7) return `Dernière sauvegarde il y a ${jours} jours : exporte-en une nouvelle.`;
+  return "Exporter une copie de tes données, ou en restaurer une.";
+}
 
 function ProfilContenu() {
   const router = useRouter();
   const t = useTheme();
+  const [sauvegarde, setSauvegarde] = useState(descriptionSauvegarde);
+
+  // Au retour de l'écran Sauvegarde, la ligne suit l'export qui vient d'être fait.
+  useFocusEffect(
+    useCallback(() => {
+      setSauvegarde(descriptionSauvegarde());
+    }, []),
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: t.bgApp }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <Texte style={[styles.titre, { color: t.textPrimary }]}>Profil</Texte>
+
+        <TouchableOpacity
+          style={[styles.entree, styles.entreeEnAvant, { backgroundColor: t.bgCard, borderColor: t.accent }]}
+          onPress={() => router.push("/sauvegarde" as never)}
+        >
+          <Texte style={[styles.entreeTitre, { color: t.accentText }]}>Sauvegarde et export</Texte>
+          <Texte style={[styles.entreeTexte, { color: t.textSecondary }]}>{sauvegarde}</Texte>
+        </TouchableOpacity>
 
         {ENTREES.map((e) => (
           <TouchableOpacity
@@ -67,12 +101,6 @@ function ProfilContenu() {
             </Texte>
           </TouchableOpacity>
         ))}
-
-        <CarteDebutJour />
-
-        <CarteSauvegarde />
-
-        <BoutonReinitialiser />
 
         <Texte style={[styles.version, { color: t.textMuted }]}>
           Version {Constants.expoConfig?.version}
@@ -97,6 +125,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
+  entreeEnAvant: { borderWidth: 1 },
   entreeTitre: {
     fontSize: typography.h3,
     fontWeight: "600",

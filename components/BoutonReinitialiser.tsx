@@ -7,11 +7,11 @@ import {
 } from "react-native";
 import { Texte } from "./Texte";
 import { toutReinitialiser } from "../lib/db/reinitialiser";
-import { radius, spacing, typography, useTheme } from "../lib/theme";
+import { spacing, typography, useTheme } from "../lib/theme";
 
 /**
- * Carte « Tout réinitialiser » pour l'écran Profil.
- * Une confirmation explicite, et un rappel de l'option plus douce.
+ * « Tout réinitialiser » : un lien discret, tout en bas de Sauvegarde et export.
+ * Rien n'est effacé sans la confirmation explicite.
  */
 export function BoutonReinitialiser() {
   const router = useRouter();
@@ -43,28 +43,15 @@ export function BoutonReinitialiser() {
   };
 
   return (
-    <TouchableOpacity
-      style={[styles.carte, { backgroundColor: t.bgCard, borderColor: t.danger }]}
-      onPress={confirmer}
-      disabled={enCours}
-    >
-      <Texte style={[styles.titre, { color: t.danger }]}>
-        {enCours ? "Réinitialisation…" : "Tout réinitialiser"}
-      </Texte>
+    <TouchableOpacity style={styles.lien} onPress={confirmer} disabled={enCours} hitSlop={8} accessibilityRole="button">
       <Texte style={[styles.texte, { color: t.textMuted }]}>
-        Effacer toutes les données et repartir du début.
+        {enCours ? "Réinitialisation…" : "Tout réinitialiser"}
       </Texte>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  carte: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.lg,
-    marginTop: spacing.xxl,
-  },
-  titre: { fontSize: typography.h3, fontWeight: "600" },
-  texte: { fontSize: typography.small, marginTop: 4 },
+  lien: { alignSelf: "center", marginTop: spacing.xxxl * 2, paddingVertical: spacing.sm },
+  texte: { fontSize: typography.small, textDecorationLine: "underline" },
 });
