@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { FigureSkill } from "../components/FigureSkill";
 import { PlusMoins } from "../components/PlusMoins";
 import { Texte } from "../components/Texte";
@@ -58,6 +58,8 @@ export default function SeanceSportEcran() {
   const date = p.date || getAujourdhui();
 
   const [seance, setSeance] = useState<SeanceSport | null>(null);
+  /** Une de mes séances : la vidéo que je suis, s'il y en a une. */
+  const [lienVideo, setLienVideo] = useState("");
   const [origine, setOrigine] = useState<OrigineSeance>("perso");
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_DEFAUT);
   const [phase, setPhase] = useState<Phase>("serie");
@@ -94,7 +96,10 @@ export default function SeanceSportEcran() {
       let o: OrigineSeance = "perso";
       if (p.source === "perso" && p.id) {
         const x = await lireMaSeance(Number(p.id));
-        if (x) s = { nom: x.nom, lignes: x.lignes };
+        if (x) {
+          s = { nom: x.nom, lignes: x.lignes };
+          setLienVideo(x.lien);
+        }
       } else if (p.source === "proposee") {
         s = proposerSeance((p.zone as ZoneProposee) ?? "complet", (Number(p.min) as DureeProposee) || 20, m, Number(p.graine) || 0);
         o = "proposee";
@@ -127,6 +132,11 @@ export default function SeanceSportEcran() {
     termine.current = true;
     return seanceId.current === null ? null : terminerSeanceSport(seanceId.current, r);
   }, []);
+  const voirVideo = lienVideo !== "" && (
+    <TouchableOpacity onPress={() => Linking.openURL(lienVideo).catch(() => {})} hitSlop={8} accessibilityRole="link">
+      <Texte style={{ color: t.accentText, fontSize: typography.body, marginBottom: spacing.sm }}>▶ Voir la vidéo</Texte>
+    </TouchableOpacity>
+  );
   /** Séance du plan : elle compte (et fait monter les exercices) si au moins la moitié des séries sont faites. */
   const validerPlan = useCallback(async () => {
     if (p.source !== "plan" || planValide.current || seanceId.current === null || !prevu.current) return;
@@ -371,9 +381,12 @@ export default function SeanceSportEcran() {
   if (modeListe) {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.ecran}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Texte style={{ color: t.accentText, fontSize: typography.body, marginBottom: spacing.sm }}>← Retour</Texte>
-        </TouchableOpacity>
+        <View style={styles.haut}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Texte style={{ color: t.accentText, fontSize: typography.body, marginBottom: spacing.sm }}>← Retour</Texte>
+          </TouchableOpacity>
+          {voirVideo}
+        </View>
         <Texte style={[styles.titre, { color: t.textPrimary }]}>{seance.nom}</Texte>
         <Texte style={{ color: t.textSecondary, fontSize: typography.bodySmall, lineHeight: 20, marginBottom: spacing.md }}>
           {dateCourte(date)}. Ce que j&apos;ai vraiment fait, série par série. 0 = pas faite.
@@ -462,9 +475,12 @@ export default function SeanceSportEcran() {
   const chrono = e.mode === "s" && debutChrono !== null ? Math.round((maintenant - debutChrono) / 1000) : null;
   return (
     <ScrollView style={{ flex: 1, backgroundColor: t.bgApp }} contentContainerStyle={styles.ecran} keyboardShouldPersistTaps="handled">
-      <TouchableOpacity onPress={quitter} hitSlop={12}>
-        <Texte style={{ color: t.accentText, fontSize: typography.body, marginBottom: spacing.sm }}>← Arrêter</Texte>
-      </TouchableOpacity>
+      <View style={styles.haut}>
+        <TouchableOpacity onPress={quitter} hitSlop={12}>
+          <Texte style={{ color: t.accentText, fontSize: typography.body, marginBottom: spacing.sm }}>← Arrêter</Texte>
+        </TouchableOpacity>
+        {voirVideo}
+      </View>
       <View style={styles.segments}>
         {seance.lignes.map((_, i) => (
           <View key={i} style={[styles.segment, { backgroundColor: i < idx ? t.accent : i === idx ? t.accentFonce : t.border }]} />
@@ -540,6 +556,7 @@ export default function SeanceSportEcran() {
 }
 
 const styles = StyleSheet.create({
+  haut: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   ecran: { paddingTop: 60, paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl * 2 },
   titre: { fontSize: typography.h1, fontWeight: "600", marginBottom: 4 },
   etiquette: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginTop: spacing.xl, marginBottom: spacing.sm },

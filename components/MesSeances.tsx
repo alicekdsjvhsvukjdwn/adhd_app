@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { Play } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Alert, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, StyleSheet, TouchableOpacity, View } from "react-native";
 import { dupliquerMaSeance, listerMesSeances, noterSeanceCommePrevu, supprimerMaSeance, type MaSeance } from "../lib/db/seances-sport";
 import { exercice } from "../lib/exercices";
 import { dureeEstimee, minutesDe } from "../lib/seances-sport";
@@ -11,7 +11,7 @@ import { MenuOptions } from "./MenuOptions";
 import type { Option } from "./Options";
 import { Texte } from "./Texte";
 
-/** Sport › Workout › Mes séances : celles que je construis avec la bibliothèque. Lancer, modifier, dupliquer, supprimer. */
+/** Sport › Workout › Mes séances : celles que je construis (lien vidéo, exercices). Lancer, modifier, dupliquer, supprimer. */
 export function MesSeances({ onChange }: { onChange?: () => void }) {
   const t = useTheme();
   const router = useRouter();
@@ -66,7 +66,7 @@ export function MesSeances({ onChange }: { onChange?: () => void }) {
       <Texte style={[styles.surtitre, { color: t.textMuted }]}>MES SÉANCES</Texte>
       {liste.length === 0 && (
         <Texte style={{ color: t.textMuted, fontSize: typography.bodySmall, marginBottom: spacing.sm }}>
-          Compose tes séances avec les exercices de la bibliothèque, dans l&apos;ordre que tu veux.
+          Une séance = le lien de ta vidéo et ses exercices, ceux de la bibliothèque ou les tiens, dans l&apos;ordre que tu veux.
         </Texte>
       )}
       {liste.map((s) => (
@@ -101,6 +101,11 @@ export function MesSeances({ onChange }: { onChange?: () => void }) {
               <FigureSkill key={i} skill={exercice(l.exercice)?.figure ?? ""} couleur={t.accent} taille={26} />
             ))}
           </View>
+          {s.lien !== "" && (
+            <TouchableOpacity onPress={() => Linking.openURL(s.lien).catch(() => {})} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: "flex-start" }} accessibilityRole="link">
+              <Texte style={{ color: t.accentText, fontSize: typography.bodySmall, fontWeight: "600" }}>▶ Voir la vidéo</Texte>
+            </TouchableOpacity>
+          )}
         </View>
       ))}
       <TouchableOpacity

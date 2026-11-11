@@ -10,11 +10,15 @@ import { enregistrerMaSeance, lireMaSeance, supprimerMaSeance } from "../lib/db/
 import { getMateriel } from "../lib/db/sport-materiel";
 import { exercice } from "../lib/exercices";
 import { libellePoids, MATERIEL_DEFAUT, type Materiel } from "../lib/materiel";
+import { urlValide } from "../lib/projets-regles";
 import { zone } from "../lib/seances";
 import { dureeEstimee, ligneParDefaut, minutesDe, pasDeSaisie, type LigneSeance } from "../lib/seances-sport";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
-/** Créer ou modifier une de mes séances : des exercices de la bibliothèque, dans l'ordre, avec séries, cible, poids et repos. */
+/**
+ * Créer ou modifier une de mes séances : un nom, le lien de la vidéo que je suis (facultatif), et des exercices
+ * (de la bibliothèque ou ajoutés par moi), dans l'ordre, avec séries, cible, poids et repos.
+ */
 export default function EditionSeance() {
   const router = useRouter();
   const t = useTheme();
@@ -22,6 +26,7 @@ export default function EditionSeance() {
   const idSeance = id ? Number(id) : null;
 
   const [nom, setNom] = useState("");
+  const [lien, setLien] = useState("");
   const [lignes, setLignes] = useState<LigneSeance[]>([]);
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_DEFAUT);
   const [choix, setChoix] = useState(false);
@@ -34,6 +39,7 @@ export default function EditionSeance() {
         const s = await lireMaSeance(idSeance);
         if (s) {
           setNom(s.nom);
+          setLien(s.lien);
           setLignes(s.lignes);
         }
         setCharge(true);
@@ -56,7 +62,11 @@ export default function EditionSeance() {
       Alert.alert("Ajoute au moins un exercice.");
       return;
     }
-    await enregistrerMaSeance({ id: idSeance ?? undefined, nom, lignes });
+    if (lien.trim() && !urlValide(lien)) {
+      Alert.alert("Ce lien n'a pas l'air d'une adresse web", "Colle l'adresse de la vidéo (par exemple depuis « Partager » dans YouTube), ou laisse le champ vide.");
+      return;
+    }
+    await enregistrerMaSeance({ id: idSeance ?? undefined, nom, lignes, lien });
     router.back();
   };
 
@@ -88,6 +98,17 @@ export default function EditionSeance() {
           placeholder="Nom de la séance (ex : Pousser + gainage)"
           placeholderTextColor={t.textMuted}
           style={[styles.champ, { color: t.textPrimary, borderColor: t.border, backgroundColor: t.bgCard }]}
+        />
+        <ChampTexte
+          value={lien}
+          onChangeText={setLien}
+          placeholder="Lien de la vidéo (facultatif)"
+          placeholderTextColor={t.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          accessibilityLabel="Lien de la vidéo"
+          style={[styles.champ, { color: t.textPrimary, borderColor: t.border, backgroundColor: t.bgCard, marginTop: spacing.sm }]}
         />
         {lignes.length > 0 && (
           <Texte style={{ color: t.textMuted, fontSize: typography.small, marginTop: spacing.sm }}>

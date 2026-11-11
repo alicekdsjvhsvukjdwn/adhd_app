@@ -1,8 +1,10 @@
 import { exercice } from "../exercices";
+import { urlValide } from "../projets-regles";
 import { meilleurePerf, nouveauRecord, type LigneSeance, type Perf, type SerieFaite } from "../seances-sport";
 import { POINTS_SEANCE } from "../suivi-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
+import { ecrireMeta, lireMeta } from "./meta";
 import { cocherRoutineLiee } from "./routine-liee";
 import { sportPayeLe } from "./sport";
 import { addPoints } from "./stats";
@@ -15,7 +17,33 @@ import { addPoints } from "./stats";
 
 // ─── Mes séances ────────────────────────────────────────────────────────
 
-export type MaSeance = { id: number; nom: string; lignes: LigneSeance[] };
+/** `lien` : la vidéo que je suis pour cette séance (adresse web complète), vide sinon. */
+export type MaSeance = { id: number; nom: string; lignes: LigneSeance[]; lien: string };
+
+// ponytail: les liens vidéo sont un JSON dans meta (clé sport_liens_seances : { id de la séance: lien }), sans
+// colonne ni migration : revenir à une version précédente de l'appli reste sans risque. En faire une colonne
+// `lien` de sport_seances le jour où une migration est faite pour une autre raison.
+const CLE_LIENS = "sport_liens_seances";
+
+async function lireLiens(): Promise<Record<string, string>> {
+  try {
+    const brut: unknown = JSON.parse((await lireMeta(CLE_LIENS)) ?? "{}");
+    return brut && typeof brut === "object" && !Array.isArray(brut) ? (brut as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Garde le lien s'il ressemble à une adresse web (« https:// » ajouté au besoin) ; sinon, la séance n'en a plus. */
+async function ecrireLien(seanceId: number, lien: string): Promise<void> {
+  const liens = await lireLiens();
+  const valide = urlValide(lien);
+  if (valide) liens[seanceId] = valide;
+  else delete liens[seanceId];
+  await ecrireMeta(CLE_LIENS, JSON.stringify(liens));
+}
+
+const lienDe = (liens: Record<string, string>, id: number) => (typeof liens[id] === "string" ? liens[id] : "");
 
 type LigneDb = { exercice_id: string; series: number; cible: number; poids: number | null; repos_s: number };
 const enLigne = (l: LigneDb): LigneSeance => ({ exercice: l.exercice_id, series: l.series, cible: l.cible, poids: l.poids, repos_s: l.repos_s });
@@ -33,19 +61,20 @@ async function lignesDe(seanceId: number): Promise<LigneSeance[]> {
 export async function listerMesSeances(): Promise<MaSeance[]> {
   const db = await getDatabase();
   const s = await db.getAllAsync<{ id: number; nom: string }>("SELECT id, nom FROM sport_seances ORDER BY id DESC");
-  return Promise.all(s.map(async (x) => ({ id: x.id, nom: x.nom, lignes: await lignesDe(x.id) })));
+  const liens = await lireLiens();
+  return Promise.all(s.map(async (x) => ({ id: x.id, nom: x.nom, lignes: await lignesDe(x.id), lien: lienDe(liens, x.id) })));
 }
 
 export async function lireMaSeance(id: number): Promise<MaSeance | null> {
   const db = await getDatabase();
   const s = await db.getFirstAsync<{ id: number; nom: string }>("SELECT id, nom FROM sport_seances WHERE id = ?", id);
-  return s ? { id: s.id, nom: s.nom, lignes: await lignesDe(s.id) } : null;
+  return s ? { id: s.id, nom: s.nom, lignes: await lignesDe(s.id), lien: lienDe(await lireLiens(), s.id) } : null;
 }
 
 const borne = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(n)));
 
-/** Crée (sans id) ou remplace une de mes séances. Renvoie son id. */
-export async function enregistrerMaSeance(s: { id?: number; nom: string; lignes: LigneSeance[] }): Promise<number> {
+/** Crée (sans id) ou remplace une de mes séances. Renvoie son id. `lien` absent : le lien vidéo ne change pas. */
+export async function enregistrerMaSeance(s: { id?: number; nom: string; lignes: LigneSeance[]; lien?: string }): Promise<number> {
   const db = await getDatabase();
   const nom = s.nom.trim() || "Ma séance";
   let id = s.id ?? 0;
@@ -69,12 +98,13 @@ export async function enregistrerMaSeance(s: { id?: number; nom: string; lignes:
       );
     }
   });
+  if (s.lien !== undefined) await ecrireLien(id, s.lien);
   return id;
 }
 
 export async function dupliquerMaSeance(id: number): Promise<number | null> {
   const s = await lireMaSeance(id);
-  return s ? enregistrerMaSeance({ nom: `${s.nom} (copie)`, lignes: s.lignes }) : null;
+  return s ? enregistrerMaSeance({ nom: `${s.nom} (copie)`, lignes: s.lignes, lien: s.lien }) : null;
 }
 
 export async function supprimerMaSeance(id: number): Promise<void> {
@@ -83,6 +113,7 @@ export async function supprimerMaSeance(id: number): Promise<void> {
     await db.runAsync("DELETE FROM sport_seances_ex WHERE seance_id = ?", id);
     await db.runAsync("DELETE FROM sport_seances WHERE id = ?", id);
   });
+  await ecrireLien(id, "");
 }
 
 // ─── Une séance qu'on fait ──────────────────────────────────────────────

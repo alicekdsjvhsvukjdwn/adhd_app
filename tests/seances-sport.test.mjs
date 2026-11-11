@@ -189,6 +189,24 @@ test("Mes séances : créer, relire dans l'ordre, modifier, dupliquer, supprimer
   await supprimerMaSeance(copie);
 });
 
+test("lien vidéo d'une de mes séances : gardé s'il ressemble à une adresse web, inchangé si on n'en parle pas, copié, retiré avec la séance", async () => {
+  const lignes = [{ exercice: "pompes", series: 2, cible: 8, poids: null, repos_s: 30 }];
+  const id = await enregistrerMaSeance({ nom: "Vidéo du lundi", lignes, lien: "  youtu.be/abc123 " });
+  assert.equal((await lireMaSeance(id)).lien, "https://youtu.be/abc123"); // « https:// » ajouté
+  assert.equal((await listerMesSeances()).find((s) => s.id === id).lien, "https://youtu.be/abc123");
+
+  await enregistrerMaSeance({ id, nom: "Vidéo du lundi", lignes }); // sans lien dans l'appel : il ne bouge pas
+  assert.equal((await lireMaSeance(id)).lien, "https://youtu.be/abc123");
+  const copie = await dupliquerMaSeance(id);
+  assert.equal((await lireMaSeance(copie)).lien, "https://youtu.be/abc123");
+
+  await enregistrerMaSeance({ id, nom: "Vidéo du lundi", lignes, lien: "pas un lien" }); // pas une adresse : plus de lien
+  assert.equal((await lireMaSeance(id)).lien, "");
+  await supprimerMaSeance(copie);
+  assert.equal(JSON.parse((await db.getFirstAsync("SELECT valeur FROM meta WHERE cle = 'sport_liens_seances'")).valeur)[copie], undefined);
+  await supprimerMaSeance(id);
+});
+
 test("série par série : enregistrée avec son exercice et son poids, corrigée au même numéro, +10 pts une seule fois", async () => {
   const avant = await points();
   const id = await commencerSeanceSport("Pousser", "perso", AUJ);
