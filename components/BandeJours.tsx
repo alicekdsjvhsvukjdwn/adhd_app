@@ -21,15 +21,16 @@ type Props = {
   aujourdhui: string;
   /** Jour touché ; null = aujourd'hui. */
   choisi: string | null;
-  /** Couleurs des échéances de chaque jour de la semaine demandée. */
-  points: (jours: string[]) => Record<string, string[]>;
-  /** Jours qui ont au moins un rendez-vous. */
-  rdv: Set<string>;
+  /** Jours où quelque chose est prévu (échéance, tâche placée, rendez-vous) : un seul point. */
+  prevus: Set<string>;
   onChoisir: (jour: string | null) => void;
 };
 
-/** La semaine en bande de 7 jours, qui défile de semaine en semaine (passé et futur). */
-export function BandeJours({ aujourdhui, choisi, points, rdv, onChoisir }: Props) {
+/**
+ * La semaine en bande de 7 jours, qui défile de semaine en semaine (passé et futur).
+ * Chaque jour : sa lettre, son numéro, et un petit point s'il y a quelque chose de prévu.
+ */
+export function BandeJours({ aujourdhui, choisi, prevus, onChoisir }: Props) {
   const t = useTheme();
   const reel = useJourReel();
   const liste = useRef<FlatList<number>>(null);
@@ -61,7 +62,6 @@ export function BandeJours({ aujourdhui, choisi, points, rdv, onChoisir }: Props
 
   const rendreSemaine = (p: number) => {
     const jours = semaine(p);
-    const pts = points(jours);
     return (
       <View style={[styles.semaine, { width: largeur }]}>
         {jours.map((d) => {
@@ -80,28 +80,16 @@ export function BandeJours({ aujourdhui, choisi, points, rdv, onChoisir }: Props
               ]}
               accessibilityRole="button"
               accessibilityState={{ selected: selectionne }}
-              accessibilityLabel={`${JOURS_LONGS[date.getUTCDay()]} ${date.getUTCDate()}, ${pts[d].length} échéance${
-                pts[d].length > 1 ? "s" : ""
-              }${rdv.has(d) ? ", rendez-vous" : ""}`}
+              accessibilityLabel={`${JOURS_LONGS[date.getUTCDay()]} ${date.getUTCDate()}${prevus.has(d) ? ", quelque chose de prévu" : ""}`}
             >
               <Texte style={[styles.jourNom, { color: estAujourdhui ? "#05080A" : t.textMuted }]}>
-                {JOURS_LONGS[date.getUTCDay()].slice(0, 3)}
+                {JOURS_LONGS[date.getUTCDay()].slice(0, 1).toUpperCase()}
               </Texte>
               <Texte style={[styles.jourNumero, { color: estAujourdhui ? "#05080A" : t.textPrimary }]}>
                 {date.getUTCDate()}
               </Texte>
               <View style={styles.jourPoints}>
-                {pts[d].slice(0, 3).map((c, i) => (
-                  <View
-                    key={i}
-                    style={[styles.jourPoint, { backgroundColor: c, borderColor: estAujourdhui ? "#05080A" : c }]}
-                  />
-                ))}
-                {rdv.has(d) && (
-                  <View
-                    style={[styles.jourPoint, { backgroundColor: "#8A9A98", borderColor: estAujourdhui ? "#05080A" : "#8A9A98" }]}
-                  />
-                )}
+                {prevus.has(d) && <View style={[styles.jourPoint, { backgroundColor: estAujourdhui ? "#05080A" : t.textSecondary }]} />}
               </View>
             </TouchableOpacity>
           );
@@ -150,7 +138,7 @@ export function BandeJours({ aujourdhui, choisi, points, rdv, onChoisir }: Props
             windowSize={5}
             initialNumToRender={3}
             onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / largeur))}
-            extraData={[choisi, rdv, points]}
+            extraData={[choisi, prevus]}
           />
         )}
       </View>
@@ -180,6 +168,6 @@ const styles = StyleSheet.create({
   jourNom: { fontSize: 11, fontWeight: "600" },
   jourNumero: { fontSize: typography.body, fontWeight: "700", marginTop: 2 },
   jourPoints: { flexDirection: "row", gap: 2, height: 6, marginTop: 4 },
-  jourPoint: { width: 6, height: 6, borderRadius: 3, borderWidth: 1 },
+  jourPoint: { width: 5, height: 5, borderRadius: 3 },
   pied: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
 });

@@ -57,7 +57,6 @@ import { getAujourdhui } from "../../lib/db/completions";
 import {
   libelleCompte,
   libelleEcheance,
-  pointsEcheance,
   POINTS_DERNIERE_ETAPE,
   ordreManuel,
   prevueLe,
@@ -128,6 +127,8 @@ function TachesContenu() {
   const jourChoisiRef = useRef<string | null>(null);
   const [rdv, setRdv] = useState<Evenement[]>([]);
   const [rdvHorsLigne, setRdvHorsLigne] = useState(false);
+  /** La liste entière des rendez-vous, ouverte en touchant la ligne compacte sous la date. */
+  const [rdvOuverts, setRdvOuverts] = useState(false);
   /** Feuille « Choisir » : l'emplacement à remplir. */
   const [choixTrois, setChoixTrois] = useState<{ jour: string; rang: number | null } | null>(null);
   /** Tâche dont le menu d'appui long est ouvert ; s'il vient d'un emplacement, lequel. */
@@ -875,6 +876,33 @@ function TachesContenu() {
       ],
     };
   };
+  // Bande des jours : un point les jours où quelque chose est prévu (échéance, tâche placée dans les 3 ou en bonus, rendez-vous).
+  const joursPrevus = new Set<string>([
+    ...classement.flatMap((p) => (p.echeance ? [p.echeance] : [])),
+    ...Object.values(planifs).flatMap((places) => places.map((x) => x.jour)),
+    ...joursAvecRdv(rdv),
+  ]);
+  /** Sous la date : les rendez-vous du jour regardé en une ligne (2 au plus, puis « +N ») ; un tap ouvre la liste entière. */
+  const ligneRdv = rdvVus.length > 0 && (
+    <TouchableOpacity
+      onPress={() => setRdvOuverts((v) => !v)}
+      style={styles.rdvCompact}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: rdvOuverts }}
+      accessibilityLabel={`${rdvVus.length} rendez-vous, voir la liste`}
+    >
+      <View style={styles.rdvPastille} />
+      <Texte style={[styles.rdvCompactTexte, { color: t.textSecondary }]} numberOfLines={1}>
+        {jourChoisi ? `${jourCourt(jourChoisi)} : ` : ""}
+        {rdvVus
+          .slice(0, 2)
+          .map((e) => `${e.journee ? "Journée" : e.debut} ${e.titre}`)
+          .join(" · ")}
+      </Texte>
+      {rdvVus.length > 2 && <Texte style={[styles.rdvCompactPlus, { color: t.textSecondary }]}>+{rdvVus.length - 2}</Texte>}
+    </TouchableOpacity>
+  );
   const blocRdv = rdvVus.length > 0 && (
     <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
       <Texte style={[styles.surtitre, { color: t.textMuted, marginTop: 0 }]}>
@@ -1052,13 +1080,14 @@ function TachesContenu() {
           <>
             {/* En-tête : le jour, la date, « + » */}
             <View style={styles.entete}>
-              <View>
+              <View style={{ flex: 1, marginRight: spacing.md }}>
                 <Texte style={[styles.jourSemaine, { color: t.accent }]}>
                   {JOURS_LONGS[aujourdhuiDate.getUTCDay()].toUpperCase()}
                 </Texte>
                 <Texte style={[styles.date, { color: t.textPrimary }]}>
                   {aujourdhuiDate.getUTCDate()} {MOIS[aujourdhuiDate.getUTCMonth()]}
                 </Texte>
+                {ligneRdv}
               </View>
               {boutonPlus}
             </View>
@@ -1072,19 +1101,13 @@ function TachesContenu() {
             <BandeJours
               aujourdhui={jour}
               choisi={jourChoisi}
-              points={(jours) =>
-                pointsEcheance(
-                  classement.map((p) => ({ echeance: p.echeance, couleur: couleurDe(p.liste_id) })),
-                  jours,
-                )
-              }
-              rdv={joursAvecRdv(rdv)}
+              prevus={joursPrevus}
               onChoisir={setJourChoisi}
             />
 
             {zoneNote}
 
-            {blocRdv}
+            {rdvOuverts && blocRdv}
 
             {jourChoisi !== null && jourChoisi > jour && (
               <>
@@ -1446,6 +1469,9 @@ const styles = StyleSheet.create({
   rdvPastille: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#8A9A98" },
   rdvHeure: { fontSize: typography.small, fontWeight: "600", minWidth: 52 },
   rdvTitre: { flex: 1, fontSize: typography.body },
+  rdvCompact: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  rdvCompactTexte: { flexShrink: 1, fontSize: typography.small },
+  rdvCompactPlus: { fontSize: typography.small, fontWeight: "700" },
   surtitre: {
     fontSize: typography.tiny,
     fontWeight: "700",
