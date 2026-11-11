@@ -22,6 +22,10 @@ export function etageres(): CategorieRecompense[] {
   return CATEGORIES_RECOMPENSES.map((c) => c.cle);
 }
 
+/** La liste unique de l'écran Récompenses : de la moins chère à la plus chère, puis par nom. */
+export const parPrix = <R extends { prix: number; nom: string }>(liste: R[]): R[] =>
+  [...liste].sort((a, b) => a.prix - b.prix || a.nom.localeCompare(b.nom, "fr"));
+
 /** Carte allumée : le solde suffit. Sinon, part de la barre (0 à 1). */
 export function etatRecompense(prix: number, solde: number): { accessible: boolean; part: number } {
   return { accessible: prix <= solde, part: Math.min(1, Math.max(0, solde / Math.max(1, prix))) };

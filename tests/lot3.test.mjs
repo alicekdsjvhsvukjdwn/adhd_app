@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { libelleEcheance, pointsEcheance, semaineDe } from "../lib/regles-taches.ts";
 import { IDEES_RECOMPENSES, ideesRestantes } from "../lib/catalogue-recompenses.ts";
-import { CATEGORIES_RECOMPENSES, categorieRecompense, ICONES_RECOMPENSES, etageres, etatRecompense } from "../lib/recompenses-regles.ts";
+import { CATEGORIES_RECOMPENSES, categorieRecompense, ICONES_RECOMPENSES, etageres, etatRecompense, parPrix } from "../lib/recompenses-regles.ts";
 import { SQL_CATEGORIES_RECOMPENSES, SQL_CATEGORIES_RECOMPENSES_V2, transformationsApres } from "../lib/schema.ts";
 
 test("semaine en cours : du lundi au dimanche, quel que soit le jour", () => {
@@ -123,6 +123,12 @@ test("récompense accessible ou pas encore, selon le solde", () => {
   assert.deepEqual(etatRecompense(50, 120), { accessible: true, part: 1 });
   assert.deepEqual(etatRecompense(400, 100), { accessible: false, part: 0.25 });
   assert.deepEqual(etatRecompense(400, 0), { accessible: false, part: 0 });
+});
+
+test("récompenses en une seule liste : par prix, puis par nom, sans toucher à la liste d'origine", () => {
+  const liste = [{ nom: "Ciné", prix: 300 }, { nom: "Thé", prix: 25 }, { nom: "Café", prix: 25 }];
+  assert.deepEqual(parPrix(liste).map((r) => r.nom), ["Café", "Thé", "Ciné"]);
+  assert.equal(liste[0].nom, "Ciné");
 });
 
 test("étagères : les cinq, toujours, dans l'ordre et avec les bonnes couleurs", () => {

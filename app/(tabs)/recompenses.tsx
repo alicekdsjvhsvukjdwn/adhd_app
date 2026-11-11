@@ -31,11 +31,10 @@ import {
     type Recompense,
 } from "../../lib/db/recompenses";
 import {
-  CATEGORIES_RECOMPENSES,
   ICONES_RECOMPENSES,
   categorieRecompense,
-  etageres,
   etatRecompense,
+  parPrix,
   type CategorieRecompense,
 } from "../../lib/recompenses-regles";
 import { niveauDePoints, totalAffiche } from "../../lib/regles-taches";
@@ -85,7 +84,7 @@ function RecompensesContenu() {
   const [voirRegles, setVoirRegles] = useState(false);
   const [voirAchats, setVoirAchats] = useState(false);
   const [bravo, setBravo] = useState<string | null>(null);
-  /** Feuille « + Ajouter » ouverte, avec l'étagère d'où l'on vient. */
+  /** Feuille « + Ajouter » ouverte (la catégorie donnée ne sert qu'à l'ordre des idées dans la feuille). */
   const [ajoutDe, setAjoutDe] = useState<CategorieRecompense | null>(null);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -172,7 +171,7 @@ function RecompensesContenu() {
       categorie: categorieRecompense(r.categorie).cle,
     });
 
-  /** Appui long sur une carte : modifier ou supprimer (les étagères défilent, pas de glisser). */
+  /** Appui long sur une ligne : modifier ou supprimer. */
   const onOptions = (r: Recompense) => {
     Alert.alert(r.nom, undefined, [
       { text: "Modifier", onPress: () => modifier(r) },
@@ -206,110 +205,123 @@ function RecompensesContenu() {
     await charger();
   };
 
-  const couleurFormulaire = formulaire
-    ? categorieRecompense(formulaire.categorie).couleur
-    : t.accent;
+  // La catégorie n'est plus affichée ni choisie : elle reste en base, gardée telle quelle à la modification.
+  const couleurFormulaire = t.accent;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bgApp }}>
       <ScrollView contentContainerStyle={{ paddingTop: 60, paddingBottom: spacing.xxxl * 2 }}>
-        {/* En-tête : le solde en pastille */}
+        {/* En-tête : le solde en pastille, et « ⓘ » pour le barème */}
         <View style={styles.entete}>
           <Texte style={[styles.titre, { color: t.textPrimary }]}>Récompenses</Texte>
-          <View style={[styles.solde, { backgroundColor: t.bgCard, borderColor: t.border }]}>
-            <Texte style={[styles.soldeChiffre, { color: t.accent }]}>{solde}</Texte>
-            <Texte style={[styles.soldeTexte, { color: t.textSecondary }]}>
-              pts à dépenser
-            </Texte>
+          <View style={styles.enteteDroite}>
+            <View style={[styles.solde, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+              <Texte style={[styles.soldeChiffre, { color: t.accent }]}>{solde}</Texte>
+              <Texte style={[styles.soldeTexte, { color: t.textSecondary }]}>
+                pts à dépenser
+              </Texte>
+            </View>
+            <TouchableOpacity
+              onPress={() => setVoirRegles(!voirRegles)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: voirRegles }}
+              accessibilityLabel="Comment gagner des points"
+            >
+              <Texte style={[styles.info, { color: voirRegles ? t.accent : t.textMuted }]}>ⓘ</Texte>
+            </TouchableOpacity>
           </View>
         </View>
 
-        <TouchableOpacity
-          onPress={() => setAjoutDe("mer")}
-          style={[styles.ajoutHaut, { borderColor: t.accent }]}
-          accessibilityRole="button"
-          accessibilityLabel="Ajouter une récompense"
-        >
-          <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>+ Ajouter</Texte>
-        </TouchableOpacity>
-
-        {/* Une étagère par catégorie */}
-        {etageres().map((cle) => {
-          const cat = categorieRecompense(cle);
-          const dedans = liste.filter((r) => categorieRecompense(r.categorie).cle === cle);
-          return (
-            <View key={cle} style={styles.etagere}>
-              <View style={styles.etagereTitre}>
-                <View style={[styles.point, { backgroundColor: cat.couleur }]} />
-                <Texte style={[styles.section, { color: t.textPrimary, flex: 1 }]}>{cat.nom}</Texte>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rangee}
-              >
-                {dedans.map((r) => {
-                  const { accessible, part } = etatRecompense(r.prix, solde);
-                  return (
-                    <TouchableOpacity
-                      key={r.id}
-                      onPress={() => onOffrir(r)}
-                      onLongPress={Platform.OS === "web" ? undefined : () => onOptions(r)}
-                      accessibilityHint="Appui long : modifier ou supprimer"
-                      accessibilityLabel={`${r.nom}, ${r.prix} points${accessible ? "" : ", pas encore"}`}
-                      style={[
-                        styles.carte,
-                        accessible
-                          ? { backgroundColor: avecAlpha(cat.couleur, 0.12), borderColor: cat.couleur }
-                          : { backgroundColor: t.bgCard, borderColor: t.border, opacity: 0.7 },
-                      ]}
-                    >
-                      <BoutonOptions
-                        titre={r.nom}
-                        style={styles.options}
-                        options={[
-                          { libelle: "Modifier", onPress: () => modifier(r) },
-                          {
-                            libelle: "Supprimer",
-                            danger: true,
-                            onPress: async () => {
-                              await supprimerRecompense(r.id);
-                              await charger();
-                            },
-                          },
-                        ]}
-                      />
-                      <IconeRecompense icone={r.icone} couleur={cat.couleur} taille={26} />
-                      <Texte
-                        style={[styles.nom, { color: t.textPrimary }]}
-                        numberOfLines={2}
-                      >
-                        {r.nom}
-                      </Texte>
-                      {accessible ? (
-                        <Texte style={[styles.prix, { color: cat.couleur }]}>{r.prix} pts</Texte>
-                      ) : (
-                        <View style={[styles.barre, { backgroundColor: t.bgApp }]}>
-                          <View style={{ flex: part, backgroundColor: cat.couleur, borderRadius: 2 }} />
-                          <View style={{ flex: 1 - part }} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-                <TouchableOpacity
-                  onPress={() => setAjoutDe(cle)}
-                  style={[styles.carte, styles.ajouter, { borderColor: t.border }]}
-                  accessibilityLabel={`Ajouter une récompense dans ${cat.nom}`}
-                >
-                  <Texte style={[styles.ajouterTexte, { color: t.textMuted }]}>+ Ajouter</Texte>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          );
-        })}
-
         <View style={{ paddingHorizontal: spacing.xl }}>
+          {/* Le barème, ouvert par « ⓘ » */}
+          {voirRegles && (
+            <View style={[styles.repliable, { backgroundColor: t.bgCard, marginTop: 0, marginBottom: spacing.md }]}>
+              <Texte style={[styles.repliableTitre, { color: t.textPrimary }]}>Comment gagner des points</Texte>
+              <Texte style={[styles.note, { color: t.textSecondary }]}>
+                Niveau {niveau} · {totalAffiche(total)} points gagnés au total
+              </Texte>
+              {REGLES_POINTS.map((r) => (
+                <View key={r.action} style={styles.regle}>
+                  <Texte style={[styles.regleAction, { color: t.textSecondary }]}>
+                    {r.action}
+                  </Texte>
+                  <Texte style={[styles.reglePoints, { color: t.accentText }]}>
+                    {r.points}
+                  </Texte>
+                </View>
+              ))}
+              <Texte style={[styles.reglesNote, { color: t.textMuted }]}>
+                Avec 3 routines et 3 tâches, on gagne environ 60
+                points par jour : un café vaut une journée, un ciné une semaine.
+                Ton niveau dépend du total gagné : dépenser ne le fait pas
+                baisser, décocher reprend les points.
+              </Texte>
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => setAjoutDe("mer")}
+            style={[styles.ajoutHaut, { borderColor: t.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter une récompense"
+          >
+            <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>+ Ajouter</Texte>
+          </TouchableOpacity>
+
+          {/* Une seule liste, de la moins chère à la plus chère. La catégorie reste en base, sans être affichée. */}
+          {liste.length === 0 && (
+            <Texte style={[styles.note, { color: t.textMuted }]}>
+              Pas encore de récompense. « + Ajouter » propose des idées toutes prêtes, ou crée la tienne.
+            </Texte>
+          )}
+          {parPrix(liste).map((r) => {
+            const { accessible, part } = etatRecompense(r.prix, solde);
+            return (
+              <TouchableOpacity
+                key={r.id}
+                onPress={() => onOffrir(r)}
+                onLongPress={Platform.OS === "web" ? undefined : () => onOptions(r)}
+                accessibilityHint="Appui long : modifier ou supprimer"
+                accessibilityLabel={`${r.nom}, ${r.prix} points${accessible ? "" : ", pas encore"}`}
+                style={[
+                  styles.ligne,
+                  accessible
+                    ? { backgroundColor: avecAlpha(t.accent, 0.1), borderColor: t.accent }
+                    : { backgroundColor: t.bgCard, borderColor: t.border, opacity: 0.7 },
+                ]}
+              >
+                <IconeRecompense icone={r.icone} couleur={accessible ? t.accent : t.textSecondary} taille={24} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Texte style={[styles.nom, { color: t.textPrimary }]} numberOfLines={2}>
+                    {r.nom}
+                  </Texte>
+                  {!accessible && (
+                    <View style={[styles.barre, { backgroundColor: t.bgApp }]}>
+                      <View style={{ flex: part, backgroundColor: t.accent, borderRadius: 2 }} />
+                      <View style={{ flex: 1 - part }} />
+                    </View>
+                  )}
+                </View>
+                <Texte style={[styles.prix, { color: accessible ? t.accent : t.textMuted }]}>{r.prix} pts</Texte>
+                <BoutonOptions
+                  titre={r.nom}
+                  options={[
+                    { libelle: "Modifier", onPress: () => modifier(r) },
+                    {
+                      libelle: "Supprimer",
+                      danger: true,
+                      onPress: async () => {
+                        await supprimerRecompense(r.id);
+                        await charger();
+                      },
+                    },
+                  ]}
+                />
+              </TouchableOpacity>
+            );
+          })}
+
           {/* Dernières récompenses */}
           {achats.length > 0 && (
             <TouchableOpacity
@@ -354,44 +366,6 @@ function RecompensesContenu() {
             </TouchableOpacity>
           )}
 
-          {/* Comment gagner des points */}
-          <TouchableOpacity
-            style={[styles.repliable, { backgroundColor: t.bgCard }]}
-            onPress={() => setVoirRegles(!voirRegles)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.repliableEntete}>
-              <Texte style={[styles.repliableTitre, { color: t.textPrimary }]}>
-                Comment gagner des points
-              </Texte>
-              <Texte style={[styles.chevron, { color: t.textMuted }]}>
-                {voirRegles ? "−" : "+"}
-              </Texte>
-            </View>
-            {voirRegles && (
-              <>
-                <Texte style={[styles.note, { color: t.textSecondary }]}>
-                  Niveau {niveau} · {totalAffiche(total)} points gagnés au total
-                </Texte>
-                {REGLES_POINTS.map((r) => (
-                  <View key={r.action} style={styles.regle}>
-                    <Texte style={[styles.regleAction, { color: t.textSecondary }]}>
-                      {r.action}
-                    </Texte>
-                    <Texte style={[styles.reglePoints, { color: t.accentText }]}>
-                      {r.points}
-                    </Texte>
-                  </View>
-                ))}
-                <Texte style={[styles.reglesNote, { color: t.textMuted }]}>
-                  Avec 3 routines et 3 tâches, on gagne environ 60
-                  points par jour : un café vaut une journée, un ciné une semaine.
-                  Ton niveau dépend du total gagné : dépenser ne le fait pas
-                  baisser, décocher reprend les points.
-                </Texte>
-              </>
-            )}
-          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -436,37 +410,6 @@ function RecompensesContenu() {
                       ? "Modifier la récompense"
                       : "Nouvelle récompense"}
                   </Texte>
-
-                  <View style={styles.categories}>
-                    {CATEGORIES_RECOMPENSES.map((c) => {
-                      const actif = formulaire.categorie === c.cle;
-                      return (
-                        <TouchableOpacity
-                          key={c.cle}
-                          onPress={() => setFormulaire({ ...formulaire, categorie: c.cle })}
-                          style={[
-                            styles.prixPastille,
-                            {
-                              backgroundColor: actif ? avecAlpha(c.couleur, 0.15) : t.bgCard,
-                              borderColor: actif ? c.couleur : t.border,
-                            },
-                          ]}
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected: actif }}
-                        >
-                          <Texte
-                            style={{
-                              color: actif ? c.couleur : t.textSecondary,
-                              fontSize: typography.small,
-                              fontWeight: "600",
-                            }}
-                          >
-                            {c.nom}
-                          </Texte>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
 
                   <View style={styles.icones}>
                     {ICONES_RECOMPENSES.map((i) => {
@@ -614,7 +557,6 @@ function RecompensesContenu() {
 }
 
 const styles = StyleSheet.create({
-  options: { position: "absolute", top: 0, right: 0, zIndex: 1 },
   entete: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -623,6 +565,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   titre: { fontSize: typography.h1, fontWeight: "600" },
+  enteteDroite: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  info: { fontSize: 20, lineHeight: 24 },
   solde: {
     flexDirection: "row",
     alignItems: "baseline",
@@ -635,39 +579,26 @@ const styles = StyleSheet.create({
   soldeChiffre: { fontSize: 22, fontWeight: "700" },
   soldeTexte: { fontSize: typography.small, fontWeight: "600" },
 
-  etagere: { marginBottom: spacing.lg },
   ajoutHaut: {
     alignSelf: "flex-start",
-    marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
     paddingVertical: 6,
   },
-  etagereTitre: {
+  ligne: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.sm,
-  },
-  point: { width: 8, height: 8, borderRadius: 4 },
-  section: { fontSize: typography.body, fontWeight: "600" },
-  rangee: { gap: spacing.sm, paddingHorizontal: spacing.xl },
-  carte: {
-    width: 118,
-    height: 104,
+    gap: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing.md,
-    justifyContent: "space-between",
+    marginBottom: spacing.sm,
   },
-  nom: { fontSize: typography.small, fontWeight: "600", lineHeight: 16 },
+  nom: { fontSize: typography.bodySmall, fontWeight: "600" },
   prix: { fontSize: typography.small, fontWeight: "700" },
   barre: { height: 4, borderRadius: 2, flexDirection: "row", overflow: "hidden" },
-  ajouter: { borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
-  ajouterTexte: { fontSize: typography.small, fontWeight: "600" },
 
   repliable: {
     borderRadius: radius.lg,
@@ -734,12 +665,6 @@ const styles = StyleSheet.create({
   formTitre: {
     fontSize: typography.h2,
     fontWeight: "600",
-    marginBottom: spacing.md,
-  },
-  categories: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
     marginBottom: spacing.md,
   },
   icones: {
