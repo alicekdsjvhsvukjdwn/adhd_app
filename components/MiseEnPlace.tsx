@@ -32,6 +32,7 @@ import {
   ORDRE_TRANCHES,
   trancheDuMoment,
 } from "../lib/moments";
+import { MODULES } from "../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
 /**
@@ -231,6 +232,8 @@ export function MiseEnPlace() {
     .filter((f): f is FamilleTemplate => !!f);
 
   const versEtape3 = () => {
+    // Moments repères masqués : pas d'étape « Juste après quoi ? », les routines sont créées sans ancre.
+    if (!MODULES.ancres) return allerA(4);
     const suggestions: Record<string, number | null> = {};
     for (const f of famillesCochees) {
       suggestions[f.id] =
@@ -370,7 +373,7 @@ export function MiseEnPlace() {
       >
         <TouchableOpacity
           onPress={() =>
-            etape === 1 ? quitter() : allerA((etape - 1) as Etape)
+            etape === 1 ? quitter() : allerA((etape === 4 && !MODULES.ancres ? 2 : etape - 1) as Etape)
           }
           hitSlop={12}
         >
@@ -381,7 +384,7 @@ export function MiseEnPlace() {
 
         {etape <= 3 && (
           <View style={styles.progression}>
-            {[1, 2, 3].map((n) => (
+            {(MODULES.ancres ? [1, 2, 3] : [1, 2]).map((n) => (
               <View
                 key={n}
                 style={[

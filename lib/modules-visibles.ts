@@ -8,7 +8,7 @@ export const MODULES = {
   /** Suivi › Progrès (et la route cachée progression). */
   progres: false,
   /** Moments repères (ancres). */
-  ancres: true,
+  ancres: false,
   /** « Je commence » (minuteur). */
   jeCommence: true,
   /** Carnet / historique d'une tâche. */

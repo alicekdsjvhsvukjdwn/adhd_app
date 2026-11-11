@@ -11,6 +11,7 @@ import { Texte } from "../../components/Texte";
 import { BoutonReinitialiser } from "../../components/BoutonReinitialiser";
 import { CarteDebutJour } from "../../components/CarteDebutJour";
 import { CarteSauvegarde } from "../../components/CarteSauvegarde";
+import { MODULES } from "../../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
 type Entree = {
@@ -45,7 +46,7 @@ const ENTREES: Entree[] = [
     description: "Quand l'appli te fait signe.",
     route: "/rappels",
   },
-];
+].filter((e) => e.route !== "/ancres" || MODULES.ancres);
 
 function ProfilContenu() {
   const router = useRouter();

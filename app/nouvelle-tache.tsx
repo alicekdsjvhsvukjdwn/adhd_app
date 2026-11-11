@@ -36,6 +36,7 @@ import {
   POINTS_TOUTES,
   type Periode,
 } from "../lib/regles-taches";
+import { MODULES } from "../lib/modules-visibles";
 import { momentStocke, type Moment } from "../lib/moments";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import {
@@ -841,6 +842,9 @@ export default function Ajouter() {
               {resumeJours(jours)}
             </Texte>
 
+            {/* Moments repères masqués : pas de sélecteur. L'ancre déjà en base est relue puis réécrite telle quelle. */}
+            {MODULES.ancres && (
+              <>
                 <Texte style={[styles.label, { color: t.textSecondary }]}>
                   Moment repère (facultatif)
                 </Texte>
@@ -890,6 +894,8 @@ export default function Ajouter() {
                     </Texte>
                   </>
                 )}
+              </>
+            )}
 
             {editeurEtapes()}
           </>
