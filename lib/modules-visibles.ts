@@ -1,0 +1,22 @@
+/**
+ * Modules affichés dans l'appli. `false` = accès retirés (onglets, tuiles, boutons, entrées de Profil) ;
+ * le code, les écrans et les tables restent : remettre `true` suffit pour tout retrouver.
+ */
+export const MODULES = {
+  /** Suivi › Esprit : humeur, bilan du dimanche, pensées, journal, TCC, séance avec moi, méditer, vision. */
+  esprit: true,
+  /** Suivi › Progrès (et la route cachée progression). */
+  progres: true,
+  /** Moments repères (ancres). */
+  ancres: true,
+  /** « Je commence » (minuteur). */
+  jeCommence: true,
+  /** Carnet / historique d'une tâche. */
+  carnet: true,
+  /** Projets créatifs (vue « Projets » de Tâches). */
+  projets: true,
+  /** Cuisine › Frigo et placards (l'inventaire). */
+  frigo: true,
+  /** Énergie du jour « En forme » (troisième niveau, sans effet aujourd'hui). */
+  energieEnForme: true,
+} as const;
