@@ -37,9 +37,10 @@ import {
 import { annulerCompletion, completer, confirmationSuppression } from "../../lib/db";
 import { routinesParCategorie, type RoutineResumee } from "../../lib/db/categories";
 import { getAujourdhui, type RoutineAvecStatut } from "../../lib/db/completions";
-import { choisirEnergie, choisirVue, energieDuJour, vueDuJour } from "../../lib/db/energie";
+import { choisirEnergie, choisirVue, energieDuJour, niveauAffiche, vueDuJour } from "../../lib/db/energie";
 import { basculerEtapeRoutine, getEtapesRoutines, type EtapeRoutine } from "../../lib/db/etapes";
 import { suggestionDuJour, type Suggestion } from "../../lib/db/suggestions";
+import { MODULES } from "../../lib/modules-visibles";
 import {
   LIBELLES_TRANCHE,
   miseDeCote as estExigeanteDuJour,
@@ -55,6 +56,16 @@ const NIVEAUX: { niveau: Niveau; libelle: string }[] = [
   { niveau: 1, libelle: "Difficile" },
   { niveau: 2, libelle: "Normal" },
   { niveau: 3, libelle: "En forme" },
+];
+
+/** « En forme » masqué (lib/modules-visibles.ts) : deux gros boutons, et sous le bouton actif ce que le choix change. */
+const DEUX_NIVEAUX: { niveau: Niveau; libelle: string; effet: string }[] = [
+  {
+    niveau: 1,
+    libelle: "Jour difficile",
+    effet: "Seulement l'essentiel aujourd'hui : étapes essentielles, une seule tâche, ménage du quotidien.",
+  },
+  { niveau: 2, libelle: "Normal", effet: "Tout s'affiche, comme d'habitude." },
 ];
 
 const CINQ_MINUTES = 5 * 60_000;
@@ -125,7 +136,7 @@ function RoutinesContenu() {
   }, [routines, jourVu]);
 
   const chargerAnnexes = useCallback(async () => {
-    setEnergie((await energieDuJour()).niveau);
+    setEnergie(niveauAffiche((await energieDuJour()).niveau));
     const vue = vueValide(await vueDuJour());
     if (vue) setChoixJour({ jour: getAujourdhui(), vue });
     setNonPrevues(await routinesParCategorie());
@@ -246,11 +257,13 @@ function RoutinesContenu() {
   ).filter((r) => !idsDuJour.has(r.id));
 
   // L'anneau prend la place qu'il peut, sans faire défiler la page ;
-  // plus petit dans la vue « Tout », pour laisser la place à la liste.
+  // plus petit dans la vue « Tout », pour laisser la place à la liste,
+  // et un peu plus petit avec les deux gros boutons d'énergie au-dessus.
+  const partAnneau = (vueTout ? 0.25 : 0.32) - (MODULES.energieEnForme ? 0 : 0.04);
   const tailleAnneau = Math.min(
     vueTout ? 200 : 260,
     width - spacing.xl * 2,
-    Math.max(160, height * (vueTout ? 0.25 : 0.32)),
+    Math.max(160, height * partAnneau),
   );
   const couleurDe = (categorie: string | null) => {
     const d = selectionDe(categorie);
@@ -433,7 +446,7 @@ function RoutinesContenu() {
             </TouchableOpacity>
           )}
         </View>
-        {!passe && <View style={[styles.energie, { borderColor: t.border, backgroundColor: t.bgCard }]}>
+        {!passe && MODULES.energieEnForme && <View style={[styles.energie, { borderColor: t.border, backgroundColor: t.bgCard }]}>
           {NIVEAUX.map((n) => {
             // Rien de sélectionné tant que rien n'est choisi.
             const actif = energie === n.niveau;
@@ -458,6 +471,40 @@ function RoutinesContenu() {
           })}
         </View>}
       </View>
+      {/* Énergie du jour à 2 niveaux : rien de sélectionné tant que rien n'est choisi. */}
+      {!passe && !MODULES.energieEnForme && (
+        <View style={styles.energie2}>
+          <View style={styles.energie2Boutons} accessibilityRole="radiogroup">
+            {DEUX_NIVEAUX.map((n) => {
+              const actif = energie === n.niveau;
+              return (
+                <TouchableOpacity
+                  key={n.niveau}
+                  onPress={() => onChoisirEnergie(n.niveau)}
+                  style={[
+                    styles.energie2Bouton,
+                    { borderColor: actif ? t.accentFonce : t.border, backgroundColor: actif ? t.accentFonce : t.bgCard },
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: actif }}
+                >
+                  <Texte style={[styles.energie2Texte, { color: actif ? t.textOnAccentFonce : t.textSecondary }]}>
+                    {n.libelle}
+                  </Texte>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {DEUX_NIVEAUX.filter((n) => n.niveau === energie).map((n) => (
+            <Texte
+              key={n.niveau}
+              style={[styles.energie2Effet, { color: t.textMuted, textAlign: n.niveau === 1 ? "left" : "right" }]}
+            >
+              {n.effet}
+            </Texte>
+          ))}
+        </View>
+      )}
       {passe && (
         <TouchableOpacity
           onPress={() => setRetour(0)}
@@ -675,6 +722,11 @@ const styles = StyleSheet.create({
   },
   energieBouton: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.pill },
   energieTexte: { fontSize: typography.tiny, fontWeight: "600" },
+  energie2: { marginTop: spacing.sm },
+  energie2Boutons: { flexDirection: "row", gap: spacing.sm },
+  energie2Bouton: { flex: 1, alignItems: "center", paddingVertical: 10, borderWidth: 1, borderRadius: radius.md },
+  energie2Texte: { fontSize: typography.bodySmall, fontWeight: "700" },
+  energie2Effet: { fontSize: typography.tiny, marginTop: 4 },
 
   anneau: { alignItems: "center", marginTop: spacing.md },
   pastilleSuggestion: {

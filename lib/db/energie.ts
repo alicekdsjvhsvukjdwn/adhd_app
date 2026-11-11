@@ -2,6 +2,7 @@ import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 import { recalculerPointsEtapesDuJour } from "./etapes";
 import { logEvent } from "./events";
+import { MODULES } from "../modules-visibles";
 import { cleEnergie, estJourDifficile } from "./jour-difficile";
 
 /**
@@ -24,6 +25,13 @@ export async function energieDuJour(): Promise<{
     return { niveau: Number(choix.valeur) as 1 | 2 | 3, source: "choix" };
   return { niveau: null, source: null };
 }
+
+/**
+ * Niveau à afficher. « En forme » masqué (lib/modules-visibles.ts) : un jour noté 3 se lit Normal.
+ * Lecture seule : la valeur en base n'est pas réécrite.
+ */
+export const niveauAffiche = (niveau: 1 | 2 | 3 | null): 1 | 2 | 3 | null =>
+  niveau === 3 && !MODULES.energieEnForme ? 2 : niveau;
 
 export async function choisirEnergie(niveau: 1 | 2 | 3): Promise<void> {
   const etaitDifficile = await estJourDifficile();
