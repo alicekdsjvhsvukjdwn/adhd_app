@@ -25,6 +25,7 @@ import { FeuilleChoixTache, type GroupeChoix } from "../../components/FeuilleCho
 import { MenuOptions } from "../../components/MenuOptions";
 import { PlusMoins } from "../../components/PlusMoins";
 import { ZoneNote } from "../../components/ZoneNote";
+import { MODULES } from "../../lib/modules-visibles";
 import { useJourCourant } from "../../hooks/useJourCourant";
 import { deviner } from "../../lib/catalogue";
 import {
@@ -417,6 +418,7 @@ function TachesContenu() {
 
   /** Bouton discret : sur la première carte, ou la carte unique d'un jour difficile. */
   const boutonJeCommence = (p: Proposition) => {
+    if (!MODULES.jeCommence) return null;
     const prochaine = (etapes[p.itemId] ?? []).find((e) => e.faite === 0);
     return (
       <TouchableOpacity

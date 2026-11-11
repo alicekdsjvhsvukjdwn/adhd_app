@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import type { Etape } from "../lib/db/etapes";
 import type { Proposition } from "../lib/db/moteur";
+import { MODULES } from "../lib/modules-visibles";
 import { LIBELLES_PRIORITE, libelleEcheance } from "../lib/regles-taches";
 import { avecAlpha, radius, spacing, typography, useTheme } from "../lib/theme";
 import { Etoile } from "./Etoile";
@@ -163,14 +164,21 @@ export function FeuilleTache(p: Props) {
                     <Texte style={[styles.boutonTexte, { color: t.textPrimary }]}>Modifier</Texte>
                   </TouchableOpacity>
                 </View>
-                <View style={styles.liens}>
-                  <TouchableOpacity onPress={p.onCommence} hitSlop={8}>
-                    <Texte style={[styles.lien, { color: t.accentText }]}>▶ Je commence</Texte>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={p.onHistorique} hitSlop={8}>
-                    <Texte style={[styles.lien, { color: t.accentText }]}>Historique</Texte>
-                  </TouchableOpacity>
-                </View>
+                {/* Liens selon lib/modules-visibles.ts ; aucun des deux : la ligne disparaît. */}
+                {(MODULES.jeCommence || MODULES.carnet) && (
+                  <View style={styles.liens}>
+                    {MODULES.jeCommence && (
+                      <TouchableOpacity onPress={p.onCommence} hitSlop={8}>
+                        <Texte style={[styles.lien, { color: t.accentText }]}>▶ Je commence</Texte>
+                      </TouchableOpacity>
+                    )}
+                    {MODULES.carnet && (
+                      <TouchableOpacity onPress={p.onHistorique} hitSlop={8}>
+                        <Texte style={[styles.lien, { color: t.accentText }]}>Historique</Texte>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </ScrollView>
             </Pressable>
           )}

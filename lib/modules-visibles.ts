@@ -10,7 +10,7 @@ export const MODULES = {
   /** Moments repères (ancres). */
   ancres: false,
   /** « Je commence » (minuteur). */
-  jeCommence: true,
+  jeCommence: false,
   /** Carnet / historique d'une tâche. */
   carnet: true,
   /** Projets créatifs (vue « Projets » de Tâches). */
