@@ -12,7 +12,7 @@ export const MODULES = {
   /** « Je commence » (minuteur). */
   jeCommence: false,
   /** Carnet / historique d'une tâche. */
-  carnet: true,
+  carnet: false,
   /** Projets créatifs (vue « Projets » de Tâches). */
   projets: true,
   /** Cuisine › Frigo et placards (l'inventaire). */

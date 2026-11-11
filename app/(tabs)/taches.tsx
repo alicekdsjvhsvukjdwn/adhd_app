@@ -321,20 +321,23 @@ function TachesContenu() {
 
   const historique = (p: Proposition) => router.push(`/historique?id=${p.itemId}`);
 
+  // Carnet masqué (lib/modules-visibles.ts) : plus d'entrée « Historique », de lien « Carnet » ni de zone de note.
   const optionsTache = (p: Proposition) => [
-    { libelle: "Historique", onPress: () => historique(p) },
+    ...(MODULES.carnet ? [{ libelle: "Historique", onPress: () => historique(p) }] : []),
     { libelle: "Modifier", onPress: () => router.push(`/nouvelle-tache?id=${p.itemId}`) },
     { libelle: "Supprimer", danger: true, onPress: () => onSupprimer(p) },
   ];
 
   const actions = (p: Proposition) => (
     <View style={styles.actions}>
-      <TouchableOpacity
-        style={[styles.action, { backgroundColor: t.textMuted }]}
-        onPress={() => historique(p)}
-      >
-        <Texte style={[styles.actionTexte, { color: t.textOnAccent }]}>Historique</Texte>
-      </TouchableOpacity>
+      {MODULES.carnet && (
+        <TouchableOpacity
+          style={[styles.action, { backgroundColor: t.textMuted }]}
+          onPress={() => historique(p)}
+        >
+          <Texte style={[styles.actionTexte, { color: t.textOnAccent }]}>Historique</Texte>
+        </TouchableOpacity>
+      )}
       <TouchableOpacity
         style={[styles.action, { backgroundColor: t.accentText }]}
         onPress={() => router.push(`/nouvelle-tache?id=${p.itemId}`)}
@@ -400,7 +403,7 @@ function TachesContenu() {
     };
   }, [listeActive, classement]);
 
-  const zoneNote = noteOuverte && (
+  const zoneNote = MODULES.carnet && noteOuverte && (
     <ZoneNote
       key={`${noteOuverte.itemId}-${noteOuverte.date}`}
       itemId={noteOuverte.itemId}
@@ -971,12 +974,14 @@ function TachesContenu() {
                   🎯 {listeActive?.objectif ? "Changer l'objectif" : "Fixer un objectif"}
                 </Texte>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => listeActive && router.push(`/historique?liste=${listeActive.id}`)}
-                hitSlop={8}
-              >
-                <Texte style={[styles.lien, { color: t.accentText }]}>📓 Carnet</Texte>
-              </TouchableOpacity>
+              {MODULES.carnet && (
+                <TouchableOpacity
+                  onPress={() => listeActive && router.push(`/historique?liste=${listeActive.id}`)}
+                  hitSlop={8}
+                >
+                  <Texte style={[styles.lien, { color: t.accentText }]}>📓 Carnet</Texte>
+                </TouchableOpacity>
+              )}
             </View>
             {editionObjectif && (
               <View style={[styles.carte, { backgroundColor: t.bgCard }]}>
