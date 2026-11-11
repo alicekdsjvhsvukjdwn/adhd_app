@@ -597,9 +597,6 @@ function RoutinesContenu() {
             <Texte style={[styles.videTexte, { color: t.textSecondary }]}>
               Rien de prévu ici aujourd&apos;hui.
             </Texte>
-            <TouchableOpacity onPress={() => router.push("/mise-en-place")} hitSlop={8}>
-              <Texte style={[styles.lien, { color: t.accent }]}>Idées de routines</Texte>
-            </TouchableOpacity>
           </View>
         ) : vueTout ? (
           grouperParMoment(
@@ -655,18 +652,24 @@ function RoutinesContenu() {
           </>
         )}
 
-        <TouchableOpacity
-          onPress={() =>
-            router.push(
-              selection === "autres" || vueTout
-                ? "/nouvelle-tache?type=routine"
-                : `/nouvelle-tache?type=routine&domaine=${selection}`,
-            )
-          }
-          hitSlop={8}
-        >
-          <Texte style={[styles.lien, { color: t.accent }]}>+ Ajouter une routine ici</Texte>
-        </TouchableOpacity>
+        <View style={styles.liensBas}>
+          <TouchableOpacity
+            onPress={() =>
+              router.push(
+                selection === "autres" || vueTout
+                  ? "/nouvelle-tache?type=routine"
+                  : `/nouvelle-tache?type=routine&domaine=${selection}`,
+              )
+            }
+            hitSlop={8}
+          >
+            <Texte style={[styles.lien, { color: t.accent }]}>+ Ajouter une routine ici</Texte>
+          </TouchableOpacity>
+          {/* La seule entrée vers la mise en place guidée (avec la suggestion « ajouter »). */}
+          <TouchableOpacity onPress={() => router.push("/mise-en-place")} hitSlop={8}>
+            <Texte style={[styles.lien, { color: t.accent }]}>Idées de routines</Texte>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       <Modal
@@ -813,6 +816,7 @@ const styles = StyleSheet.create({
   vide: { borderWidth: 1, borderRadius: radius.md, padding: spacing.lg, gap: spacing.sm },
   videTexte: { fontSize: typography.bodySmall },
   lien: { fontSize: typography.bodySmall, fontWeight: "600", marginTop: spacing.md },
+  liensBas: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", columnGap: spacing.lg },
 
   actions: { flexDirection: "row" },
   action: {

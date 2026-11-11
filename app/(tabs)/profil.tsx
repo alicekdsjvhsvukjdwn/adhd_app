@@ -20,12 +20,8 @@ type Entree = {
   route: string;
 };
 
+// « Idées de routines » n'a qu'une entrée : en bas de la liste de l'onglet Routines.
 const ENTREES: Entree[] = [
-  {
-    titre: "Idées de routines",
-    description: "À partir de ce qui est difficile en ce moment.",
-    route: "/mise-en-place",
-  },
   {
     titre: "Mes moments repères",
     description: "Les ancres auxquelles rattacher les routines.",
