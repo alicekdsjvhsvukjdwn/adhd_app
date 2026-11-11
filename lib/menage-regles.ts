@@ -57,14 +57,6 @@ export function jauge(taches: TacheMenage[], aujourdhui: string): number {
   return 1 - taches.reduce((s, t) => s + partRetard(t, aujourdhui), 0) / taches.length;
 }
 
-const mixer = (a: number, b: number, p: number) => Math.round(a + (b - a) * p);
-/** Orange (à faire) → vert (propre). */
-export function couleurJauge(part: number): string {
-  const p = Math.min(1, Math.max(0, part));
-  const [r, g, b] = [mixer(0xfb, 0x34, p), mixer(0x92, 0xd3, p), mixer(0x3c, 0x99, p)];
-  return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
-}
-
 /**
  * « À faire aujourd'hui » : les tâches dues ou en retard, toutes pièces, les plus en retard
  * d'abord, `max` visibles. Un jour difficile : seulement les tâches « chaque jour ».

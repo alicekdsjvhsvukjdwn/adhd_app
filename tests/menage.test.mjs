@@ -30,7 +30,6 @@ import {
   couleurPiece,
   roueMenage,
   TACHES_PAR_ROUE,
-  couleurJauge,
   jauge,
   libelleFrequence,
   partRetard,
@@ -60,9 +59,6 @@ test("jauge d'une pièce : moyenne des retards, pleine = propre, vide = à faire
   assert.equal(jauge([t(1, 7, "2026-10-28")], AUJ), 1);
   assert.equal(jauge([t(1, 7, "2026-10-21")], AUJ), 0);
   assert.equal(jauge([t(1, 4, "2026-10-28"), t(2, 7, "2026-10-21")], AUJ), 0.5);
-  assert.equal(couleurJauge(0), "#FB923C"); // orange
-  assert.equal(couleurJauge(1), "#34D399"); // vert
-  assert.equal(couleurJauge(2), "#34D399");
 });
 
 test("fréquences en toutes lettres", () => {

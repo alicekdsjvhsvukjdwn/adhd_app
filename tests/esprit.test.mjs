@@ -32,7 +32,6 @@ import {
 import {
   couleurHumeur,
   emotionsDe,
-  emotionsFrequentes,
   liensHumeur,
   moyenne,
   moyennesParJour,
@@ -44,12 +43,11 @@ import { rappelsDus, TEXTES } from "../push-worker/src/rappels.ts";
 
 // ─── Règles pures ───
 
-test("humeur : moyennes, mini-barres de la semaine, émotions les plus citées", () => {
+test("humeur : moyennes, mini-barres de la semaine, émotions d'une saisie", () => {
   assert.equal(moyenne([]), null);
   assert.equal(moyenne([2, 3, 5]), 3.3);
   const h = [{ jour: "2026-10-19", niveau: 2 }, { jour: "2026-10-19", niveau: 4 }, { jour: "2026-10-21", niveau: 5 }];
   assert.deepEqual(moyennesParJour(h, semaineDe("2026-10-21")).map((x) => x.moy), [3, null, 5, null, null, null, null]);
-  assert.deepEqual(emotionsFrequentes(["calme,joie", "calme", "fatigue,calme", "joie"]), [["calme", 3], ["joie", 2], ["fatigue", 1]]);
   assert.deepEqual(emotionsDe(" a, b ,,"), ["a", "b"]);
   assert.equal(couleurHumeur(1), "#F87171");
   assert.equal(couleurHumeur(9), "#22D3EE");

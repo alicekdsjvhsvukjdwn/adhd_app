@@ -2,7 +2,7 @@
  * Cuisine (vegan) sans accès à la base : testable seul (tests/cuisine.test.mjs).
  * Inventaire sans chiffres (3 niveaux), recettes avec portions, comparaison recette ↔ inventaire.
  */
-import { CATALOGUE, RAYONS, type AlimentCatalogue, type Rayon } from "./cuisine-catalogue";
+import { CATALOGUE, type AlimentCatalogue, type Rayon } from "./cuisine-catalogue";
 
 // ─── Inventaire ─────────────────────────────────────────────────────────
 
@@ -87,7 +87,6 @@ export function memeAliment(a: string, b: string): boolean {
 
 export type IngredientRecette = { id?: number; nom: string; quantite: number | null; unite: string; aliment: string };
 export const TAGS_RECETTE = ["rapide", "batch", "petit-déj", "déjeuner", "dîner", "snack", "se congèle"] as const;
-export const UNITES = ["", "g", "kg", "ml", "cl", "L", "c. à s.", "c. à c.", "pincée", "pièce", "boîte", "gousse", "tranche", "verre"] as const;
 
 export const tagsDe = (s: string): string[] => s.split(",").map((t) => t.trim()).filter(Boolean);
 
@@ -234,7 +233,6 @@ export const POINTS_CUISINE = 5;
 export function rayonDe(nom: string): Rayon {
   return CATALOGUE.find((a) => memeAliment(a.nom, nom))?.rayon ?? "autre";
 }
-export const nomRayon = (r: string) => RAYONS.find((x) => x.cle === r)?.nom ?? "Autre";
 
 export type IngredientCalcule = { nom: string; aliment: string; quantite: number | null; unite: string };
 

@@ -173,16 +173,3 @@ export async function etoiler(jour: string, itemId: number, comme: "priorite" | 
   await placerDansTrois(jour, libre.rang, itemId);
   return "ajoute";
 }
-
-/** Ancienne API (bascule sur des emplacements déjà lus) : gardée pour les écrans qui n'ont pas besoin du choix du jour. */
-export async function basculerEtoile(jour: string, emplacements: Emplacement[], itemId: number): Promise<boolean> {
-  const rang = rangDe(emplacements, itemId);
-  if (rang !== null) {
-    await retirerDesTrois(jour, rang);
-    return true;
-  }
-  const libre = emplacements.find((e) => e.itemId === null);
-  if (!libre) return false;
-  await placerDansTrois(jour, libre.rang, itemId);
-  return true;
-}

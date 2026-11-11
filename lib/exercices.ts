@@ -256,6 +256,3 @@ export function filtrer(f: FiltreExercices, m: Materiel, liste: Exercice[] = tou
       (!f.materielDispo || faisable(e, m)),
   );
 }
-
-/** Unité de ce qu'on note pour cet exercice. */
-export const uniteDe = (e: Exercice): "reps" | "s" => (e.mode === "s" ? "s" : "reps");

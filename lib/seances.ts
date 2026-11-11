@@ -44,8 +44,6 @@ export const REVEIL_DEFAUT: Seance = {
   lien: "",
 };
 
-export const couleurSeance = (s: Seance, accent: string) => (s.zone ? zone(s.zone).couleur : accent);
-
 /** Durée prévue en secondes (repos compris). */
 export const dureeSeance = (s: Seance) => s.tours * s.exercices.length * (s.effort_s + s.repos_s);
 

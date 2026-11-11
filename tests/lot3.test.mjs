@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { libelleEcheance, pointsEcheance, semaineDe } from "../lib/regles-taches.ts";
-import { IDEES_RECOMPENSES, ideesRestantes } from "../lib/catalogue-recompenses.ts";
-import { CATEGORIES_RECOMPENSES, categorieRecompense, ICONES_RECOMPENSES, etageres, etatRecompense, parPrix } from "../lib/recompenses-regles.ts";
+import { libelleEcheance, semaineDe } from "../lib/regles-taches.ts";
+import { IDEES_RECOMPENSES } from "../lib/catalogue-recompenses.ts";
+import { CATEGORIES_RECOMPENSES, categorieRecompense, ICONES_RECOMPENSES, etatRecompense, parPrix } from "../lib/recompenses-regles.ts";
 import { SQL_CATEGORIES_RECOMPENSES, SQL_CATEGORIES_RECOMPENSES_V2, transformationsApres } from "../lib/schema.ts";
 
 test("semaine en cours : du lundi au dimanche, quel que soit le jour", () => {
@@ -38,25 +38,6 @@ test("semaine en cours : à cheval sur deux mois et deux années", () => {
   assert.equal(nouvelAn[6], "2027-01-03");
   // Passage à l'heure d'hiver (25 octobre 2026) : toujours 7 jours distincts.
   assert.equal(new Set(semaineDe("2026-10-25")).size, 7);
-});
-
-test("points d'échéance : une couleur par tâche, rangée sous son jour", () => {
-  const semaine = semaineDe("2026-10-19");
-  const points = pointsEcheance(
-    [
-      { echeance: "2026-10-20", couleur: "#5392F7" },
-      { echeance: "2026-10-20", couleur: "#88E9AC" },
-      { echeance: "2026-10-25", couleur: "#5392F7" },
-      { echeance: null, couleur: "#6568F1" }, // sans échéance
-      { echeance: "2026-10-26", couleur: "#6568F1" }, // semaine suivante
-      { echeance: "2026-10-01", couleur: "#6568F1" }, // en retard, hors semaine
-    ],
-    semaine,
-  );
-  assert.deepEqual(Object.keys(points), semaine);
-  assert.deepEqual(points["2026-10-20"], ["#5392F7", "#88E9AC"]);
-  assert.deepEqual(points["2026-10-25"], ["#5392F7"]);
-  assert.deepEqual(points["2026-10-19"], []);
 });
 
 test("raison d'une carte : l'échéance dite simplement", () => {
@@ -131,8 +112,8 @@ test("récompenses en une seule liste : par prix, puis par nom, sans toucher à 
   assert.equal(liste[0].nom, "Ciné");
 });
 
-test("étagères : les cinq, toujours, dans l'ordre et avec les bonnes couleurs", () => {
-  assert.deepEqual(etageres(), ["mer", "bouffe", "temps", "decouvertes", "gros"]);
+test("catégories de récompenses : les cinq, dans l'ordre et avec les bonnes couleurs", () => {
+  assert.deepEqual(CATEGORIES_RECOMPENSES.map((c) => c.cle), ["mer", "bouffe", "temps", "decouvertes", "gros"]);
   assert.deepEqual(CATEGORIES_RECOMPENSES.map((c) => c.couleur), ["#22D3EE", "#FB923C", "#A78BFA", "#FACC15", "#60A5FA"]);
   assert.equal(categorieRecompense("plaisirs").cle, "temps"); // clé d'avant la version 28
 });
@@ -170,11 +151,9 @@ test("catalogue d'idées : icônes connues, prix dans les fourchettes, rien d'aj
   assert.equal(IDEES_RECOMPENSES.bouffe.length, 7);
   assert.equal(IDEES_RECOMPENSES.temps.length, 7);
   assert.equal(IDEES_RECOMPENSES.decouvertes.length, 6);
-  const restantes = ideesRestantes("bouffe", ["glace", " RESTO "]).map((i) => i.nom);
   // Gros objectifs : rien de proposé, on les crée soi-même ; chaque étagère est triée par prix.
   assert.equal(IDEES_RECOMPENSES.gros.length, 0);
   for (const l of Object.values(IDEES_RECOMPENSES)) assert.deepEqual(l.map((x) => x.prix), l.map((x) => x.prix).sort((a, b) => a - b));
   const noms = Object.values(IDEES_RECOMPENSES).flat().map((x) => x.nom.toLowerCase());
   assert.equal(new Set(noms).size, noms.length);
-  assert.deepEqual(restantes, ["Pâtisserie", "Street food", "Verre en terrasse", "Brunch", "Soirée en ville"]);
 });

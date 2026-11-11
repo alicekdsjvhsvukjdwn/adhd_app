@@ -96,12 +96,6 @@ export function etatSommeil(p: { heure: number; enCours: Coucher | null; leverNo
   return p.heure < HEURE_MIDI ? "lever" : "lever_discret";
 }
 
-/** Raccourci « il y a 30 min » : à 0 h 10, 23 h 40 la veille. */
-export function ilYa(aujourdhui: string, maintenantMin: number, minutes: number): Coucher {
-  const m = maintenantMin - minutes;
-  return { date: m < 0 ? jourVoisin(aujourdhui, -1) : aujourdhui, heure: hhmmDe(m) };
-}
-
 /**
  * Coucher ajusté : le jour le plus proche de maintenant (à ±12 h). À 0 h 10,
  * 23 h 40 est la veille ; à 23 h 50, 0 h 30 est le lendemain (nuit du jour qui suit).

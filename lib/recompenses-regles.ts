@@ -17,11 +17,6 @@ export type CategorieRecompense = (typeof CATEGORIES_RECOMPENSES)[number]["cle"]
 export const categorieRecompense = (cle: string) =>
   CATEGORIES_RECOMPENSES.find((c) => c.cle === cle) ?? CATEGORIES_RECOMPENSES[2];
 
-/** Étagères affichées : les cinq, toujours, pour que « Idées » soit accessible même vide. */
-export function etageres(): CategorieRecompense[] {
-  return CATEGORIES_RECOMPENSES.map((c) => c.cle);
-}
-
 /** La liste unique de l'écran Récompenses : de la moins chère à la plus chère, puis par nom. */
 export const parPrix = <R extends { prix: number; nom: string }>(liste: R[]): R[] =>
   [...liste].sort((a, b) => a.prix - b.prix || a.nom.localeCompare(b.nom, "fr"));

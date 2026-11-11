@@ -11,7 +11,7 @@ import { basculerEtapeRoutine, enregistrerEtapes, getEtapesRoutines } from "../l
 import { addItem, placerTache } from "../lib/db/items.ts";
 import { genererPropositions } from "../lib/db/moteur.ts";
 import { getStats } from "../lib/db/stats.ts";
-import { basculerEtoile, emplacementsDuJour, placerDansTrois, retirerDesTrois } from "../lib/db/trois.ts";
+import { emplacementsDuJour, placerDansTrois, retirerDesTrois } from "../lib/db/trois.ts";
 import { lireJours, ordreManuel, prevueLe } from "../lib/regles-taches.ts";
 import { composerTrois, estPropose, idVide } from "../lib/trois-regles.ts";
 
@@ -141,12 +141,10 @@ test("Mes 3 : proposition figée, choix, remplacement, retrait, étoile, report,
   await retirerDesTrois(AUJ, 1);
   assert.deepEqual(await noms(AUJ, classement, true), ["B", null, "C"]);
 
-  // Étoile : sur une tâche des 3, elle la retire ; sur une autre, elle va dans le premier emplacement libre ; si tout est pris, false.
-  const empl = () => emplacementsDuJour(AUJ, classement, false);
-  assert.equal(await basculerEtoile(AUJ, await empl(), d), true);
+  // L'emplacement libéré se remplit de nouveau, puis un autre se libère.
+  await placerDansTrois(AUJ, 1, d);
   assert.deepEqual(await noms(AUJ, classement), ["B", "D", "C"]);
-  assert.equal(await basculerEtoile(AUJ, await empl(), classement.find((p) => p.nom === "A").itemId), false);
-  assert.equal(await basculerEtoile(AUJ, await empl(), c), true);
+  await retirerDesTrois(AUJ, 2);
   assert.deepEqual(await noms(AUJ, classement), ["B", "D", null]);
 
   // Tâche faite : elle disparaît, sans remplacement automatique.

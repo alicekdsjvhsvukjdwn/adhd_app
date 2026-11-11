@@ -69,13 +69,6 @@ export function moyennesParJour(humeurs: { jour: string; niveau: number }[], jou
 /** Les n derniers jours jusqu'à `fin` (inclus), du plus ancien au plus récent. */
 export const derniersJours = (fin: string, n: number) => Array.from({ length: n }, (_, i) => decalerJours(fin, i - (n - 1)));
 
-/** Émotions les plus citées, par ordre décroissant puis alphabétique. */
-export function emotionsFrequentes(listes: string[], n = 5): [string, number][] {
-  const c = new Map<string, number>();
-  for (const l of listes) for (const e of emotionsDe(l)) c.set(e, (c.get(e) ?? 0) + 1);
-  return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr")).slice(0, n);
-}
-
 /** Heure du jour pour la carte : le soir (à partir de 18 h), « Comment était ta journée ? ». */
 export const estLeSoir = (heure: number) => heure >= 18;
 

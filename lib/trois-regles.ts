@@ -99,9 +99,6 @@ export function composerBonus(p: { stockes: { itemId: number; rang: number }[]; 
     });
 }
 
-/** Premier emplacement libre, ou null quand les 3 sont pris (une tâche faite occupe son emplacement). */
-export const premierLibre = (e: Emplacement[]): number | null => e.find((x) => x.itemId === null)?.rang ?? null;
-
 export const rangDe = (e: Emplacement[], itemId: number): number | null => e.find((x) => x.itemId === itemId)?.rang ?? null;
 
 /** Les 3 sont-ils tous remplis et faits ? (un emplacement vide compte comme « pas fait ») */

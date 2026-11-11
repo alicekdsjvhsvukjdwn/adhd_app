@@ -10,7 +10,6 @@ import {
   etatSommeil,
   heureLisible,
   hhmmDe,
-  ilYa,
   jourDuLever,
   lireCoucher,
   minutesDe,
@@ -92,12 +91,7 @@ test("le bouton selon l'heure et ce qui est déjà noté", () => {
   assert.equal(e(18), "dormir");
 });
 
-test("raccourcis : « il y a 30 min » à 0 h 10 → 23 h 40 la veille", () => {
-  assert.deepEqual(ilYa("2026-10-19", 10, 30), c("2026-10-18", "23:40"));
-  assert.deepEqual(ilYa("2026-10-19", 10, 0), c("2026-10-19", "00:10"));
-  assert.deepEqual(ilYa("2026-10-19", 7 * 60 + 20, 60), c("2026-10-19", "06:20"));
-  assert.deepEqual(ilYa("2026-11-01", 15, 15), c("2026-11-01", "00:00"));
-  assert.deepEqual(ilYa("2026-11-01", 15, 30), c("2026-10-31", "23:45"));
+test("heure lisible : « 23 h 12 »", () => {
   assert.equal(heureLisible("23:12"), "23 h 12");
 });
 

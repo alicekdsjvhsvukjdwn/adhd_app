@@ -226,16 +226,6 @@ export function semaineDe(iso: string): string[] {
   return [0, 1, 2, 3, 4, 5, 6].map((i) => decalerJours(lundi, i));
 }
 
-/** Par jour de `jours`, la couleur de chaque tâche dont l'échéance tombe ce jour-là. */
-export function pointsEcheance(
-  taches: { echeance: string | null; couleur: string }[],
-  jours: string[],
-): Record<string, string[]> {
-  const res: Record<string, string[]> = Object.fromEntries(jours.map((j) => [j, []]));
-  for (const t of taches) if (t.echeance && res[t.echeance]) res[t.echeance].push(t.couleur);
-  return res;
-}
-
 /** « en retard », « échéance aujourd'hui », « échéance demain », « échéance dans 3 j ». */
 export function libelleEcheance(echeance: string, aujourdhui: string): string {
   const j = Math.round((Date.parse(echeance) - Date.parse(aujourdhui)) / 86400000);
@@ -298,12 +288,6 @@ export function ordreManuel<T extends { rang_manuel: number | null }>(taches: T[
 
 /** Semaines de chaque côté de la semaine en cours dans la bande des jours (un an). */
 export const SEMAINES_BANDE = 52;
-
-/** Position (0 … 2×52) de la semaine qui contient `jour` dans la bande ouverte autour d'`aujourdhui` : lundi → dimanche, d'une même semaine, donnent le même index. */
-export function indexSemaine(aujourdhui: string, jour: string): number {
-  const ms = (iso: string) => Date.parse(semaineDe(iso)[0] + "T00:00:00Z");
-  return SEMAINES_BANDE + Math.round((ms(jour) - ms(aujourdhui)) / (7 * 86_400_000));
-}
 
 const MOIS_LONGS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 

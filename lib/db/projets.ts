@@ -1,4 +1,4 @@
-import { avancement, couleurValide, estFaite, etatValide, iconeValide, minutesParSemaine, POINTS_PROJET_FINI, POINTS_PROJET_JOUR, projetsOublies, tempsTotal, type EtapeProjet, type EtatProjet } from "../projets-regles";
+import { avancement, couleurValide, estFaite, etatValide, iconeValide, minutesParSemaine, POINTS_PROJET_FINI, POINTS_PROJET_JOUR, projetsOublies, type EtapeProjet, type EtatProjet } from "../projets-regles";
 import { SQL_PROJET_TYPES_DEFAUT } from "../schema";
 import { getDatabase } from "./client";
 import { completer, getAujourdhui } from "./completions";
@@ -275,11 +275,6 @@ export async function supprimerEntree(id: number): Promise<void> {
   await db.runAsync("DELETE FROM projet_photos WHERE journal_id = ?", id);
   await db.runAsync("DELETE FROM projet_journal WHERE id = ?", id);
   if (e) await toucher(e.projet_id);
-}
-
-export async function tempsPasse(projetId: number): Promise<number> {
-  const db = await getDatabase();
-  return tempsTotal(await db.getAllAsync<{ minutes: number }>("SELECT minutes FROM projet_journal WHERE projet_id = ?", projetId));
 }
 
 /** Toutes les photos du journal, de la plus ancienne à la plus récente (pour « avant → maintenant »). */

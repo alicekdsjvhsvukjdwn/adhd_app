@@ -17,15 +17,6 @@ export const ETATS_PROJET: { cle: EtatProjet; nom: string }[] = [
 export const etatValide = (e: string): EtatProjet => (ETATS_PROJET.some((x) => x.cle === e) ? (e as EtatProjet) : "idee");
 export const nomEtat = (e: string) => ETATS_PROJET.find((x) => x.cle === e)?.nom ?? "Idée";
 
-/** Types de départ : icône au trait (clé de ICONES_TYPES) et couleur. */
-export const TYPES_DEFAUT: { nom: string; icone: string; couleur: string }[] = [
-  { nom: "Électronique / Arduino", icone: "cpu", couleur: "#22D3EE" },
-  { nom: "Peinture & dessin", icone: "palette", couleur: "#F472B6" },
-  { nom: "Artisanat", icone: "scissors", couleur: "#FB923C" },
-  { nom: "Musique", icone: "music", couleur: "#A78BFA" },
-  { nom: "Autre", icone: "sparkles", couleur: "#4ADE80" },
-];
-
 /** Icônes proposées pour un type personnel. */
 export const CLES_ICONES_TYPES = ["cpu", "palette", "scissors", "music", "sparkles", "hammer", "brush", "camera", "pen", "gem", "lightbulb", "leaf"] as const;
 export type CleIconeType = (typeof CLES_ICONES_TYPES)[number];

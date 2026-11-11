@@ -48,9 +48,3 @@ export const IDEES_RECOMPENSES: Record<CategorieRecompense, IdeeRecompense[]> = 
   // Les gros objectifs se créent soi-même (« + Créer un gros objectif »).
   gros: [],
 };
-
-/** Les idées d'une étagère qui ne sont pas déjà dans les récompenses (même nom, sans tenir compte de la casse). */
-export function ideesRestantes(cle: CategorieRecompense, dejaLa: string[]): IdeeRecompense[] {
-  const pris = new Set(dejaLa.map((n) => n.trim().toLowerCase()));
-  return IDEES_RECOMPENSES[cle].filter((i) => !pris.has(i.nom.toLowerCase()));
-}

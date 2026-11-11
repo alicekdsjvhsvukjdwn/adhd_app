@@ -8,7 +8,7 @@ import { initialiserBase } from "../lib/db/demarrage.ts";
 import { historiqueExercice } from "../lib/db/exercices-historique.ts";
 import { configurerSport, getReglages, noterEssai } from "../lib/db/sport.ts";
 import { ecrireMateriel, getMateriel, materielConfigure } from "../lib/db/sport-materiel.ts";
-import { alternativeA, EXERCICES, exercice, faisable, filtrer, uniteDe } from "../lib/exercices.ts";
+import { alternativeA, EXERCICES, exercice, faisable, filtrer } from "../lib/exercices.ts";
 import { manquants, MATERIEL_DEFAUT, MATERIELS, materielValide } from "../lib/materiel.ts";
 import { ZONES } from "../lib/seances.ts";
 
@@ -61,8 +61,8 @@ test("de quoi faire un programme complet : les mouvements demandés sont là, du
   for (const z of ["haut", "bas", "abdos", "mobilite"]) assert.ok(EXERCICES.filter((e) => e.zones.includes(z)).length >= 8, z);
   for (const m of ["sol", "mobilier", "halteres", "parallettes"]) assert.ok(EXERCICES.some((e) => e.materiel.includes(m)) || m === "sol", m);
   assert.ok(EXERCICES.filter((e) => e.materiel.includes("barre")).length >= 2); // tractions : visibles, grisées sans barre
-  assert.equal(uniteDe(exercice("planche")), "s");
-  assert.equal(uniteDe(exercice("curl_halteres")), "reps");
+  assert.equal(exercice("planche").mode, "s");
+  assert.equal(exercice("curl_halteres").mode, "reps_poids");
 });
 
 // ─── Matériel ───

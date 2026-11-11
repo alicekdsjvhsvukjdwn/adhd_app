@@ -35,7 +35,6 @@ import {
   supprimerEtape,
   supprimerProjet,
   supprimerType,
-  tempsPasse,
 } from "../lib/db/projets.ts";
 import {
   avancement,
@@ -193,7 +192,6 @@ test("journal, temps total, photos, matériel, notes, liens", async () => {
   const id = await creerProjet({ nom: "P", type_id: elec.id });
   await ajouterEntree(id, { jour: "2026-10-10", minutes: 30, note: "début", photos: [PHOTO] });
   await ajouterEntree(id, { jour: "2026-10-12", minutes: 45, photos: [PHOTO + "2", PHOTO + "3"] });
-  assert.equal(await tempsPasse(id), 75);
   const j = await listerJournal(id);
   assert.deepEqual(j.map((x) => x.jour), ["2026-10-12", "2026-10-10"]); // récent d'abord
   assert.equal(j[0].photos.length, 2);
@@ -370,7 +368,6 @@ test("séance : le temps du journal s'additionne au temps total et compte dans l
   const id = await creerProjet({ nom: "Suivi", type_id: elec.id });
   await ajouterEntree(id, { minutes: 25 });
   await ajouterEntree(id, { minutes: 35, jour: AUJ });
-  assert.equal(await tempsPasse(id), 60);
   const s = await suiviProjets(AUJ);
   assert.equal(s.semaines.length, 8);
   assert.equal(s.semaines[7].parType[elec.id] >= 60, true);

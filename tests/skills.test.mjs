@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { exercice, uniteDe } from "../lib/exercices.ts";
+import { exercice } from "../lib/exercices.ts";
 import { MATERIEL_DEFAUT, materielValide } from "../lib/materiel.ts";
 import { alternativeA } from "../lib/exercices.ts";
 import {
@@ -77,7 +77,7 @@ test("chaque étape est un exercice de la bibliothèque, dans la même unité, e
     sk.etapes.forEach((et, i) => {
       const ex = exercice(et.exercice);
       assert.ok(ex, `${sk.id} étape ${i + 1} → ${et.exercice}`);
-      assert.equal(uniteDe(ex), et.unite, `${sk.id} étape ${i + 1} : ${et.nom}`);
+      assert.equal(ex.mode === "s" ? "s" : "reps", et.unite, `${sk.id} étape ${i + 1} : ${et.nom}`);
       const avant = sk.etapes[i - 1];
       // Un même exercice sur deux étapes d'affilée : la cible monte (sinon l'étape se validerait d'elle-même).
       if (avant && avant.exercice === et.exercice) assert.ok(et.series * et.objectif > avant.series * avant.objectif || et.objectif > avant.objectif, `${sk.id} ${et.nom}`);
