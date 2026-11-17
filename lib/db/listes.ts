@@ -23,9 +23,11 @@ export type Liste = {
   objectif_periode: Periode | null;
   /** Clé de la palette de lib/theme-listes.ts. */
   couleur: string | null;
+  /** Zone du bonhomme de « Ma journée » ; null = devinée du nom, ou demandée la première fois. */
+  zone: string | null;
 };
 
-const COLONNES = "id, nom, icone, ordre, objectif, objectif_periode, couleur";
+const COLONNES = "id, nom, icone, ordre, objectif, objectif_periode, couleur, zone";
 
 export async function getListes(): Promise<Liste[]> {
   const db = await getDatabase();

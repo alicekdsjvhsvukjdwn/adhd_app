@@ -12,6 +12,7 @@ import { POINTS_PROJET_FINI, POINTS_PROJET_JOUR } from "../projets-regles";
 import { POINTS_TCC } from "../tcc-points";
 import { POINTS_ETAPE_SKILL, POINTS_MAITRISE } from "../skills";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
+import { PLAFOND_ENTREES_JOUR, POINTS_BONUS_ZONES, POINTS_ENTREE, ZONES_POUR_BONUS } from "../journee-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
 
@@ -92,6 +93,14 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
   {
     action: "Une tâche de ménage due ou en retard (une fois par tâche et par échéance ; rien si elle n'était pas encore due)",
     points: `+${POINTS_MENAGE}`,
+  },
+  {
+    action: `Ma journée : une entrée (jusqu'à ${PLAFOND_ENTREES_JOUR} points par jour). Liée à une tâche cochée : 0, la tâche a déjà ses points`,
+    points: `+${POINTS_ENTREE}`,
+  },
+  {
+    action: `Ma journée : ${ZONES_POUR_BONUS} zones du bonhomme colorées le même jour (une fois par jour)`,
+    points: `+${POINTS_BONUS_ZONES}`,
   },
   {
     action: "Décocher, annuler ou remettre à faire",

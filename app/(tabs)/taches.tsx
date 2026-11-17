@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 import { BandeJours } from "../../components/BandeJours";
@@ -10,19 +10,31 @@ import { Glissable, type Option } from "../../components/Options";
 import { ChampTexte, Texte } from "../../components/Texte";
 import { VisageHumeur } from "../../components/VisageHumeur";
 import { useJourCourant } from "../../hooks/useJourCourant";
+import { deviner } from "../../lib/catalogue";
+import { addItem } from "../../lib/db/items";
+import { getListes } from "../../lib/db/listes";
+import { lireMeta } from "../../lib/db/meta";
 import {
-  ajouterEntree,
+  cocherTache,
+  decocherTache,
+  definirZoneListe,
   entreesDu,
   entreesEntre,
   getZones,
   joursAvecEntrees,
+  lierTache,
   modifierEntree,
+  noterEntree,
   restaurerEntree,
   supprimerEntree,
+  tachesAFaire,
   textesPasses,
+  verifierBonus,
   type Entree,
+  type TacheAFaire,
 } from "../../lib/db/journee";
 import {
+  CLE_AFFICHER_TROIS,
   compterParZone,
   couleurZone,
   DUREES,
@@ -31,8 +43,12 @@ import {
   momentDeHeureJournee,
   MOMENTS_JOURNEE,
   PARTIES,
+  POINTS_BONUS_ZONES,
   suggestions,
+  tacheCorrespondante,
   validerSaisie,
+  zoneDeTache,
+  ZONES_POUR_BONUS,
   type CleZone,
   type MomentJournee,
   type Zone,
@@ -77,7 +93,19 @@ function MaJourneeContenu() {
   const [enEdition, setEnEdition] = useState<Entree | null>(null);
   const [menu, setMenu] = useState<Entree | null>(null);
   const [changerZone, setChangerZone] = useState<Entree | null>(null);
-  const [annulable, setAnnulable] = useState<Entree | null>(null);
+  /** « Annuler » pendant 5 s : une suppression, ou une tâche cochée. */
+  const [annulable, setAnnulable] = useState<{ texte: string; annuler: () => Promise<void> } | null>(null);
+  /** « Cocher aussi … ? » sous l'entrée qui ressemble à une tâche non faite. */
+  const [proposition, setProposition] = useState<{ entreeId: number; tache: TacheAFaire } | null>(null);
+  /** « À ne pas oublier » : mes tâches, section repliée. */
+  const [taches, setTaches] = useState<TacheAFaire[]>([]);
+  const [tachesOuvertes, setTachesOuvertes] = useState(false);
+  const [nouvelleTache, setNouvelleTache] = useState("");
+  /** Tâche d'une liste sans zone : le mini-bonhomme demande la zone. */
+  const [zonePour, setZonePour] = useState<TacheAFaire | null>(null);
+  const [bravo, setBravo] = useState(false);
+  const [afficherTrois, setAfficherTrois] = useState(false);
+  const router = useRouter();
 
   const champ = useRef<TextInput>(null);
   const minuteurRecente = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +120,17 @@ function MaJourneeContenu() {
 
   const charger = useCallback(async () => {
     const s = semaineDe(vu);
-    const [z, e, sem, j, p] = await Promise.all([getZones(), entreesDu(vu), entreesEntre(s[0], s[6]), joursAvecEntrees(), textesPasses()]);
+    const [z, e, sem, j, p, tt, trois] = await Promise.all([
+      getZones(),
+      entreesDu(vu),
+      entreesEntre(s[0], s[6]),
+      joursAvecEntrees(),
+      textesPasses(),
+      tachesAFaire(vu),
+      lireMeta(CLE_AFFICHER_TROIS),
+    ]);
+    setTaches(tt);
+    setAfficherTrois(trois === "1");
     setZones(z);
     setEntrees(e);
     setSemaine(sem);
@@ -113,6 +151,21 @@ function MaJourneeContenu() {
     setEnEdition(null);
     setDetails(null);
     setMessage(null);
+    setProposition(null);
+  };
+
+  /** Bonus des 4 zones : petit retour visuel et haptique. */
+  const feterBonus = (gagne: boolean) => {
+    if (!gagne) return;
+    setBravo(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setTimeout(() => setBravo(false), 4000);
+  };
+
+  const proposerAnnulation = (texte: string, annuler: () => Promise<void>) => {
+    setAnnulable({ texte, annuler });
+    if (minuteurAnnuler.current) clearTimeout(minuteurAnnuler.current);
+    minuteurAnnuler.current = setTimeout(() => setAnnulable(null), DELAI_ANNULER);
   };
 
   const actives = zones.filter((z) => z.active);
@@ -139,7 +192,10 @@ function MaJourneeContenu() {
       await modifierEntree(enEdition.id, { texte, zone, moment });
       setEnEdition(null);
     } else {
-      const id = await ajouterEntree({ jour: vu, moment, zone, texte });
+      const { id, bonus } = await noterEntree({ jour: vu, moment, zone, texte });
+      feterBonus(bonus);
+      const tache = tacheCorrespondante(texte, taches);
+      setProposition(tache ? { entreeId: id, tache } : null);
       setRecente(id);
       if (minuteurRecente.current) clearTimeout(minuteurRecente.current);
       minuteurRecente.current = setTimeout(() => setRecente(null), DELAI_DETAILS);
@@ -162,17 +218,47 @@ function MaJourneeContenu() {
   const supprimer = async (e: Entree) => {
     const supprimee = await supprimerEntree(e.id);
     if (!supprimee) return;
-    setAnnulable(supprimee);
-    if (minuteurAnnuler.current) clearTimeout(minuteurAnnuler.current);
-    minuteurAnnuler.current = setTimeout(() => setAnnulable(null), DELAI_ANNULER);
+    proposerAnnulation(`« ${supprimee.texte} » supprimée`, () => restaurerEntree(supprimee));
     await charger();
   };
 
   const annuler = async () => {
     if (!annulable) return;
-    const e = annulable;
+    const a = annulable;
     setAnnulable(null);
-    await restaurerEntree(e);
+    await a.annuler();
+    await charger();
+  };
+
+  /** Toucher une tâche = la cocher ; elle devient une entrée dans la zone de sa liste (demandée une fois si inconnue). */
+  const cocher = async (tache: TacheAFaire, zoneChoisie?: CleZone) => {
+    const z = zoneChoisie ?? zoneDeTache(tache);
+    if (!z) {
+      setZonePour(tache);
+      return;
+    }
+    const { id, bonus } = await cocherTache(tache, z, vu, moment);
+    feterBonus(bonus);
+    Haptics.selectionAsync().catch(() => {});
+    proposerAnnulation(`« ${tache.nom} » cochée · ${PARTIES[z]}`, () => decocherTache(id));
+    await charger();
+  };
+
+  const lier = async () => {
+    if (!proposition) return;
+    const p = proposition;
+    setProposition(null);
+    await lierTache(p.entreeId, p.tache.id);
+    Haptics.selectionAsync().catch(() => {});
+    await charger();
+  };
+
+  const ajouterTache = async () => {
+    const nom = nouvelleTache.trim();
+    if (!nom) return;
+    const listes = await getListes();
+    await addItem({ nom, type: "tache", categorie: deviner(nom)?.categorie ?? null, liste_id: listes[0]?.id ?? null });
+    setNouvelleTache("");
     await charger();
   };
 
@@ -302,6 +388,16 @@ function MaJourneeContenu() {
             <Texte style={[styles.lien, { color: t.accentText }]}>+ durée · ressenti</Texte>
           </TouchableOpacity>
         )}
+        {proposition?.entreeId === e.id && (
+          <View style={styles.proposition}>
+            <TouchableOpacity onPress={lier} hitSlop={6} style={{ flex: 1 }} accessibilityRole="button">
+              <Texte style={[styles.lien, { color: t.accentText }]}>Cocher aussi « {proposition.tache.nom} » ?</Texte>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setProposition(null)} hitSlop={10} accessibilityLabel="Non merci">
+              <Texte style={{ color: t.textMuted, fontSize: typography.body }}>✕</Texte>
+            </TouchableOpacity>
+          </View>
+        )}
         {details === e.id && panneauDetails(e)}
       </View>
     );
@@ -343,6 +439,12 @@ function MaJourneeContenu() {
             })}
           </View>
         </View>
+
+        {bravo && (
+          <Texte style={[styles.bravo, { color: t.textPrimary, backgroundColor: t.bgCardActive }]}>
+            ✦ {ZONES_POUR_BONUS} zones colorées : +{POINTS_BONUS_ZONES} points
+          </Texte>
+        )}
 
         {ouvert ? (
           <View style={styles.saisie}>
@@ -429,7 +531,69 @@ function MaJourneeContenu() {
             );
           })}
         </View>
+
+        {/* À ne pas oublier : mes tâches, repliées, sans compteur ni retard. Toucher = cocher. */}
+        <TouchableOpacity
+          onPress={() => setTachesOuvertes(!tachesOuvertes)}
+          style={[styles.section, { borderTopColor: t.border }]}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: tachesOuvertes }}
+        >
+          <Texte style={[styles.sectionTitre, { color: t.textSecondary }]}>À ne pas oublier</Texte>
+          <Texte style={{ color: t.textMuted, fontSize: typography.body }}>{tachesOuvertes ? "▾" : "▸"}</Texte>
+        </TouchableOpacity>
+        {tachesOuvertes && (
+          <View style={{ gap: 2 }}>
+            {taches.map((tache) => (
+              <TouchableOpacity
+                key={tache.id}
+                onPress={() => (ouvert ? cocher(tache) : undefined)}
+                disabled={!ouvert}
+                style={styles.tache}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: false, disabled: !ouvert }}
+              >
+                <View style={[styles.caseTache, { borderColor: t.textMuted }]} />
+                <Texte style={{ color: t.textPrimary, fontSize: typography.body, flex: 1 }}>{tache.nom}</Texte>
+              </TouchableOpacity>
+            ))}
+            <View style={styles.ligneSaisie}>
+              <ChampTexte
+                style={[styles.champ, { backgroundColor: t.bgCard, borderColor: t.border, color: t.textPrimary }]}
+                placeholder="Ajouter une tâche…"
+                placeholderTextColor={t.textMuted}
+                value={nouvelleTache}
+                onChangeText={setNouvelleTache}
+                onSubmitEditing={ajouterTache}
+                returnKeyType="done"
+              />
+            </View>
+          </View>
+        )}
+
+        {afficherTrois && (
+          <TouchableOpacity onPress={() => router.push("/mes-trois" as never)} style={[styles.section, { borderTopColor: t.border }]} accessibilityRole="link">
+            <Texte style={[styles.sectionTitre, { color: t.textSecondary }]}>Mes 3 priorités</Texte>
+            <Texte style={{ color: t.textMuted, fontSize: typography.body }}>→</Texte>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+
+      <FeuilleZone
+        visible={zonePour !== null}
+        titre={zonePour ? `« ${zonePour.nom} » : quelle zone ?` : ""}
+        sousTitre={zonePour?.liste_nom ? `Pour toute la liste « ${zonePour.liste_nom} » (modifiable dans Mes listes).` : undefined}
+        zones={zones}
+        choisie={null}
+        onChoisir={async (cle) => {
+          if (!zonePour) return;
+          const tache = zonePour;
+          setZonePour(null);
+          if (tache.liste_id !== null) await definirZoneListe(tache.liste_id, cle);
+          await cocher(tache, cle);
+        }}
+        onFermer={() => setZonePour(null)}
+      />
 
       <MenuOptions titre={menu?.texte ?? ""} options={menu ? options(menu) : []} onFermer={() => setMenu(null)} />
 
@@ -443,6 +607,7 @@ function MaJourneeContenu() {
           const e = changerZone;
           setChangerZone(null);
           await modifierEntree(e.id, { zone: cle });
+          feterBonus(await verifierBonus(e.jour));
           await charger();
         }}
         onFermer={() => setChangerZone(null)}
@@ -451,7 +616,7 @@ function MaJourneeContenu() {
       {annulable && (
         <View style={[styles.bandeau, { backgroundColor: t.textPrimary }]}>
           <Texte style={[styles.bandeauTexte, { color: t.bgApp }]} numberOfLines={1}>
-            « {annulable.texte} » supprimée
+            {annulable.texte}
           </Texte>
           <TouchableOpacity onPress={annuler} hitSlop={10}>
             <Texte style={[styles.bandeauAction, { color: t.bgApp }]}>Annuler</Texte>
@@ -463,7 +628,7 @@ function MaJourneeContenu() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60 - spacing.md, paddingHorizontal: spacing.xl },
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: spacing.xl },
   jourSemaine: { fontSize: typography.small, fontWeight: "700", letterSpacing: 1 },
   date: { fontSize: 30, fontWeight: "600", marginBottom: spacing.md },
 
@@ -502,6 +667,12 @@ const styles = StyleSheet.create({
   lettre: { fontSize: typography.tiny, fontWeight: "700", marginTop: 4 },
 
 
+  proposition: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: 6, paddingLeft: spacing.xxl },
+  bravo: { marginTop: spacing.md, borderRadius: radius.md, padding: spacing.md, fontSize: typography.bodySmall, fontWeight: "700", textAlign: "center", overflow: "hidden" },
+  section: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, marginTop: spacing.xl, paddingTop: spacing.lg, minHeight: 44 },
+  sectionTitre: { fontSize: typography.body, fontWeight: "700" },
+  tache: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 44 },
+  caseTache: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5 },
   bandeau: {
     position: "absolute",
     left: spacing.xl,

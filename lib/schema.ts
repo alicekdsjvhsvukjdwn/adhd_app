@@ -913,3 +913,9 @@ export const SQL_JOURNEE = `
   );
   CREATE INDEX IF NOT EXISTS journal_jour ON journal (jour);
 `;
+
+/** Ma journée, suite : la zone de chaque liste (vide = devinée de son nom, ou demandée), et le bonus des 4 zones (une fois par jour). */
+export const SQL_JOURNEE_V2 = `
+  ALTER TABLE listes ADD COLUMN zone TEXT;
+  CREATE TABLE IF NOT EXISTS journal_bonus (jour TEXT PRIMARY KEY);
+`;

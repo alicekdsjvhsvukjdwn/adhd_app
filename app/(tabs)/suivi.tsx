@@ -30,6 +30,7 @@ import { getReglages, seancesCetteSemaine } from "../../lib/db/sport";
 import { MODULES } from "../../lib/modules-visibles";
 import { semaineDe } from "../../lib/regles-taches";
 import Progression from "./progression";
+import { JourneeProgres } from "../../components/JourneeProgres";
 import {
   barresSemaine,
   coucherPour,
@@ -404,14 +405,15 @@ const styles = StyleSheet.create({
   petiteCarte: { flex: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 6 },
 });
 
-/** Les parties affichées : Corps toujours, Esprit et Progrès selon lib/modules-visibles.ts. */
+/** Les parties affichées : Corps et Ma journée toujours, Esprit et Progrès selon lib/modules-visibles.ts. */
 const PARTIES = (
   [
     { cle: "corps", libelle: "Corps" },
+    { cle: "journee", libelle: "Ma journée" },
     { cle: "esprit", libelle: "Esprit" },
     { cle: "progres", libelle: "Progrès" },
   ] as const
-).filter((p) => p.cle === "corps" || MODULES[p.cle]);
+).filter((p) => p.cle === "corps" || p.cle === "journee" || MODULES[p.cle]);
 
 /** Suivi : un sélecteur en haut s'il y a plusieurs parties, sinon Corps directement. */
 function SuiviContenu({ rappel }: { rappel: boolean }) {
@@ -444,7 +446,7 @@ function SuiviContenu({ rappel }: { rappel: boolean }) {
           })}
         </View>
       )}
-      {partie === "corps" ? <Corps /> : partie === "esprit" ? <EspritEcran /> : <Progression />}
+      {partie === "corps" ? <Corps /> : partie === "journee" ? <JourneeProgres /> : partie === "esprit" ? <EspritEcran /> : <Progression />}
     </View>
   );
 }

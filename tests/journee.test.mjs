@@ -6,21 +6,31 @@ import { decalerJours } from "../lib/dates.ts";
 import { getDatabase } from "../lib/db/client.ts";
 import { getAujourdhui } from "../lib/db/completions.ts";
 import { initialiserBase } from "../lib/db/demarrage.ts";
-import { addItem } from "../lib/db/items.ts";
+import { addItem, getItem } from "../lib/db/items.ts";
+import { getListes } from "../lib/db/listes.ts";
+import { getStats } from "../lib/db/stats.ts";
+import { REGLES_POINTS } from "../lib/db/recompenses.ts";
 import {
   ajouterEntree,
+  cocherTache,
+  decocherTache,
+  definirZoneListe,
   entreesDu,
   getEntree,
   getZones,
+  lierTache,
   modifierEntree,
   modifierZone,
+  noterEntree,
   restaurerEntree,
   supprimerEntree,
+  tachesAFaire,
   textesPasses,
 } from "../lib/db/journee.ts";
 import { runMigrations } from "../lib/db/migrations.ts";
 import { placerDansTrois } from "../lib/db/trois.ts";
 import {
+  chaleur,
   compterParZone,
   couleurZone,
   GRIS_ZONE,
@@ -29,8 +39,13 @@ import {
   momentDeHeureJournee,
   nettoyerDetails,
   origineSaisie,
+  pointsEntree,
+  statsJournee,
   suggestions,
+  tacheCorrespondante,
   validerSaisie,
+  zoneDeListe,
+  zoneDeTache,
   ZONES_DEFAUT,
 } from "../lib/journee-regles.ts";
 
@@ -166,9 +181,157 @@ test("migration 41 en ajout seulement : tâches et « 3 » intactes", async () =
   });
   const avant = await compter();
   // La base telle qu'elle était sur le téléphone avant Ma journée.
-  await db.execAsync("DROP TABLE journal; DROP TABLE zones; PRAGMA user_version = 40");
+  await db.execAsync("DROP TABLE journal; DROP TABLE zones; DROP TABLE journal_bonus; ALTER TABLE listes DROP COLUMN zone; PRAGMA user_version = 40");
   await runMigrations();
   assert.deepEqual(await compter(), avant);
   assert.equal((await getZones()).length, 7);
   assert.equal((await db.getFirstAsync("SELECT COUNT(*) AS n FROM journal")).n, 0);
+  assert.ok((await getListes()).every((l) => l.zone === null));
+  assert.equal((await db.getFirstAsync("PRAGMA user_version")).user_version, 42);
+  assert.equal((await db.getFirstAsync("SELECT statut FROM items WHERE id = ?", tache)).statut, "actif");
+});
+
+// ─── Partie B : tâches, correspondance, points, progrès ───
+
+test("correspondance entrée ↔ tâche : accents, majuscules, pluriels, mots clés", () => {
+  const taches = [
+    { id: 1, nom: "Meal prep" },
+    { id: 2, nom: "Faire le ménage de la cuisine" },
+    { id: 3, nom: "Appeler maman" },
+    { id: 4, nom: "Rendre les livres à la médiathèque" },
+  ];
+  assert.equal(tacheCorrespondante("fait le MEAL PREP du dimanche", taches)?.id, 1);
+  assert.equal(tacheCorrespondante("ménage", taches)?.id, 2);
+  assert.equal(tacheCorrespondante("Menage cuisine", taches)?.id, 2);
+  assert.equal(tacheCorrespondante("appelé maman", taches)?.id, 3);
+  assert.equal(tacheCorrespondante("livre rendu à la mediatheque", taches)?.id, 4);
+  assert.equal(tacheCorrespondante("Courir 20 min", taches), null);
+  // « faire » seul ne suffit pas.
+  assert.equal(tacheCorrespondante("faire une sieste", taches), null);
+});
+
+test("liste → zone : la table par défaut, rien de deviné sans mot reconnu", () => {
+  const z = (n) => zoneDeListe(n);
+  assert.deepEqual(
+    ["Quotidien", "Travail", "Administratif", "Compétences", "Perso", "Projets", "Courses / achats", "Sport", "Ménage", "Cuisine", "Amis", "Sorties"].map(z),
+    ["mains", "tete", "mains", "tete", "ventre", "pieds", "mains", "bras", "mains", "mains", "coeur", "jambes"],
+  );
+  assert.equal(z("Divers"), null);
+  assert.equal(z("Mercredi"), null);
+  // La zone réglée sur la liste passe devant la devinette.
+  assert.equal(zoneDeTache({ liste_zone: "coeur", liste_nom: "Quotidien" }), "coeur");
+  assert.equal(zoneDeTache({ liste_zone: null, liste_nom: "Quotidien" }), "mains");
+  assert.equal(zoneDeTache({ liste_zone: null, liste_nom: "Divers" }), null);
+});
+
+test("points d'une entrée : 2, plafonnés à 20 par jour, 0 si liée à une tâche", () => {
+  assert.equal(pointsEntree(0), 2);
+  assert.equal(pointsEntree(19), 1);
+  assert.equal(pointsEntree(20), 0);
+  assert.equal(pointsEntree(0, true), 0);
+  assert.ok(REGLES_POINTS.some((r) => r.action.startsWith("Ma journée : une entrée")));
+  assert.ok(REGLES_POINTS.some((r) => r.action.includes("4 zones")));
+});
+
+test("plafond par jour et bonus des 4 zones (une fois), entrées liées comprises", async () => {
+  await initialiserBase();
+  const db = await getDatabase();
+  const jour = decalerJours(getAujourdhui(), -3);
+  await db.runAsync("DELETE FROM journal WHERE jour = ?", jour);
+  const points = async () => (await getStats()).points;
+  const depart = await points();
+
+  // 12 entrées dans la même zone : 20 points, pas 24 ; une seule zone, pas de bonus.
+  for (let i = 0; i < 12; i++) {
+    const r = await noterEntree({ jour, moment: "matin", zone: "mains", texte: "Petit truc " + i });
+    assert.equal(r.bonus, false);
+  }
+  assert.equal((await points()) - depart, 20);
+
+  await noterEntree({ jour, moment: "midi", zone: "tete", texte: "Candidature" });
+  await noterEntree({ jour, moment: "midi", zone: "coeur", texte: "Appel" });
+  // La 4e zone vient d'une tâche cochée : 0 point pour l'entrée, mais elle colore sa zone et donne le bonus.
+  const tache = await addItem({ nom: "Courir", type: "tache" });
+  const r = await cocherTache({ id: tache, nom: "Courir" }, "bras", jour, "soir");
+  assert.equal(r.bonus, true);
+  const entree = await getEntree(r.id);
+  assert.deepEqual([entree.points, entree.tache_id, entree.origine], [0, tache, "tache"]);
+  // Plafond atteint : 0 pour les entrées ; +10 la tâche ; +10 le bonus.
+  assert.equal((await points()) - depart, 40);
+
+  // Le bonus ne revient pas.
+  const r2 = await noterEntree({ jour, moment: "soir", zone: "jambes", texte: "Balade" });
+  assert.equal(r2.bonus, false);
+  assert.equal((await points()) - depart, 40);
+
+  // Décocher : la tâche revient, ses points repartent, l'entrée aussi.
+  await decocherTache(r.id);
+  assert.equal(await getEntree(r.id), null);
+  assert.equal((await getItem(tache)).statut, "actif");
+  assert.equal((await points()) - depart, 30);
+});
+
+test("« Cocher aussi … ? » : la tâche est faite et liée, sans double point", async () => {
+  await initialiserBase();
+  const db = await getDatabase();
+  const jour = decalerJours(getAujourdhui(), -2);
+  await db.runAsync("DELETE FROM journal WHERE jour = ?", jour);
+  const avant = (await getStats()).points;
+  const tache = await addItem({ nom: "Meal prep", type: "tache" });
+  assert.ok((await tachesAFaire(jour)).some((t) => t.id === tache));
+  const { id } = await noterEntree({ jour, moment: "midi", zone: "mains", texte: "meal prep du dimanche" });
+  assert.equal((await getEntree(id)).points, 2);
+  await lierTache(id, tache);
+  const e = await getEntree(id);
+  assert.deepEqual([e.tache_id, e.points], [tache, 0]);
+  // Rien que les 10 points de la tâche : les 2 de l'entrée sont repris.
+  assert.equal((await getStats()).points - avant, 10);
+  assert.equal((await getItem(tache)).statut, "termine");
+  assert.ok(!(await tachesAFaire(jour)).some((t) => t.id === tache));
+  // Une deuxième liaison ne change rien.
+  await lierTache(id, tache);
+  assert.equal((await getStats()).points - avant, 10);
+  // Supprimer l'entrée liée : la tâche reste faite, aucun point repris (l'entrée n'en avait pas).
+  await supprimerEntree(id);
+  assert.equal((await getStats()).points - avant, 10);
+});
+
+test("zone d'une liste : choisie une fois, valable pour toutes ses tâches", async () => {
+  await initialiserBase();
+  const db = await getDatabase();
+  const r = await db.runAsync("INSERT INTO listes (nom, icone, ordre, cree_le) VALUES (?, NULL, 99, ?)", "Divers", new Date().toISOString());
+  const liste = r.lastInsertRowId;
+  const a = await addItem({ nom: "Truc A", type: "tache", liste_id: liste });
+  const b = await addItem({ nom: "Truc B", type: "tache", liste_id: liste });
+  const trouve = async (id) => (await tachesAFaire(getAujourdhui())).find((t) => t.id === id);
+  assert.equal(zoneDeTache(await trouve(a)), null);
+  await definirZoneListe(liste, "pieds");
+  assert.equal(zoneDeTache(await trouve(a)), "pieds");
+  assert.equal(zoneDeTache(await trouve(b)), "pieds");
+  assert.equal((await getListes()).find((l) => l.id === liste).zone, "pieds");
+});
+
+test("progrès : carte de chaleur, ressenti moyen, temps total, zones colorées par jour", () => {
+  assert.deepEqual(chaleur({ mains: 6, tete: 2, bras: 0, pieds: 1 }), { mains: 3, tete: 1, bras: 0, pieds: 1 });
+  assert.deepEqual(chaleur({}), {});
+  const e = [
+    { jour: "2026-11-16", zone: "mains", ressenti: 4, duree_min: 30 },
+    { jour: "2026-11-16", zone: "mains", ressenti: 3, duree_min: null },
+    { jour: "2026-11-16", zone: "tete", ressenti: null, duree_min: 60 },
+    { jour: "2026-11-17", zone: "mains", ressenti: null, duree_min: null },
+  ];
+  const s = statsJournee(e, ["2026-11-15", "2026-11-16", "2026-11-17"]);
+  assert.deepEqual(s.parZone.mains, { n: 3, ressentiMoyen: 3.5, minutes: 30 });
+  assert.deepEqual(s.parZone.tete, { n: 1, ressentiMoyen: null, minutes: 60 });
+  assert.deepEqual(s.zonesParJour, [0, 2, 1]);
+});
+
+test("zones désactivées : les entrées restent, la zone ne se colore plus", async () => {
+  await initialiserBase();
+  const jour = decalerJours(getAujourdhui(), -5);
+  const { id } = await noterEntree({ jour, moment: "matin", zone: "coeur", texte: "Café avec Léa" });
+  await modifierZone("coeur", { active: 0 });
+  assert.equal((await getEntree(id)).zone, "coeur");
+  assert.equal((await getZones()).find((z) => z.cle === "coeur").active, 0);
+  await modifierZone("coeur", { active: 1 });
 });

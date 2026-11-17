@@ -228,6 +228,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       objectif: "tâches à faire dans la liste par période ; vide = pas d'objectif",
       objectif_periode: "'semaine' (lundi → dimanche) | 'mois'",
       couleur: "clé de la palette : 'bleu' | 'orange' | 'vert' | 'violet' | 'rose' | 'sarcelle' | 'ocre' | 'ardoise'",
+      zone: "zone du bonhomme de Ma journée (table zones) ; vide = devinée du nom de la liste, ou demandée la première fois",
     },
   },
   ancres: {
@@ -596,6 +597,10 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       points: "points rapportés par l'entrée (0 si liée à une tâche : la tâche a déjà rapporté les siens)",
       origine: "'saisie' (notée sur le moment) | 'recopie' (notée après le jour ou le moment indiqué) | 'tache' (vient d'une tâche cochée)",
     },
+  },
+  journal_bonus: {
+    table: "Ma journée : un jour où 4 zones du bonhomme se sont colorées a rapporté 10 points (une seule fois par jour).",
+    colonnes: { jour: JOUR },
   },
   vision_phrases: {
     table: "Ma vision : les phrases écrites au présent.",

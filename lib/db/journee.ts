@@ -1,6 +1,9 @@
 import { decalerJours } from "../dates";
 import {
+  gagneBonus,
   nettoyerDetails,
+  pointsEntree,
+  POINTS_BONUS_ZONES,
   origineSaisie,
   ZONES_DEFAUT,
   type CleZone,
@@ -8,7 +11,8 @@ import {
   type Zone,
 } from "../journee-regles";
 import { getDatabase } from "./client";
-import { getAujourdhui } from "./completions";
+import { annulerCompletion, completer, getAujourdhui } from "./completions";
+import { addPoints } from "./stats";
 
 /** Ma journée : une ligne par chose faite (voir lib/journee-regles.ts). */
 export type Entree = {
@@ -142,17 +146,20 @@ export async function modifierEntree(
   }
 }
 
-/** Supprime et rend la ligne, pour « Annuler » pendant 5 s. */
+/** Supprime (ses points avec) et rend la ligne, pour « Annuler » pendant 5 s. Une tâche cochée le reste. */
 export async function supprimerEntree(id: number): Promise<Entree | null> {
   const db = await getDatabase();
   const e = await getEntree(id);
-  if (e) await db.runAsync("DELETE FROM journal WHERE id = ?", id);
+  if (!e) return null;
+  await db.runAsync("DELETE FROM journal WHERE id = ?", id);
+  if (e.points) await addPoints(-e.points);
   return e;
 }
 
-/** Remet une entrée supprimée, avec son identifiant. */
+/** Remet une entrée supprimée, avec son identifiant et ses points. */
 export async function restaurerEntree(e: Entree): Promise<void> {
   const db = await getDatabase();
+  if (e.points) await addPoints(e.points);
   await db.runAsync(
     `INSERT INTO journal (${COLONNES}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     e.id,
@@ -167,4 +174,78 @@ export async function restaurerEntree(e: Entree): Promise<void> {
     e.points,
     e.origine,
   );
+}
+
+// ─── Points, bonus des 4 zones, tâches ──────────────────────────────────
+
+/** Le bonus des 4 zones, une fois par jour : true s'il vient d'être gagné. */
+export async function verifierBonus(jour: string): Promise<boolean> {
+  const db = await getDatabase();
+  const n = (await db.getFirstAsync<{ n: number }>("SELECT COUNT(DISTINCT zone) AS n FROM journal WHERE jour = ?", jour))?.n ?? 0;
+  const deja = !!(await db.getFirstAsync("SELECT 1 FROM journal_bonus WHERE jour = ?", jour));
+  if (!gagneBonus(n, deja)) return false;
+  await db.runAsync("INSERT OR IGNORE INTO journal_bonus (jour) VALUES (?)", jour);
+  await addPoints(POINTS_BONUS_ZONES);
+  return true;
+}
+
+/** Ajoute une entrée avec ses points (plafonnés par jour ; 0 si liée à une tâche) et vérifie le bonus. */
+export async function noterEntree(e: NouvelleEntree, maintenant = new Date()): Promise<{ id: number; bonus: boolean }> {
+  const db = await getDatabase();
+  const deja = (await db.getFirstAsync<{ s: number | null }>("SELECT SUM(points) AS s FROM journal WHERE jour = ?", e.jour))?.s ?? 0;
+  const points = pointsEntree(deja, e.tache_id != null);
+  const id = await ajouterEntree({ ...e, points }, maintenant);
+  if (points) await addPoints(points);
+  return { id, bonus: await verifierBonus(e.jour) };
+}
+
+/** Une tâche pas encore faite, avec ce qu'il faut pour trouver sa zone. */
+export type TacheAFaire = { id: number; nom: string; liste_id: number | null; liste_nom: string | null; liste_zone: string | null };
+
+/** « À ne pas oublier » : les tâches actives pas cochées ce jour-là, par ordre alphabétique (aucun tri d'urgence affiché). */
+export async function tachesAFaire(jour: string): Promise<TacheAFaire[]> {
+  const db = await getDatabase();
+  return db.getAllAsync<TacheAFaire>(
+    `SELECT i.id, i.nom, i.liste_id, l.nom AS liste_nom, l.zone AS liste_zone
+     FROM items i LEFT JOIN listes l ON l.id = i.liste_id
+     WHERE i.type = 'tache' AND i.statut = 'actif'
+       AND NOT EXISTS (SELECT 1 FROM completions c WHERE c.item_id = i.id AND c.date = ?)
+     ORDER BY i.nom COLLATE NOCASE`,
+    jour,
+  );
+}
+
+/** La zone choisie pour une liste vaut pour toutes ses tâches (modifiable dans Mes listes). */
+export async function definirZoneListe(listeId: number, zone: CleZone | null): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("UPDATE listes SET zone = ? WHERE id = ?", zone, listeId);
+}
+
+/** Cocher une tâche depuis « À ne pas oublier » : elle est faite (ses points) et devient une entrée (0 point) dans sa zone. */
+export async function cocherTache(
+  t: { id: number; nom: string },
+  zone: CleZone,
+  jour: string,
+  moment: MomentJournee,
+): Promise<{ id: number; bonus: boolean }> {
+  await completer(t.id, "complet", undefined, undefined, undefined, jour);
+  return noterEntree({ jour, moment, zone, texte: t.nom, tache_id: t.id, origine: "tache" });
+}
+
+/** Annuler un cochage : la tâche revient à faire, l'entrée part (elle n'avait pas de points). */
+export async function decocherTache(entreeId: number): Promise<void> {
+  const e = await getEntree(entreeId);
+  if (!e?.tache_id) return;
+  await annulerCompletion(e.tache_id, e.jour);
+  await supprimerEntree(entreeId);
+}
+
+/** « Cocher aussi … ? » : la tâche est faite et liée à l'entrée, qui rend ses points (jamais de double compte). */
+export async function lierTache(entreeId: number, tacheId: number): Promise<void> {
+  const db = await getDatabase();
+  const e = await getEntree(entreeId);
+  if (!e || e.tache_id) return;
+  await completer(tacheId, "complet", undefined, undefined, undefined, e.jour);
+  await db.runAsync("UPDATE journal SET tache_id = ?, points = 0 WHERE id = ?", tacheId, entreeId);
+  if (e.points) await addPoints(-e.points);
 }

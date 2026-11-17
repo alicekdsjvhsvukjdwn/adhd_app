@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   Platform,
+  Switch,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -11,6 +12,8 @@ import {
 } from "react-native";
 import { Texte } from "../../components/Texte";
 import { joursDepuisSauvegarde } from "../../lib/fichiers";
+import { ecrireMeta, lireMeta } from "../../lib/db/meta";
+import { CLE_AFFICHER_TROIS } from "../../lib/journee-regles";
 import { MODULES } from "../../lib/modules-visibles";
 import { radius, spacing, typography, useTheme } from "../../lib/theme";
 
@@ -71,11 +74,13 @@ function ProfilContenu() {
   const router = useRouter();
   const t = useTheme();
   const [sauvegarde, setSauvegarde] = useState(descriptionSauvegarde);
+  const [trois, setTrois] = useState(false);
 
   // Au retour de l'écran Sauvegarde, la ligne suit l'export qui vient d'être fait.
   useFocusEffect(
     useCallback(() => {
       setSauvegarde(descriptionSauvegarde());
+      lireMeta(CLE_AFFICHER_TROIS).then((v) => setTrois(v === "1"));
     }, []),
   );
 
@@ -107,6 +112,24 @@ function ProfilContenu() {
           </TouchableOpacity>
         ))}
 
+        {/* Les 3 du jour et les bonus : cachés par défaut, rien n'est effacé. */}
+        <View style={[styles.entree, styles.reglage, { backgroundColor: t.bgCard }]}>
+          <View style={{ flex: 1 }}>
+            <Texte style={[styles.entreeTitre, { color: t.textPrimary }]}>Afficher mes 3 priorités</Texte>
+            <Texte style={[styles.entreeTexte, { color: t.textSecondary }]}>
+              Les 3 du jour et les bonus, ouverts depuis « Ma journée ».
+            </Texte>
+          </View>
+          <Switch
+            value={trois}
+            onValueChange={async (v) => {
+              setTrois(v);
+              await ecrireMeta(CLE_AFFICHER_TROIS, v ? "1" : null);
+            }}
+            accessibilityLabel="Afficher mes 3 priorités"
+          />
+        </View>
+
         <Texte style={[styles.version, { color: t.textMuted }]}>
           Version {Constants.expoConfig?.version}
           {process.env.EXPO_PUBLIC_BUILD ? ` · publiée le ${process.env.EXPO_PUBLIC_BUILD}` : ""}
@@ -131,6 +154,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   entreeEnAvant: { borderWidth: 1 },
+  reglage: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   entreeTitre: {
     fontSize: typography.h3,
     fontWeight: "600",

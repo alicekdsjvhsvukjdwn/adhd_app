@@ -23,6 +23,7 @@ import {
   SQL_COURSES_V2,
   SQL_TROIS_V2,
   SQL_JOURNEE,
+  SQL_JOURNEE_V2,
   SQL_PROJET_TYPES_DEFAUT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
@@ -876,6 +877,14 @@ const MIGRATIONS: Migration[] = [
     run: async (db) => {
       await db.execAsync(SQL_JOURNEE);
       await semerZones(db);
+    },
+  },
+
+  {
+    version: 42,
+    nom: "Ma journée : zone des listes, bonus des 4 zones",
+    run: async (db) => {
+      await db.execAsync(SQL_JOURNEE_V2);
     },
   },
 ];

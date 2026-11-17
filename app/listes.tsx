@@ -13,6 +13,8 @@ import {
   supprimerListe,
   type Liste,
 } from "../lib/db/listes";
+import { definirZoneListe, getZones } from "../lib/db/journee";
+import { PARTIES, zoneDeListe, type Zone } from "../lib/journee-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { CLES_COULEURS, useCouleurListe } from "../lib/theme-listes";
 
@@ -31,8 +33,10 @@ export default function ListesScreen() {
   /** « Déplacer ses tâches vers… » : la liste d'origine dont on choisit la destination. */
   const [aDeplacer, setADeplacer] = useState<Liste | null>(null);
   const [message, setMessage] = useState("");
+  const [zones, setZones] = useState<Zone[]>([]);
 
   const charger = useCallback(async () => {
+    setZones(await getZones());
     const l = await getListes();
     setListes(l);
     setNoms(Object.fromEntries(l.map((x) => [x.id, x.nom])));
@@ -164,6 +168,34 @@ export default function ListesScreen() {
               );
             })}
           </View>
+          {/* Zone du bonhomme : une tâche cochée depuis « Ma journée » y devient une entrée. */}
+          <Texte style={[styles.zoneTitre, { color: t.textMuted }]}>
+            Zone dans Ma journée
+            {!l.zone ? (zoneDeListe(l.nom) ? ` : devinée (${PARTIES[zoneDeListe(l.nom)!]})` : " : demandée la première fois") : ""}
+          </Texte>
+          <View style={styles.couleurs}>
+            {zones
+              .filter((z) => z.active)
+              .map((z) => {
+                const choisie = l.zone === z.cle;
+                return (
+                  <TouchableOpacity
+                    key={z.cle}
+                    onPress={async () => {
+                      await definirZoneListe(l.id, choisie ? null : z.cle);
+                      await charger();
+                    }}
+                    style={[styles.zone, { borderColor: choisie ? t.textPrimary : t.border, backgroundColor: choisie ? t.bgCardActive : "transparent" }]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: choisie }}
+                    accessibilityLabel={`${PARTIES[z.cle]} (${z.libelle}) pour ${l.nom}`}
+                  >
+                    <View style={[styles.zonePoint, { backgroundColor: z.couleur }]} />
+                    <Texte style={{ color: choisie ? t.textPrimary : t.textSecondary, fontSize: typography.tiny, fontWeight: "600" }}>{PARTIES[z.cle]}</Texte>
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
           {listes.length > 1 && (
             <TouchableOpacity onPress={() => setADeplacer(l)} hitSlop={8} style={styles.deplacer} accessibilityRole="button">
               <Texte style={{ color: t.accentText, fontSize: typography.small, fontWeight: "600" }}>Déplacer ses tâches vers…</Texte>
@@ -228,4 +260,7 @@ const styles = StyleSheet.create({
   couleurs: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginLeft: 52 },
   couleur: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
   deplacer: { marginLeft: 52, marginTop: spacing.md },
+  zoneTitre: { fontSize: typography.tiny, fontWeight: "700", marginLeft: 52, marginTop: spacing.md, marginBottom: 6 },
+  zone: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 10, minHeight: 32 },
+  zonePoint: { width: 10, height: 10, borderRadius: 5 },
 });

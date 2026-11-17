@@ -147,3 +147,106 @@ export function compterParZone(entrees: { zone: string }[]): Record<string, numb
   for (const e of entrees) c[e.zone] = (c[e.zone] ?? 0) + 1;
   return c;
 }
+
+// ─── Points (voir REGLES_POINTS) ────────────────────────────────────────
+
+export const POINTS_ENTREE = 2;
+/** Plafond des points d'entrées par jour : inutile de tout découper en mini-entrées. */
+export const PLAFOND_ENTREES_JOUR = 20;
+export const POINTS_BONUS_ZONES = 10;
+export const ZONES_POUR_BONUS = 4;
+
+/** Points d'une nouvelle entrée, d'après ceux déjà gagnés par les entrées du jour. Liée à une tâche : 0 (la tâche a les siens). */
+export function pointsEntree(dejaGagnes: number, lieeATache = false): number {
+  if (lieeATache) return 0;
+  return Math.max(0, Math.min(POINTS_ENTREE, PLAFOND_ENTREES_JOUR - dejaGagnes));
+}
+
+/** Le bonus des 4 zones : une fois par jour, dès que la 4ᵉ zone se colore (entrées liées à une tâche comprises). */
+export const gagneBonus = (zonesColorees: number, dejaDonne: boolean) => !dejaDonne && zonesColorees >= ZONES_POUR_BONUS;
+
+// ─── Tâches : correspondance et zone de leur liste ──────────────────────
+
+/** Mots trop courants pour dire qu'une entrée ressemble à une tâche. */
+const MOTS_VIDES = new Set(["faire", "fait", "avec", "pour", "dans", "chez", "tout", "toute", "tous", "plus", "apres", "avant", "encore"]);
+
+/** Mots clés : plus de 3 lettres, sans accents ni pluriel en -s. */
+function motsCles(s: string): string[] {
+  return normaliser(s)
+    .split(" ")
+    .filter((m) => m.length > 3 && !MOTS_VIDES.has(m))
+    .map((m) => m.replace(/s$/, ""));
+}
+
+/**
+ * La tâche non faite qui ressemble le plus à l'entrée (accents, majuscules et pluriels ignorés) :
+ * au moins la moitié de ses mots clés dans l'entrée, ou son nom en entier. null sinon.
+ */
+export function tacheCorrespondante<T extends { id: number; nom: string }>(texte: string, taches: T[]): T | null {
+  const entree = normaliser(texte);
+  const mots = new Set(motsCles(texte));
+  let meilleure: { t: T; score: number; communs: number } | null = null;
+  for (const t of taches) {
+    const nom = normaliser(t.nom);
+    if (!nom) continue;
+    const cles = motsCles(t.nom);
+    const communs = cles.filter((m) => mots.has(m)).length;
+    const score = entree.includes(nom) || nom === entree ? 1 : cles.length ? communs / cles.length : 0;
+    if (score < 0.5 || (score < 1 && communs === 0)) continue;
+    if (!meilleure || score > meilleure.score || (score === meilleure.score && communs > meilleure.communs)) meilleure = { t, score, communs };
+  }
+  return meilleure?.t ?? null;
+}
+
+/** Correspondance liste → zone par défaut, d'après des mots du nom de la liste (modifiable dans Mes listes). */
+const MOTS_ZONES: [CleZone, string[]][] = [
+  ["mains", ["quotidien", "maison", "menage", "cuisin", "course", "administ", "admin", "demarche", "papier"]],
+  ["tete", ["travail", "emploi", "competence", "apprend", "formation", "boulot", "etude"]],
+  ["bras", ["sport"]],
+  ["pieds", ["projet", "arduino", "musique", "appli"]],
+  ["ventre", ["perso", "sante", "soin", "tcc", "repos", "repas"]],
+  ["coeur", ["relation", "ami", "famille"]],
+  ["jambes", ["sortie", "dehors", "mer", "balade"]],
+];
+
+/** Zone devinée d'après le nom de la liste ; null = aucun mot reconnu (on demandera). */
+export function zoneDeListe(nom: string): CleZone | null {
+  const mots = normaliser(nom).split(" ");
+  // Mots courts (mer, ami, tcc) : en entier seulement (pas « mercredi »).
+  const reconnu = (m: string, k: string) => (k.length < 5 ? m === k || m === k + "s" : m.startsWith(k));
+  for (const [zone, cles] of MOTS_ZONES) if (mots.some((m) => cles.some((k) => reconnu(m, k)))) return zone;
+  return null;
+}
+
+/** Zone d'une tâche : celle réglée sur sa liste, sinon devinée du nom de la liste, sinon null (on demande). */
+export const zoneDeTache = (t: { liste_zone: string | null; liste_nom: string | null }): CleZone | null =>
+  (t.liste_zone as CleZone | null) ?? (t.liste_nom ? zoneDeListe(t.liste_nom) : null);
+
+// ─── Progrès ────────────────────────────────────────────────────────────
+
+/** Carte de chaleur : chaque zone de 0 à 3 selon sa part du maximum de la période. */
+export function chaleur(comptes: Record<string, number>): Record<string, number> {
+  const max = Math.max(0, ...Object.values(comptes));
+  return Object.fromEntries(Object.entries(comptes).map(([k, n]) => [k, n > 0 ? Math.max(1, Math.ceil((3 * n) / max)) : 0]));
+}
+
+/** Par zone : entrées, ressenti moyen (null si jamais noté), minutes notées ; et zones colorées par jour. */
+export function statsJournee(
+  entrees: { jour: string; zone: string; ressenti: number | null; duree_min: number | null }[],
+  jours: string[],
+) {
+  const parZone: Record<string, { n: number; ressentiMoyen: number | null; minutes: number }> = {};
+  const ressentis: Record<string, number[]> = {};
+  for (const e of entrees) {
+    const z = (parZone[e.zone] ??= { n: 0, ressentiMoyen: null, minutes: 0 });
+    z.n++;
+    z.minutes += e.duree_min ?? 0;
+    if (e.ressenti) (ressentis[e.zone] ??= []).push(e.ressenti);
+  }
+  for (const [k, r] of Object.entries(ressentis)) parZone[k].ressentiMoyen = Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 10) / 10;
+  const zonesParJour = jours.map((j) => new Set(entrees.filter((e) => e.jour === j).map((e) => e.zone)).size);
+  return { parZone, zonesParJour };
+}
+
+/** meta : '1' = « Afficher mes 3 priorités » (Profil). Absent = désactivé : les 3 et les bonus restent cachés. */
+export const CLE_AFFICHER_TROIS = "afficher_trois";
