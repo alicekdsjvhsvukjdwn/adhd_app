@@ -55,6 +55,8 @@ export default function TabsLayout() {
         name="taches"
         options={{
           title: "Ma journée",
+          // Libellé court : avec 6 onglets, « Ma journée » était coupé sur iPhone.
+          tabBarLabel: "Journée",
           tabBarIcon: icone(PersonStanding),
         }}
       />
