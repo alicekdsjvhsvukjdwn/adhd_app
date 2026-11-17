@@ -888,3 +888,28 @@ export function transformationsApres(schemaSauvegarde: number): string[] {
     ...(schemaSauvegarde < 32 ? [SQL_JOURNAL_DEPUIS_FAITS] : []),
   ];
 }
+
+/** Ma journée : les zones du bonhomme (sens et couleur modifiables, forme fixe) et le journal de ce que j'ai fait. */
+export const SQL_JOURNEE = `
+  CREATE TABLE IF NOT EXISTS zones (
+    cle TEXT PRIMARY KEY,
+    libelle TEXT NOT NULL DEFAULT '',
+    couleur TEXT NOT NULL DEFAULT '#94A3B8',
+    ordre INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE IF NOT EXISTS journal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour TEXT NOT NULL DEFAULT '',
+    cree_le TEXT NOT NULL DEFAULT '',
+    moment TEXT NOT NULL DEFAULT 'matin',
+    zone TEXT NOT NULL DEFAULT '',
+    texte TEXT NOT NULL DEFAULT '',
+    duree_min INTEGER,
+    ressenti INTEGER,
+    tache_id INTEGER,
+    points INTEGER NOT NULL DEFAULT 0,
+    origine TEXT NOT NULL DEFAULT 'saisie'
+  );
+  CREATE INDEX IF NOT EXISTS journal_jour ON journal (jour);
+`;

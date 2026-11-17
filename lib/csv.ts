@@ -571,6 +571,32 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
     table: "Cuisine : un jour avec « J'ai cuisiné » a rapporté 5 points (une seule fois par jour).",
     colonnes: { jour: JOUR },
   },
+  zones: {
+    table: "Ma journée : les 7 zones du bonhomme (la forme est fixe, le sens et la couleur se règlent dans Profil).",
+    colonnes: {
+      cle: "'tete' | 'coeur' | 'bras' | 'ventre' | 'mains' | 'jambes' | 'pieds'",
+      libelle: "ce que veut dire la zone",
+      couleur: "couleur #RRGGBB",
+      ordre: "position dans la légende",
+      active: `${BOOL} ; 0 = zone grise, qu'on ne touche plus`,
+    },
+  },
+  journal: {
+    table: "Ma journée : une ligne par chose faite.",
+    colonnes: {
+      id: "identifiant",
+      jour: `jour logique (la journée commence à l'heure de début réglée dans Profil), ${JOUR}`,
+      cree_le: ISO,
+      moment: "'matin' | 'midi' | 'apres_midi' | 'soir'",
+      zone: "zone du bonhomme (table zones, colonne cle)",
+      texte: "ce que j'ai fait",
+      duree_min: "durée en minutes, vide si pas notée",
+      ressenti: "1 (très bas) à 5 (très bien), vide si pas noté",
+      tache_id: "tâche cochée en même temps (table items), vide sinon",
+      points: "points rapportés par l'entrée (0 si liée à une tâche : la tâche a déjà rapporté les siens)",
+      origine: "'saisie' (notée sur le moment) | 'recopie' (notée après le jour ou le moment indiqué) | 'tache' (vient d'une tâche cochée)",
+    },
+  },
   vision_phrases: {
     table: "Ma vision : les phrases écrites au présent.",
     colonnes: { id: "identifiant", domaine_id: "domaine (table vision_domaines)", texte: "texte libre", ordre: "position" },

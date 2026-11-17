@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Gift, Moon, SprayCan, Sun, SquareCheck, User, type LucideIcon } from "lucide-react-native";
+import { Gift, Moon, PersonStanding, SprayCan, Sun, User, type LucideIcon } from "lucide-react-native";
 import { Platform, type ColorValue } from "react-native";
 import { MODULES } from "../../lib/modules-visibles";
 import { resetOnglet } from "../../lib/reset-onglet";
@@ -54,8 +54,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="taches"
         options={{
-          title: "Tâches",
-          tabBarIcon: icone(SquareCheck),
+          title: "Ma journée",
+          tabBarIcon: icone(PersonStanding),
         }}
       />
       <Tabs.Screen

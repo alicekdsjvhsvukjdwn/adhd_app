@@ -22,12 +22,14 @@ import {
   SQL_CUISINE,
   SQL_COURSES_V2,
   SQL_TROIS_V2,
+  SQL_JOURNEE,
   SQL_PROJET_TYPES_DEFAUT,
   SQL_TABLES_HORS_MIGRATIONS,
   SQL_VERSIONS_EN_ETAPES,
 } from "../schema";
 import { getDatabase } from "./client";
 import { semerRecettesDepart } from "./cuisine-depart";
+import { semerZones } from "./journee";
 
 /**
  * Migrations versionnées via PRAGMA user_version.
@@ -865,6 +867,15 @@ const MIGRATIONS: Migration[] = [
     nom: "Mes 3 planifiables : bonus, moment du placement, origine",
     run: async (db) => {
       await db.execAsync(SQL_TROIS_V2);
+    },
+  },
+
+  {
+    version: 41,
+    nom: "Ma journée : zones du bonhomme et journal de ce que j'ai fait",
+    run: async (db) => {
+      await db.execAsync(SQL_JOURNEE);
+      await semerZones(db);
     },
   },
 ];
