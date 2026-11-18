@@ -31,8 +31,13 @@ type Entree = {
 const ENTREES: Entree[] = [
   {
     titre: "Zones du bonhomme",
-    description: "Ce que veut dire chaque zone de « Ma journée », et sa couleur.",
+    description: "Ce que veut dire chaque zone de « Ma journée », sa couleur, et les liens automatiques.",
     route: "/zones",
+  },
+  {
+    titre: "Récap du dimanche",
+    description: "L'heure du récap, sa notification et la piste pour la semaine.",
+    route: "/recap-reglages",
   },
   {
     titre: "Mes listes",

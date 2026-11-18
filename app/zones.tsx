@@ -4,6 +4,9 @@ import { ScrollView, StyleSheet, Switch, TouchableOpacity, View } from "react-na
 import { Bonhomme } from "../components/Bonhomme";
 import { ChampTexte, Texte } from "../components/Texte";
 import { getZones, modifierZone } from "../lib/db/journee";
+import { CLE_RETRO, ecrireLiens, getLiens, remplirDepuis } from "../lib/db/journal-auto";
+import { lireMeta } from "../lib/db/meta";
+import { LIENS_DEFAUT, SOURCES, type Liens } from "../lib/journal-auto-regles";
 import { PALETTE_ZONES, PARTIES, type CleZone, type Zone } from "../lib/journee-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 
@@ -76,7 +79,111 @@ export default function ZonesScreen() {
           </View>
         </View>
       ))}
+
+      <LiensAutomatiques zones={zones} />
     </ScrollView>
+  );
+}
+
+/** Ce que les autres parties de l'appli colorent toutes seules, modifiable ; un interrupteur par source. */
+function LiensAutomatiques({ zones }: { zones: Zone[] }) {
+  const t = useTheme();
+  const [liens, setLiens] = useState<Liens | null>(null);
+  const [retro, setRetro] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [enCours, setEnCours] = useState(false);
+
+  useEffect(() => {
+    getLiens().then(setLiens);
+    lireMeta(CLE_RETRO).then(setRetro);
+  }, []);
+
+  const changer = async (l: Liens) => {
+    setLiens(l);
+    await ecrireLiens(l);
+  };
+
+  const remplir = async () => {
+    setEnCours(true);
+    const n = await remplirDepuis(30);
+    setEnCours(false);
+    setRetro(await lireMeta(CLE_RETRO));
+    setMessage(n > 0 ? `${n} entrée${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""}, sans points.` : "Rien de nouveau à ajouter.");
+  };
+
+  if (!liens) return null;
+  const actives = zones.filter((z) => z.active);
+  return (
+    <View style={{ marginTop: spacing.xl }}>
+      <Texte style={[styles.titre2, { color: t.textPrimary }]}>Liens automatiques</Texte>
+      <Texte style={[styles.intro, { color: t.textSecondary }]}>
+        Ce que tu fais ailleurs dans l&apos;appli arrive tout seul dans « Ma journée » (0 point : l&apos;action a déjà rapporté). Les relations, jamais.
+      </Texte>
+      {SOURCES.map((s) => {
+        const on = !liens.off.includes(s.cle);
+        const siens = LIENS_DEFAUT.filter((l) => l.source === s.cle);
+        return (
+          <View key={s.cle} style={[styles.bloc, { backgroundColor: t.bgCard, borderColor: "transparent" }]}>
+            <View style={styles.ligne}>
+              <Texte style={[styles.source, { color: t.textPrimary }]}>{s.libelle}</Texte>
+              <Switch
+                value={on}
+                onValueChange={(v) => changer({ ...liens, off: v ? liens.off.filter((x) => x !== s.cle) : [...liens.off, s.cle] })}
+                accessibilityLabel={`${s.libelle} : entrées automatiques`}
+              />
+            </View>
+            {on && s.cle === "tache" && (
+              <Texte style={[styles.aide, { color: t.textMuted }]}>Dans la zone de leur liste (réglable dans Mes listes).</Texte>
+            )}
+            {on &&
+              siens.map((l) => (
+                <View key={l.cle} style={{ gap: 6 }}>
+                  {siens.length > 1 || l.libelle !== s.libelle ? <Texte style={[styles.aide, { color: t.textSecondary }]}>{l.libelle}</Texte> : null}
+                  <View style={styles.couleurs}>
+                    {actives.map((z) => {
+                      const actif = liens.zones[l.cle] === z.cle;
+                      return (
+                        <TouchableOpacity
+                          key={z.cle}
+                          onPress={() => changer({ ...liens, zones: { ...liens.zones, [l.cle]: z.cle } })}
+                          style={[styles.choixZone, { borderColor: actif ? z.couleur : t.border, backgroundColor: actif ? z.couleur : "transparent" }]}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: actif }}
+                          accessibilityLabel={`${l.libelle} → ${PARTIES[z.cle]}`}
+                        >
+                          <Texte style={{ fontSize: typography.tiny, fontWeight: "700", color: actif ? "#05080A" : t.textSecondary }}>{PARTIES[z.cle]}</Texte>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    <TouchableOpacity
+                      onPress={() => changer({ ...liens, zones: { ...liens.zones, [l.cle]: null } })}
+                      style={[styles.choixZone, { borderColor: liens.zones[l.cle] ? t.border : t.textPrimary }]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: !liens.zones[l.cle] }}
+                    >
+                      <Texte style={{ fontSize: typography.tiny, fontWeight: "700", color: t.textSecondary }}>Aucune</Texte>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+          </View>
+        );
+      })}
+
+      <TouchableOpacity
+        onPress={remplir}
+        disabled={enCours}
+        style={[styles.bouton, { borderColor: t.accent, opacity: enCours ? 0.5 : 1 }]}
+        accessibilityRole="button"
+      >
+        <Texte style={{ color: t.accentText, fontWeight: "700", textAlign: "center" }}>
+          {enCours ? "Remplissage…" : "Remplir le journal depuis mes données des 30 derniers jours"}
+        </Texte>
+      </TouchableOpacity>
+      <Texte style={[styles.aide, { color: t.textMuted, textAlign: "center" }]}>
+        {message ?? (retro ? `Déjà fait le ${retro.split("-").reverse().join("/")} : le relancer n'ajoute pas de doublon.` : "Sans points, pour que la semaine, le récap et Progrès aient déjà de la matière.")}
+      </Texte>
+    </View>
   );
 }
 
@@ -91,4 +198,9 @@ const styles = StyleSheet.create({
   champ: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 16 },
   couleurs: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   couleur: { width: 30, height: 30, borderRadius: 15, borderWidth: 2 },
+  titre2: { fontSize: typography.h2, fontWeight: "600", marginBottom: spacing.sm },
+  source: { fontSize: typography.body, fontWeight: "700" },
+  aide: { fontSize: typography.small, lineHeight: 18 },
+  choixZone: { borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: 10, minHeight: 32, justifyContent: "center" },
+  bouton: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm, minHeight: 44, justifyContent: "center" },
 });

@@ -919,3 +919,45 @@ export const SQL_JOURNEE_V2 = `
   ALTER TABLE listes ADD COLUMN zone TEXT;
   CREATE TABLE IF NOT EXISTS journal_bonus (jour TEXT PRIMARY KEY);
 `;
+
+/**
+ * Ma journée se remplit toute seule : origine 'auto', source et source_id (lib/journal-auto-regles.ts).
+ * masque = entrée auto masquée (elle n'est pas recréée) ; texte_perso = texte réécrit ou fusionné (plus remplacé).
+ * courses_faites : « Courses faites » vidait la liste sans trace ; une ligne par validation.
+ */
+export const SQL_JOURNAL_AUTO = `
+  ALTER TABLE journal ADD COLUMN source TEXT;
+  ALTER TABLE journal ADD COLUMN source_id TEXT;
+  ALTER TABLE journal ADD COLUMN masque INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE journal ADD COLUMN texte_perso INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX IF NOT EXISTS journal_source ON journal (source, source_id);
+  CREATE TABLE IF NOT EXISTS courses_faites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour TEXT NOT NULL DEFAULT '',
+    n INTEGER NOT NULL DEFAULT 0,
+    horodatage TEXT NOT NULL DEFAULT ''
+  );
+`;
+
+/** Récap du dimanche : ce qui est choisi ou écrit (le reste est recalculé à partir des données). */
+export const SQL_RECAP = `
+  CREATE TABLE IF NOT EXISTS recap_semaine (
+    semaine_debut TEXT PRIMARY KEY,
+    vu_le TEXT,
+    fierte TEXT,
+    piste_zone TEXT,
+    piste_texte TEXT,
+    piste_ajoutee INTEGER NOT NULL DEFAULT 0
+  );
+  -- Total des points gagnés relevé chaque jour : points de la semaine (récap), moyenne sur 14 jours (récompenses).
+  CREATE TABLE IF NOT EXISTS points_jours (jour TEXT PRIMARY KEY, total INTEGER NOT NULL DEFAULT 0);
+`;
+
+/** Récompenses repensées : le souvenir d'une récompense utilisée, et les pioches du jour. L'objectif est dans meta. */
+export const SQL_RECOMPENSES_V2 = `
+  ALTER TABLE achats ADD COLUMN souvenir_texte TEXT;
+  ALTER TABLE achats ADD COLUMN souvenir_photo_uri TEXT;
+  ALTER TABLE achats ADD COLUMN souvenir_ressenti INTEGER;
+  ALTER TABLE achats ADD COLUMN journal_id INTEGER;
+  CREATE TABLE IF NOT EXISTS pioches (jour TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0);
+`;

@@ -226,7 +226,7 @@ test("sauvegarde : les photos des projets partent dans le JSON, mais pas dans le
   assert.equal(ok.ok, true);
   assert.equal(ok.sauvegarde.tables.projets[0].couverture, PHOTO);
   assert.equal(ok.sauvegarde.tables.projet_photos[0].data, PHOTO);
-  assert.deepEqual(COLONNES_IMAGES, { projets: ["couverture"], projet_photos: ["data"], recettes: ["photo"] });
+  assert.deepEqual(COLONNES_IMAGES, { projets: ["couverture"], projet_photos: ["data"], recettes: ["photo"], achats: ["souvenir_photo_uri"] });
   await supprimerProjet(id);
 });
 

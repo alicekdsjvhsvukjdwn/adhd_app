@@ -36,7 +36,6 @@ import {
 import {
   CLE_AFFICHER_TROIS,
   compterParZone,
-  couleurZone,
   DUREES,
   libelleDuree,
   modifiable,
@@ -53,6 +52,9 @@ import {
   type MomentJournee,
   type Zone,
 } from "../../lib/journee-regles";
+import { fusionner, masquerEntree, synchroniserJournal } from "../../lib/db/journal-auto";
+import { recapDisponible } from "../../lib/db/recap";
+import { autoRessemblante, libelleSource } from "../../lib/journal-auto-regles";
 import { NOMS_MOMENT } from "../../lib/moments";
 import { semaineDe } from "../../lib/regles-taches";
 import { useCleReset } from "../../lib/reset-onglet";
@@ -85,6 +87,10 @@ function MaJourneeContenu() {
   const [moment, setMoment] = useState<MomentJournee>(() => momentDeHeureJournee(new Date().getHours()));
   const [message, setMessage] = useState<string | null>(null);
   const [filtre, setFiltre] = useState<CleZone | null>(null);
+  /** « Tout · Mes notes » : les entrées auto peuvent être cachées de la liste (elles colorent toujours le bonhomme). */
+  const [mesNotes, setMesNotes] = useState(false);
+  /** « Fusionner avec … ? » : ma note ressemble à une entrée auto du jour. */
+  const [fusion, setFusion] = useState<{ noteId: number; auto: Entree } | null>(null);
   /** L'entrée qui vient d'être saisie : sa ligne « + durée · ressenti ». */
   const [recente, setRecente] = useState<number | null>(null);
   /** L'entrée dont les détails sont ouverts. */
@@ -105,6 +111,8 @@ function MaJourneeContenu() {
   const [zonePour, setZonePour] = useState<TacheAFaire | null>(null);
   const [bravo, setBravo] = useState(false);
   const [afficherTrois, setAfficherTrois] = useState(false);
+  /** Le récap du dimanche est prêt et pas encore ouvert. */
+  const [recapPret, setRecapPret] = useState(false);
   const router = useRouter();
 
   const champ = useRef<TextInput>(null);
@@ -131,6 +139,9 @@ function MaJourneeContenu() {
     ]);
     setTaches(tt);
     setAfficherTrois(trois === "1");
+    recapDisponible()
+      .then((r) => setRecapPret(r.nouveau))
+      .catch(() => {});
     setZones(z);
     setEntrees(e);
     setSemaine(sem);
@@ -138,9 +149,23 @@ function MaJourneeContenu() {
     setPassees(p);
   }, [vu]);
 
+  /** Bonus des 4 zones : petit retour visuel et haptique. */
+  const feterBonus = (gagne: boolean) => {
+    if (!gagne) return;
+    setBravo(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setTimeout(() => setBravo(false), 4000);
+  };
+
+  // À l'ouverture : ce que j'ai fait ailleurs dans l'appli arrive ici (entrées auto), et le bonus des 4 zones peut tomber.
   useFocusEffect(
     useCallback(() => {
-      charger();
+      synchroniserJournal()
+        .catch(() => false)
+        .then((bonus) => {
+          if (bonus) feterBonus(true);
+          return charger();
+        });
     }, [charger]),
   );
 
@@ -154,14 +179,6 @@ function MaJourneeContenu() {
     setProposition(null);
   };
 
-  /** Bonus des 4 zones : petit retour visuel et haptique. */
-  const feterBonus = (gagne: boolean) => {
-    if (!gagne) return;
-    setBravo(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setTimeout(() => setBravo(false), 4000);
-  };
-
   const proposerAnnulation = (texte: string, annuler: () => Promise<void>) => {
     setAnnulable({ texte, annuler });
     if (minuteurAnnuler.current) clearTimeout(minuteurAnnuler.current);
@@ -171,7 +188,8 @@ function MaJourneeContenu() {
   const actives = zones.filter((z) => z.active);
   const parCle = Object.fromEntries(zones.map((z) => [z.cle, z])) as Record<CleZone, Zone>;
   const comptes = compterParZone(entrees);
-  const visibles = filtre ? entrees.filter((e) => e.zone === filtre) : entrees;
+  const visibles = entrees.filter((e) => (!filtre || e.zone === filtre) && (!mesNotes || e.origine !== "auto"));
+  const aDesAutos = entrees.some((e) => e.origine === "auto");
   const proposees = ouvert && !enEdition ? suggestions(texte, zone, passees) : [];
 
   const choisirZone = (cle: CleZone) => {
@@ -194,7 +212,10 @@ function MaJourneeContenu() {
     } else {
       const { id, bonus } = await noterEntree({ jour: vu, moment, zone, texte });
       feterBonus(bonus);
-      const tache = tacheCorrespondante(texte, taches);
+      // Pas de doublon : une entrée auto du jour qui ressemble → proposer de fusionner (plutôt que de cocher une tâche).
+      const auto = autoRessemblante(texte, zone, entrees.filter((e) => e.origine === "auto"));
+      setFusion(auto ? { noteId: id, auto } : null);
+      const tache = auto ? null : tacheCorrespondante(texte, taches);
       setProposition(tache ? { entreeId: id, tache } : null);
       setRecente(id);
       if (minuteurRecente.current) clearTimeout(minuteurRecente.current);
@@ -267,7 +288,30 @@ function MaJourneeContenu() {
     await charger();
   };
 
-  const options = (e: Entree): Option[] => [
+  const fusionnerNote = async () => {
+    if (!fusion) return;
+    const f = fusion;
+    setFusion(null);
+    await fusionner(f.noteId, f.auto.id);
+    Haptics.selectionAsync().catch(() => {});
+    await charger();
+  };
+
+  /** Une entrée auto ne se supprime pas (elle reviendrait) : elle se masque, avec « Annuler ». */
+  const masquer = async (e: Entree) => {
+    await masquerEntree(e.id);
+    proposerAnnulation(`« ${e.texte} » masquée`, () => masquerEntree(e.id, false));
+    await charger();
+  };
+
+  const options = (e: Entree): Option[] =>
+    e.origine === "auto"
+      ? [
+          { libelle: "Changer de zone", onPress: () => setTimeout(() => setChangerZone(e), 350) },
+          { libelle: "Modifier le texte", onPress: () => modifier(e) },
+          { libelle: "Masquer", onPress: () => masquer(e), danger: true },
+        ]
+      : [
     { libelle: "Modifier", onPress: () => modifier(e) },
     // Le menu se ferme d'abord : la feuille du bonhomme s'ouvre juste après.
     { libelle: "Changer de zone", onPress: () => setTimeout(() => setChangerZone(e), 350) },
@@ -342,6 +386,7 @@ function MaJourneeContenu() {
   const ligne = (e: Entree) => {
     const z = parCle[e.zone];
     const infos = [NOMS_MOMENT[e.moment], e.duree_min ? libelleDuree(e.duree_min) : null].filter(Boolean).join(" · ");
+    const auto = e.origine === "auto";
     const contenu = (
       <Pressable
         onPress={() => ouvert && setDetails(details === e.id ? null : e.id)}
@@ -353,7 +398,12 @@ function MaJourneeContenu() {
         <View style={[styles.point, { backgroundColor: z?.couleur ?? t.textMuted }]} />
         <View style={{ flex: 1 }}>
           <Texte style={[styles.entreeTexte, { color: t.textPrimary }]}>{e.texte}</Texte>
-          <Texte style={[styles.entreeInfos, { color: t.textMuted }]}>{infos}</Texte>
+          <View style={styles.infosLigne}>
+            {auto && (
+              <Texte style={[styles.etiquette, { color: t.textSecondary, borderColor: t.border }]}>auto · {libelleSource(e.source)}</Texte>
+            )}
+            <Texte style={[styles.entreeInfos, { color: t.textMuted }]}>{infos}</Texte>
+          </View>
         </View>
         {e.ressenti ? <VisageHumeur niveau={e.ressenti} taille={22} /> : null}
       </Pressable>
@@ -366,14 +416,16 @@ function MaJourneeContenu() {
             titre={e.texte}
             renderRightActions={() => (
               <View style={styles.actions}>
-                <TouchableOpacity onPress={() => modifier(e)} style={[styles.action, { backgroundColor: t.bgCardActive }]}>
-                  <Texte style={{ color: t.textPrimary, fontWeight: "600" }}>Modifier</Texte>
-                </TouchableOpacity>
+                {!auto && (
+                  <TouchableOpacity onPress={() => modifier(e)} style={[styles.action, { backgroundColor: t.bgCardActive }]}>
+                    <Texte style={{ color: t.textPrimary, fontWeight: "600" }}>Modifier</Texte>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={() => setChangerZone(e)} style={[styles.action, { backgroundColor: t.bgCardActive }]}>
                   <Texte style={{ color: t.textPrimary, fontWeight: "600" }}>Zone</Texte>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => supprimer(e)} style={[styles.action, { backgroundColor: t.danger }]}>
-                  <Texte style={{ color: t.bgApp, fontWeight: "700" }}>Supprimer</Texte>
+                <TouchableOpacity onPress={() => (auto ? masquer(e) : supprimer(e))} style={[styles.action, { backgroundColor: t.danger }]}>
+                  <Texte style={{ color: t.bgApp, fontWeight: "700" }}>{auto ? "Masquer" : "Supprimer"}</Texte>
                 </TouchableOpacity>
               </View>
             )}
@@ -398,6 +450,16 @@ function MaJourneeContenu() {
             </TouchableOpacity>
           </View>
         )}
+        {fusion?.noteId === e.id && (
+          <View style={styles.proposition}>
+            <TouchableOpacity onPress={fusionnerNote} hitSlop={6} style={{ flex: 1 }} accessibilityRole="button">
+              <Texte style={[styles.lien, { color: t.accentText }]}>Déjà noté : « {fusion.auto.texte} ». Fusionner ?</Texte>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setFusion(null)} hitSlop={10} accessibilityLabel="Garder les deux">
+              <Texte style={{ color: t.textMuted, fontSize: typography.body }}>✕</Texte>
+            </TouchableOpacity>
+          </View>
+        )}
         {details === e.id && panneauDetails(e)}
       </View>
     );
@@ -413,28 +475,57 @@ function MaJourneeContenu() {
 
         <BandeJours aujourdhui={jour} choisi={jourChoisi} prevus={joursPleins} onChoisir={allerAu} />
 
-        {/* Le bonhomme à gauche, la légende à droite (toucher = filtre). */}
+        {recapPret && (
+          <TouchableOpacity
+            onPress={() => router.push("/recap" as never)}
+            style={[styles.recap, { backgroundColor: t.bgCard, borderColor: t.accent }]}
+            accessibilityRole="button"
+          >
+            <Texte style={[styles.sectionTitre, { color: t.textPrimary, flex: 1 }]}>Ton récap de la semaine est prêt</Texte>
+            <Texte style={{ color: t.accentText, fontSize: typography.body, fontWeight: "700" }}>Voir →</Texte>
+          </TouchableOpacity>
+        )}
+
+        {/* Le bonhomme à gauche, sa légende à droite : toucher une ligne = toucher la zone ; « voir » filtre la liste. */}
         <View style={styles.haut}>
           <Bonhomme zones={zones} comptes={comptes} choisie={ouvert ? zone : null} onChoisir={ouvert ? choisirZone : undefined} />
           <View style={styles.legende}>
             {actives.map((z) => {
               const n = comptes[z.cle] ?? 0;
-              const actif = filtre === z.cle;
+              const choisieIci = ouvert && zone === z.cle;
+              const filtree = filtre === z.cle;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={z.cle}
-                  onPress={() => setFiltre(actif ? null : z.cle)}
-                  style={[styles.legendeLigne, actif && { backgroundColor: t.bgCardActive }]}
+                  onPress={() => (ouvert ? choisirZone(z.cle) : setFiltre(filtree ? null : z.cle))}
+                  onLongPress={() => setFiltre(filtree ? null : z.cle)}
+                  style={[
+                    styles.legendeLigne,
+                    { borderColor: choisieIci ? t.textPrimary : "transparent" },
+                    filtree && { backgroundColor: t.bgCardActive },
+                  ]}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: actif }}
-                  accessibilityLabel={`Filtrer : ${z.libelle}, ${n} entrée${n > 1 ? "s" : ""}`}
+                  accessibilityState={{ selected: choisieIci }}
+                  accessibilityLabel={`${PARTIES[z.cle]} : ${z.libelle}, ${n} entrée${n > 1 ? "s" : ""}`}
+                  accessibilityHint={ouvert ? "Touche pour écrire dans cette zone, appui long pour filtrer la liste" : "Touche pour filtrer la liste"}
                 >
-                  <View style={[styles.legendePoint, { backgroundColor: couleurZone(z.couleur, Math.max(n, 1)) }]} />
-                  <Texte style={[styles.legendeTexte, { color: n ? t.textPrimary : t.textMuted }]} numberOfLines={2}>
+                  <View style={[styles.legendePoint, { backgroundColor: z.couleur }]} />
+                  <Texte style={[styles.legendeTexte, { color: n ? t.textPrimary : t.textSecondary }]} numberOfLines={2}>
                     {z.libelle}
                   </Texte>
-                  <Texte style={[styles.legendeNombre, { color: n ? t.textPrimary : t.textMuted }]}>{n || ""}</Texte>
-                </TouchableOpacity>
+                  {n > 0 ? (
+                    <TouchableOpacity
+                      onPress={() => setFiltre(filtree ? null : z.cle)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={filtree ? "Voir toutes les entrées" : `Voir seulement : ${z.libelle}`}
+                    >
+                      <Texte style={[styles.legendeNombre, { color: filtree ? t.accentText : t.textPrimary }]}>{filtree ? `${n} ✕` : `${n} ›`}</Texte>
+                    </TouchableOpacity>
+                  ) : (
+                    <Texte style={[styles.legendeNombre, { color: t.textMuted }]}>+</Texte>
+                  )}
+                </Pressable>
               );
             })}
           </View>
@@ -511,6 +602,27 @@ function MaJourneeContenu() {
           <Texte style={[styles.message, { color: t.textMuted }]}>{vu > jour ? "Ce jour n'est pas encore là." : "Lecture seule : ce jour a plus de 7 jours."}</Texte>
         )}
 
+        {aDesAutos && (
+          <View style={[styles.pastilles, { marginTop: spacing.md }]}>
+            {[
+              { cle: false, libelle: "Tout" },
+              { cle: true, libelle: "Mes notes" },
+            ].map((f) => {
+              const actif = mesNotes === f.cle;
+              return (
+                <TouchableOpacity
+                  key={f.libelle}
+                  onPress={() => setMesNotes(f.cle)}
+                  style={[styles.pastille, { borderColor: actif ? t.accent : t.border, backgroundColor: actif ? t.accentFonce : "transparent" }]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: actif }}
+                >
+                  <Texte style={{ color: actif ? t.textOnAccentFonce : t.textSecondary, fontSize: typography.small, fontWeight: "600" }}>{f.libelle}</Texte>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
         <View style={{ marginTop: spacing.md }}>{visibles.map(ligne)}</View>
 
         {/* La semaine en bonhommes : toucher un jour = y aller. */}
@@ -634,10 +746,12 @@ const styles = StyleSheet.create({
 
   haut: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg, alignItems: "flex-start" },
   legende: { flex: 1, gap: 2 },
-  legendeLigne: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 36, paddingHorizontal: 6, borderRadius: radius.sm },
-  legendePoint: { width: 12, height: 12, borderRadius: 6 },
+  legendeLigne: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 44, paddingHorizontal: 6, borderRadius: radius.sm, borderWidth: 1.5 },
+  legendePoint: { width: 14, height: 14, borderRadius: 7 },
   legendeTexte: { flex: 1, fontSize: typography.tiny, lineHeight: 15 },
-  legendeNombre: { fontSize: typography.small, fontWeight: "700", minWidth: 14, textAlign: "right" },
+  legendeNombre: { fontSize: typography.small, fontWeight: "700", minWidth: 18, textAlign: "right" },
+  infosLigne: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" },
+  etiquette: { fontSize: typography.tiny, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, overflow: "hidden" },
 
   saisie: { marginTop: spacing.lg, gap: spacing.sm },
   pastilles: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
@@ -653,7 +767,7 @@ const styles = StyleSheet.create({
   entree: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.md, padding: spacing.md },
   point: { width: 10, height: 10, borderRadius: 5 },
   entreeTexte: { fontSize: typography.body },
-  entreeInfos: { fontSize: typography.tiny, marginTop: 2 },
+  entreeInfos: { fontSize: typography.tiny },
   plusDetails: { paddingVertical: 6, paddingLeft: spacing.xxl },
   actions: { flexDirection: "row", gap: 4, paddingLeft: 6 },
   action: { justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radius.md },
@@ -671,6 +785,7 @@ const styles = StyleSheet.create({
   bravo: { marginTop: spacing.md, borderRadius: radius.md, padding: spacing.md, fontSize: typography.bodySmall, fontWeight: "700", textAlign: "center", overflow: "hidden" },
   section: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, marginTop: spacing.xl, paddingTop: spacing.lg, minHeight: 44 },
   sectionTitre: { fontSize: typography.body, fontWeight: "700" },
+  recap: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md, minHeight: 44 },
   tache: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 44 },
   caseTache: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5 },
   bandeau: {

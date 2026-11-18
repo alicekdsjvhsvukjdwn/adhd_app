@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { Modal, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import Svg, { Circle, Ellipse, Line, Path, Rect } from "react-native-svg";
-import { couleurZone, GRIS_ZONE, PARTIES, type CleZone, type Zone } from "../lib/journee-regles";
+import { contourZone, couleurZone, GRIS_ZONE, PARTIES, type CleZone, type Zone } from "../lib/journee-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { Texte } from "./Texte";
 
@@ -46,16 +46,21 @@ type Props = {
   onChoisir?: (cle: CleZone) => void;
   /** Mini : une zone avec au moins une entrée prend sa couleur pleine (pas de nuances). */
   plein?: boolean;
+  /** Couleur imposée par zone (carte de chaleur du récap). */
+  teintes?: Partial<Record<CleZone, string>>;
 };
 
-export function Bonhomme({ zones, comptes, largeur = LARGEUR_BONHOMME, choisie, onChoisir, plein }: Props) {
+export function Bonhomme({ zones, comptes, largeur = LARGEUR_BONHOMME, choisie, onChoisir, plein, teintes }: Props) {
   const par = Object.fromEntries(zones.map((z) => [z.cle, z])) as Partial<Record<CleZone, Zone>>;
   const couleur = (cle: CleZone) => {
     const z = par[cle];
     if (!z || !z.active) return GRIS_ZONE;
+    if (teintes?.[cle]) return teintes[cle]!;
     const n = comptes[cle] ?? 0;
-    return plein ? (n > 0 ? z.couleur : GRIS_ZONE) : couleurZone(z.couleur, n);
+    return couleurZone(z.couleur, plein && n > 0 ? 3 : n);
   };
+  /** Zone active sans entrée : contour de sa couleur à 50 %, le bonhomme sert de légende. */
+  const vide = (cle: CleZone) => !!par[cle]?.active && !teintes?.[cle] && !(comptes[cle] ?? 0);
   const sel = (cle: CleZone) => choisie === cle;
   const echelle = largeur / VB_L;
   const hauteur = Math.round(VB_H * echelle);
@@ -64,11 +69,22 @@ export function Bonhomme({ zones, comptes, largeur = LARGEUR_BONHOMME, choisie, 
   /** Trait épais (bras, jambes) : sélectionné, un trait clair plus large dessous fait le contour. */
   const membre = (cle: CleZone, x1: number, y1: number, x2: number, y2: number, epaisseur: number) => (
     <Fragment key={`${cle}${x1}`}>
-      {sel(cle) && <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={CONTOUR} strokeWidth={epaisseur + 4} strokeLinecap="round" />}
+      {(sel(cle) || vide(cle)) && (
+        <Line
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={sel(cle) ? CONTOUR : contourZone(par[cle]!.couleur)}
+          strokeWidth={epaisseur + (sel(cle) ? 4 : 2)}
+          strokeLinecap="round"
+        />
+      )}
       <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={couleur(cle)} strokeWidth={epaisseur} strokeLinecap="round" />
     </Fragment>
   );
-  const bord = (cle: CleZone) => (sel(cle) ? { stroke: CONTOUR, strokeWidth: 2.5 } : {});
+  const bord = (cle: CleZone) =>
+    sel(cle) ? { stroke: CONTOUR, strokeWidth: 2.5 } : vide(cle) ? { stroke: contourZone(par[cle]!.couleur), strokeWidth: mini ? 2 : 1.2 } : {};
 
   return (
     <View style={{ width: largeur, height: hauteur }}>

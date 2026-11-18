@@ -67,6 +67,8 @@ export async function coursesFaites(): Promise<number> {
   const db = await getDatabase();
   const n = (await db.getFirstAsync<{ n: number }>("SELECT COUNT(*) AS n FROM courses WHERE cochee = 1"))?.n ?? 0;
   await db.runAsync("DELETE FROM courses WHERE cochee = 1");
+  // La trace de la validation : Ma journée en fait une entrée (lib/db/journal-auto.ts).
+  if (n > 0) await db.runAsync("INSERT INTO courses_faites (jour, n, horodatage) VALUES (?, ?, ?)", getAujourdhui(), n, new Date().toISOString());
   return n;
 }
 

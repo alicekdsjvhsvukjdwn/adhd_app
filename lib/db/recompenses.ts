@@ -13,8 +13,11 @@ import { POINTS_TCC } from "../tcc-points";
 import { POINTS_ETAPE_SKILL, POINTS_MAITRISE } from "../skills";
 import { POINTS_NUIT, POINTS_SEANCE } from "../suivi-regles";
 import { PLAFOND_ENTREES_JOUR, POINTS_BONUS_ZONES, POINTS_ENTREE, ZONES_POUR_BONUS } from "../journee-regles";
+import { PIOCHES_PAR_JOUR, SEUIL_PIOCHE_DEFAUT } from "../recompenses-regles";
 import { getDatabase } from "./client";
 import { getAujourdhui } from "./completions";
+import { synchroniserJour } from "./journal-auto";
+import { ecrireMeta, lireMeta } from "./meta";
 
 /**
  * Récompenses réelles, achetées avec les points gagnés.
@@ -95,7 +98,7 @@ export const REGLES_POINTS: { action: string; points: string }[] = [
     points: `+${POINTS_MENAGE}`,
   },
   {
-    action: `Ma journée : une entrée (jusqu'à ${PLAFOND_ENTREES_JOUR} points par jour). Liée à une tâche cochée : 0, la tâche a déjà ses points`,
+    action: `Ma journée : une entrée (jusqu'à ${PLAFOND_ENTREES_JOUR} points par jour). Liée à une tâche cochée, ou créée toute seule par une autre partie de l'appli : 0, l'action a déjà ses points`,
     points: `+${POINTS_ENTREE}`,
   },
   {
@@ -167,9 +170,17 @@ export async function soldePoints(): Promise<number> {
 
 /** Achète une récompense si le solde suffit. Renvoie false sinon. */
 export async function acheter(r: Recompense): Promise<boolean> {
-  if ((await soldePoints()) < r.prix) return false;
+  return (await utiliser(r)) !== null;
+}
+
+/**
+ * Utiliser une récompense : les points (le solde) baissent, pas le niveau. Renvoie l'achat, ou null si le solde ne suffit pas.
+ * Si c'était mon objectif, il est libéré (j'en choisis un autre). L'entrée de Ma journée suit (lib/db/journal-auto.ts).
+ */
+export async function utiliser(r: Recompense): Promise<number | null> {
+  if ((await soldePoints()) < r.prix) return null;
   const db = await getDatabase();
-  await db.runAsync(
+  const res = await db.runAsync(
     `INSERT INTO achats (recompense_id, nom, icone, prix, date, horodatage)
      VALUES (?, ?, ?, ?, ?, ?)`,
     r.id,
@@ -179,13 +190,89 @@ export async function acheter(r: Recompense): Promise<boolean> {
     getAujourdhui(),
     new Date().toISOString(),
   );
+  if ((await lireObjectif()) === r.id) await ecrireObjectif(null);
+  await synchroniserJour(getAujourdhui());
+  return res.lastInsertRowId;
+}
+
+// ─── Objectif, pioche, souvenirs ────────────────────────────────────────
+
+const CLE_OBJECTIF = "recompense_objectif";
+const CLE_SEUIL = "pioche_seuil";
+
+export async function lireObjectif(): Promise<number | null> {
+  const v = Number(await lireMeta(CLE_OBJECTIF));
+  return v > 0 ? v : null;
+}
+
+export async function ecrireObjectif(id: number | null): Promise<void> {
+  await ecrireMeta(CLE_OBJECTIF, id ? String(id) : null);
+}
+
+export async function lireSeuilPioche(): Promise<number> {
+  const v = Number(await lireMeta(CLE_SEUIL));
+  return v > 0 ? v : SEUIL_PIOCHE_DEFAUT;
+}
+
+export async function ecrireSeuilPioche(n: number): Promise<void> {
+  await ecrireMeta(CLE_SEUIL, String(Math.max(1, Math.round(n))));
+}
+
+/** Pioches faites aujourd'hui (la première + 2 repioches au plus). */
+export async function piochesDuJour(): Promise<number> {
+  const db = await getDatabase();
+  return (await db.getFirstAsync<{ n: number }>("SELECT n FROM pioches WHERE jour = ?", getAujourdhui()))?.n ?? 0;
+}
+
+/** Compte une pioche ; false si les 3 du jour sont déjà faites. */
+export async function compterPioche(): Promise<boolean> {
+  if ((await piochesDuJour()) >= PIOCHES_PAR_JOUR) return false;
+  const db = await getDatabase();
+  await db.runAsync("INSERT INTO pioches (jour, n) VALUES (?, 1) ON CONFLICT(jour) DO UPDATE SET n = n + 1", getAujourdhui());
   return true;
+}
+
+export type Souvenir = { texte: string; photo: string | null; ressenti: number | null };
+
+/** Le souvenir d'une récompense utilisée : il complète son entrée de Ma journée (texte et ressenti). */
+export async function enregistrerSouvenir(achatId: number, s: Souvenir): Promise<void> {
+  const db = await getDatabase();
+  const ressenti = s.ressenti && s.ressenti >= 1 && s.ressenti <= 5 ? Math.round(s.ressenti) : null;
+  await db.runAsync(
+    "UPDATE achats SET souvenir_texte = ?, souvenir_photo_uri = ?, souvenir_ressenti = ? WHERE id = ?",
+    s.texte.trim() || null,
+    s.photo,
+    ressenti,
+    achatId,
+  );
+  const a = await db.getFirstAsync<{ date: string }>("SELECT date FROM achats WHERE id = ?", achatId);
+  if (a) await synchroniserJour(a.date);
+}
+
+export type SouvenirAchat = Achat & {
+  categorie: string | null;
+  souvenir_texte: string | null;
+  souvenir_photo_uri: string | null;
+  souvenir_ressenti: number | null;
+};
+
+/** « Mes souvenirs » : les récompenses utilisées, la plus récente d'abord. */
+export async function souvenirs(): Promise<SouvenirAchat[]> {
+  const db = await getDatabase();
+  return db.getAllAsync<SouvenirAchat>(
+    `SELECT a.id, a.recompense_id, a.nom, a.icone, a.prix, a.date, r.categorie,
+            a.souvenir_texte, a.souvenir_photo_uri, a.souvenir_ressenti
+     FROM achats a LEFT JOIN recompenses r ON r.id = a.recompense_id
+     ORDER BY a.horodatage DESC, a.id DESC`,
+  );
 }
 
 /** Annule un achat (rembourse). Réservé aux achats du jour dans l'interface. */
 export async function annulerAchat(id: number): Promise<void> {
   const db = await getDatabase();
+  const a = await db.getFirstAsync<{ date: string }>("SELECT date FROM achats WHERE id = ?", id);
   await db.runAsync("DELETE FROM achats WHERE id = ?", id);
+  if (a) await synchroniserJour(a.date);
 }
 
 export async function derniersAchats(limite = 20): Promise<Achat[]> {

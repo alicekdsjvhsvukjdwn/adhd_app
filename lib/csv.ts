@@ -33,7 +33,7 @@ const BOOL = "0 = non, 1 = oui";
 
 /** Description de chaque table et de ses colonnes connues. */
 /** Colonnes d'images : jamais écrites dans les CSV (trop lourdes), gardées dans la sauvegarde JSON. */
-export const COLONNES_IMAGES: Record<string, string[]> = { projets: ["couverture"], projet_photos: ["data"], recettes: ["photo"] };
+export const COLONNES_IMAGES: Record<string, string[]> = { projets: ["couverture"], projet_photos: ["data"], recettes: ["photo"], achats: ["souvenir_photo_uri"] };
 
 const DOC: Record<string, { table: string; colonnes: Record<string, string> }> = {
   items: {
@@ -215,7 +215,34 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       prix: "points",
       date: JOUR,
       horodatage: ISO,
+      souvenir_texte: "souvenir : une phrase, vide sinon",
+      souvenir_photo_uri: "souvenir : photo (data URI JPEG, gardée dans la sauvegarde JSON, pas dans ce fichier), vide sinon",
+      souvenir_ressenti: "souvenir : ressenti 1 (très bas) à 5 (très bien), vide sinon",
+      journal_id: "entrée de Ma journée créée pour cette récompense (table journal), vide sinon",
     },
+  },
+  pioches: {
+    table: "Récompenses : « Piocher une petite récompense », nombre de pioches par jour (2 repioches au plus).",
+    colonnes: { jour: JOUR, n: "pioches faites ce jour-là" },
+  },
+  recap_semaine: {
+    table: "Récap du dimanche : ce qui a été choisi ou écrit pour une semaine (les chiffres sont recalculés à partir des données).",
+    colonnes: {
+      semaine_debut: `lundi de la semaine, ${JOUR}`,
+      vu_le: `${ISO} ; vide si le récap n'a pas encore été ouvert`,
+      fierte: "« De quoi je suis fière cette semaine », une phrase, vide sinon",
+      piste_zone: "zone proposée comme piste pour la semaine suivante (table zones, colonne cle)",
+      piste_texte: "idée proposée avec la piste",
+      piste_ajoutee: `idée ajoutée à « À ne pas oublier » : ${BOOL}`,
+    },
+  },
+  points_jours: {
+    table: "Total des points gagnés (stats.points_total) relevé chaque jour d'ouverture : sert aux points de la semaine et à la moyenne des 14 derniers jours.",
+    colonnes: { jour: JOUR, total: "points gagnés au total ce jour-là (les dépenses ne comptent pas)" },
+  },
+  courses_faites: {
+    table: "Cuisine : une ligne par « Courses faites » validé (la liste est vidée, cette trace reste).",
+    colonnes: { id: "identifiant", jour: JOUR, n: "articles validés", horodatage: ISO },
   },
   listes: {
     table: "Listes de tâches.",
@@ -265,7 +292,7 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
   meta: {
     table: "Valeurs diverses, clé → valeur.",
     colonnes: {
-      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' et 'trois_compose:AAAA-MM-JJ' (anciens réglages de Mes 3, plus lus) | 'tcc_seance_moi' (jour et rappel de ma séance avec moi-même, JSON) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache) | 'sport_exercices_perso' (mes exercices libres, JSON [{id: 'perso:N', nom, mode}]) | 'sport_liens_seances' (lien vidéo de chacune de mes séances, JSON {id de sport_seances: lien})",
+      cle: "'energie_routines:AAAA-MM-JJ' (choix du jour sur Routines : 1 = jour difficile, 2 = normal, 3 = en forme) | 'jour_difficile:AAAA-MM-JJ' (ancien, plus écrit depuis la version 20) | 'vue_routines:AAAA-MM-JJ' (domaine, 'autres' ou 'tout' choisi sur Routines) | 'negligence_dernier_jour_traite' | 'nuit_en_cours' (« Je vais dormir » tapé, pas encore levée) | 'nuit_reponses:AAAA-MM-JJ' (réponses du matin en attente pour la nuit de ce jour) | 'debut_jour' (heure de début de la journée, 4 à 8) | 'prefs_trois' et 'trois_compose:AAAA-MM-JJ' (anciens réglages de Mes 3, plus lus) | 'tcc_seance_moi' (jour et rappel de ma séance avec moi-même, JSON) | 'menage_init' / 'vision_init' (pièces et domaines de départ créés) | 'vision_routine' (routine cochée après la lecture de Ma vision) | 'rappel_esprit' (rappel du soir, JSON, téléphone) | 'agenda_actif' / 'agenda_cache' (rendez-vous Google Agenda en cache) | 'sport_exercices_perso' (mes exercices libres, JSON [{id: 'perso:N', nom, mode}]) | 'sport_liens_seances' (lien vidéo de chacune de mes séances, JSON {id de sport_seances: lien}) | 'liens_auto' (Ma journée, liens automatiques : JSON {zones: {lien: zone ou null}, off: [sources coupées]}) | 'journal_retro' (jour du remplissage du journal depuis mes données) | 'recap' (récap du dimanche : JSON {heure, notif, piste, idees: {zone: [idées]}}) | 'recompense_objectif' (id de la récompense choisie comme objectif) | 'pioche_seuil' (prix maximum d'une petite récompense piochée)",
       valeur:
         "energie_routines : 1 = jour difficile, 2 = normal, 3 = en forme ; jour_difficile : 1 ; nuit_en_cours : jour et heure locaux du coucher, 'AAAA-MM-JJ HH:MM' ; nuit_reponses : JSON {qualite?, ecrans?}",
     },
@@ -595,7 +622,11 @@ const DOC: Record<string, { table: string; colonnes: Record<string, string> }> =
       ressenti: "1 (très bas) à 5 (très bien), vide si pas noté",
       tache_id: "tâche cochée en même temps (table items), vide sinon",
       points: "points rapportés par l'entrée (0 si liée à une tâche : la tâche a déjà rapporté les siens)",
-      origine: "'saisie' (notée sur le moment) | 'recopie' (notée après le jour ou le moment indiqué) | 'tache' (vient d'une tâche cochée)",
+      origine: "'saisie' (notée sur le moment) | 'recopie' (notée après le jour ou le moment indiqué) | 'tache' (vient d'une tâche cochée) | 'auto' (créée toute seule par une autre partie de l'appli, 0 point)",
+      source: "entrée auto : 'routine' | 'sport' | 'menage' | 'cuisine' | 'tcc' | 'meditation' | 'humeur' | 'projet' | 'recompense' | 'tache' ; vide pour mes notes",
+      source_id: "entrée auto : ce qui l'a créée dans sa source (ex. 'matin:bras' pour les routines du matin, 'guidee:12', 'piece:3', id d'un achat…)",
+      masque: `entrée auto masquée (cachée partout, pas recréée) : ${BOOL}`,
+      texte_perso: `texte réécrit à la main ou fusionné avec une note (plus remplacé par la source) : ${BOOL}`,
     },
   },
   journal_bonus: {

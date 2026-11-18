@@ -1,9 +1,12 @@
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useJourCourant } from "../hooks/useJourCourant";
 import { decalerJours } from "../lib/dates";
+import { synchroniserJournal } from "../lib/db/journal-auto";
 import { entreesEntre, getZones, type Entree } from "../lib/db/journee";
+import { semainesPassees } from "../lib/db/recap";
+import { titreSemaine } from "../lib/recap-regles";
 import { chaleur, compterParZone, libelleDuree, statsJournee, type Zone } from "../lib/journee-regles";
 import { radius, spacing, typography, useTheme } from "../lib/theme";
 import { Bonhomme } from "./Bonhomme";
@@ -22,12 +25,19 @@ export function JourneeProgres() {
   const [entrees, setEntrees] = useState<Entree[]>([]);
   const jours = Array.from({ length: periode }, (_, i) => decalerJours(jour, i - periode + 1));
 
+  const [semaines, setSemaines] = useState<Awaited<ReturnType<typeof semainesPassees>>>([]);
+  const router = useRouter();
+
   useFocusEffect(
     useCallback(() => {
-      Promise.all([getZones(), entreesEntre(decalerJours(jour, 1 - periode), jour)]).then(([z, e]) => {
-        setZones(z);
-        setEntrees(e);
-      });
+      synchroniserJournal()
+        .catch(() => false)
+        .then(() => Promise.all([getZones(), entreesEntre(decalerJours(jour, 1 - periode), jour), semainesPassees()]))
+        .then(([z, e, s]) => {
+          setZones(z);
+          setEntrees(e);
+          setSemaines(s);
+        });
     }, [jour, periode]),
   );
 
@@ -93,6 +103,31 @@ export function JourneeProgres() {
           </View>
         ))}
       </View>
+
+      {/* Mes semaines : les récaps passés, recalculés à chaque ouverture. */}
+      {semaines.length > 0 && (
+        <>
+          <Texte style={[styles.titre, { color: t.textSecondary }]}>Mes semaines</Texte>
+          {semaines.map((s) => (
+            <TouchableOpacity
+              key={s.lundi}
+              onPress={() => router.push(`/recap?semaine=${s.lundi}` as never)}
+              style={[styles.semaine, { backgroundColor: t.bgCard }]}
+              accessibilityRole="button"
+              accessibilityLabel={`${titreSemaine(s.lundi)}, ${s.total} entrées : ouvrir le récap`}
+            >
+              <Bonhomme zones={zones} comptes={s.comptes} largeur={30} plein />
+              <View style={{ flex: 1 }}>
+                <Texte style={[styles.libelleSemaine, { color: t.textPrimary }]}>{titreSemaine(s.lundi)}</Texte>
+                <Texte style={[styles.infos, { color: t.textMuted }]}>
+                  {s.total} entrée{s.total > 1 ? "s" : ""}
+                </Texte>
+              </View>
+              <Texte style={{ color: t.textMuted, fontSize: typography.body }}>›</Texte>
+            </TouchableOpacity>
+          ))}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -112,4 +147,6 @@ const styles = StyleSheet.create({
   colonne: { flex: 1, alignItems: "center", height: "100%" },
   fondBarre: { flex: 1, width: "100%", maxWidth: 18, borderRadius: 4, justifyContent: "flex-end", overflow: "hidden" },
   barre: { width: "100%", borderRadius: 4 },
+  semaine: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, minHeight: 44 },
+  libelleSemaine: { fontSize: typography.bodySmall, fontWeight: "600" },
 });

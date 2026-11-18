@@ -34,17 +34,26 @@ export const PARTIES: Record<CleZone, string> = {
 /** Couleurs proposées dans Profil pour une zone. */
 export const PALETTE_ZONES = ["#60A5FA", "#F87171", "#FB923C", "#FACC15", "#4ADE80", "#2DD4BF", "#A78BFA", "#F472B6", "#94A3B8"];
 
-/** Zone sans entrée (ou désactivée) : gris foncé. */
+/** Zone désactivée : gris foncé. */
 export const GRIS_ZONE = "#26302F";
+/** Le fond de l'appli : une zone vide est sa couleur à 18 % posée dessus. */
+export const FOND_ZONE = "#05080A";
+export const OPACITE_VIDE = 0.18;
 
 /** 0, 1, 2 ou 3 (= 3 entrées et plus). */
 export const intensite = (n: number) => Math.max(0, Math.min(3, Math.floor(n)));
 
-/** De plus en plus vive selon le nombre d'entrées du jour. */
+/** Toujours dans sa couleur : atténuée (18 %) sans entrée, puis de plus en plus vive à 1, 2, 3+ entrées. */
 export function couleurZone(couleur: string, n: number): string {
-  const i = intensite(n);
-  if (i === 0) return GRIS_ZONE;
-  return melanger(GRIS_ZONE, couleur, [0, 0.45, 0.72, 1][i]);
+  return melanger(FOND_ZONE, couleur, [OPACITE_VIDE, 0.5, 0.75, 1][intensite(n)]);
+}
+
+/** Contour d'une zone vide : sa couleur à 50 %. */
+export const contourZone = (couleur: string) => melanger(FOND_ZONE, couleur, 0.5);
+
+/** Carte de chaleur d'une période : opacité selon la part de la zone la plus remplie ; vide = 18 %. */
+export function couleurChaleur(couleur: string, n: number, max: number): string {
+  return melanger(FOND_ZONE, couleur, max > 0 && n > 0 ? OPACITE_VIDE + (1 - OPACITE_VIDE) * (n / max) : OPACITE_VIDE);
 }
 
 // ─── Moments ────────────────────────────────────────────────────────────
@@ -171,7 +180,7 @@ export const gagneBonus = (zonesColorees: number, dejaDonne: boolean) => !dejaDo
 const MOTS_VIDES = new Set(["faire", "fait", "avec", "pour", "dans", "chez", "tout", "toute", "tous", "plus", "apres", "avant", "encore"]);
 
 /** Mots clés : plus de 3 lettres, sans accents ni pluriel en -s. */
-function motsCles(s: string): string[] {
+export function motsCles(s: string): string[] {
   return normaliser(s)
     .split(" ")
     .filter((m) => m.length > 3 && !MOTS_VIDES.has(m))

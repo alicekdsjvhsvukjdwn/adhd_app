@@ -28,11 +28,15 @@ import {
   textesPasses,
 } from "../lib/db/journee.ts";
 import { runMigrations } from "../lib/db/migrations.ts";
+import { melanger } from "../lib/theme.ts";
 import { placerDansTrois } from "../lib/db/trois.ts";
 import {
   chaleur,
   compterParZone,
+  contourZone,
+  couleurChaleur,
   couleurZone,
+  FOND_ZONE,
   GRIS_ZONE,
   intensite,
   modifiable,
@@ -57,19 +61,25 @@ test("saisie : zone obligatoire, texte vide refusé, message clair", () => {
   assert.equal(validerSaisie("mains", "Meal prep"), null);
 });
 
-test("couleur : grise sans entrée, de plus en plus vive à 1, 2, 3+ entrées", () => {
+test("couleur : toujours la sienne, atténuée (18 %) sans entrée, de plus en plus vive à 1, 2, 3+ entrées", () => {
   const c = "#FB923C";
-  assert.equal(couleurZone(c, 0), GRIS_ZONE);
+  const n0 = couleurZone(c, 0);
+  assert.notEqual(n0, GRIS_ZONE);
+  assert.equal(n0, melanger(FOND_ZONE, c, 0.18));
+  assert.equal(contourZone(c), melanger(FOND_ZONE, c, 0.5));
   const n1 = couleurZone(c, 1);
   const n2 = couleurZone(c, 2);
-  assert.notEqual(n1, GRIS_ZONE);
   assert.notEqual(n1, n2);
   assert.equal(couleurZone(c, 3).toUpperCase(), c);
   assert.equal(couleurZone(c, 12), couleurZone(c, 3));
   assert.deepEqual([0, 1, 2, 3, 9].map(intensite), [0, 1, 2, 3, 3]);
-  // Plus vive = plus loin du gris : la distance croît avec le nombre d'entrées.
-  const dist = (h) => Math.abs(parseInt(h.slice(1, 3), 16) - parseInt(GRIS_ZONE.slice(1, 3), 16));
-  assert.ok(dist(n1) < dist(n2) && dist(n2) < dist(c));
+  // Plus vive = plus loin du fond : la distance croît avec le nombre d'entrées.
+  const dist = (h) => Math.abs(parseInt(h.slice(1, 3), 16) - parseInt(FOND_ZONE.slice(1, 3), 16));
+  assert.ok(dist(n0) < dist(n1) && dist(n1) < dist(n2) && dist(n2) < dist(c));
+  // Carte de chaleur : normalisée sur la zone la plus remplie, vide = 18 %.
+  assert.equal(couleurChaleur(c, 6, 6).toUpperCase(), c);
+  assert.equal(couleurChaleur(c, 0, 6), n0);
+  assert.ok(dist(couleurChaleur(c, 2, 6)) < dist(couleurChaleur(c, 4, 6)));
 });
 
 test("jours modifiables : 7 jours en arrière, puis lecture seule ; pas les jours à venir", () => {
@@ -181,13 +191,18 @@ test("migration 41 en ajout seulement : tâches et « 3 » intactes", async () =
   });
   const avant = await compter();
   // La base telle qu'elle était sur le téléphone avant Ma journée.
-  await db.execAsync("DROP TABLE journal; DROP TABLE zones; DROP TABLE journal_bonus; ALTER TABLE listes DROP COLUMN zone; PRAGMA user_version = 40");
+  await db.execAsync(
+    "DROP TABLE journal; DROP TABLE zones; DROP TABLE journal_bonus; ALTER TABLE listes DROP COLUMN zone; " +
+      "DROP TABLE courses_faites; DROP TABLE recap_semaine; DROP TABLE points_jours; DROP TABLE pioches; " +
+      "ALTER TABLE achats DROP COLUMN souvenir_texte; ALTER TABLE achats DROP COLUMN souvenir_photo_uri; ALTER TABLE achats DROP COLUMN souvenir_ressenti; ALTER TABLE achats DROP COLUMN journal_id; " +
+      "PRAGMA user_version = 40",
+  );
   await runMigrations();
   assert.deepEqual(await compter(), avant);
   assert.equal((await getZones()).length, 7);
   assert.equal((await db.getFirstAsync("SELECT COUNT(*) AS n FROM journal")).n, 0);
   assert.ok((await getListes()).every((l) => l.zone === null));
-  assert.equal((await db.getFirstAsync("PRAGMA user_version")).user_version, 42);
+  assert.equal((await db.getFirstAsync("PRAGMA user_version")).user_version, 45);
   assert.equal((await db.getFirstAsync("SELECT statut FROM items WHERE id = ?", tache)).statut, "actif");
 });
 

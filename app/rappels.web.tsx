@@ -30,6 +30,8 @@ const LIBELLES: Record<TypeRappel, { titre: string; aide: string }> = {
   quotidien: { titre: "Rappel quotidien", aide: "« Un coup d'œil à tes routines ? »" },
   soir: { titre: "Rappel du soir", aide: "« C'est l'heure de Je vais dormir ? »" },
   esprit: { titre: "30 secondes pour toi", aide: "« Un tap pour dire comment ça va. » (Esprit)" },
+  // Réglé dans Profil › Récap du dimanche.
+  recap: { titre: "Récap du dimanche", aide: "« Ton récap de la semaine est prêt »" },
 };
 
 export default function RappelsWeb() {
@@ -147,7 +149,7 @@ export default function RappelsWeb() {
       <SelecteurHeure
         visible={choixHeure !== null}
         titre={choixHeure ? LIBELLES[choixHeure].titre : ""}
-        heure={choixHeure ? reglages[choixHeure].heure : "20:00"}
+        heure={choixHeure ? (reglages[choixHeure]?.heure ?? "20:00") : "20:00"}
         onValider={(hhmm) => {
           if (choixHeure) changer({ ...reglages, [choixHeure]: { ...reglages[choixHeure], heure: hhmm } });
           setChoixHeure(null);

@@ -21,6 +21,12 @@ export async function addPoints(delta: number) {
   await db.runAsync(SQL_AJOUTER_POINTS, delta);
 }
 
+/** Relève le total des points gagnés pour aujourd'hui (table points_jours : récap, moyenne sur 14 jours). */
+export async function noterPointsDuJour(): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("INSERT OR REPLACE INTO points_jours (jour, total) SELECT ?, points_total FROM stats WHERE id = 1", getAujourdhui());
+}
+
 /**
  * Nombre de jours consécutifs avec au moins une complétion.
  * Aujourd'hui compte s'il y a déjà quelque chose ; sinon la série court

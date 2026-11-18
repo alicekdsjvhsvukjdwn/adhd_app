@@ -1,13 +1,15 @@
 // Choix des rappels à envoyer. Fonction pure : aucun accès réseau ni KV,
 // utilisée par le Worker et testée dans tests/rappels-web.test.mjs.
 
-export type TypeRappel = "quotidien" | "soir" | "esprit";
+export type TypeRappel = "quotidien" | "soir" | "esprit" | "recap";
 
 export type Reglages = {
   quotidien: { actif: boolean; heure: string };
   soir: { actif: boolean; heure: string };
   /** « 30 secondes pour toi » : seule l'heure est envoyée au serveur, jamais ce qui est noté. Absent des abonnements d'avant (voir rappelsDus). */
   esprit: { actif: boolean; heure: string };
+  /** Récap du dimanche : envoyé le dimanche seulement, à l'heure choisie. Absent des abonnements d'avant. */
+  recap?: { actif: boolean; heure: string };
 };
 
 /** Date locale (AAAA-MM-JJ) du dernier envoi de chaque rappel. */
@@ -31,6 +33,11 @@ export const TEXTES: Record<TypeRappel, { title: string; body: string; url: stri
     title: "30 secondes pour toi ?",
     body: "Un tap pour dire comment ça va.",
     url: "/suivi?partie=esprit",
+  },
+  recap: {
+    title: "Ton récap de la semaine est prêt",
+    body: "Six cartes pour voir ta semaine, à ton rythme.",
+    url: "/recap",
   },
 };
 
@@ -63,9 +70,12 @@ export function rappelsDus(
   envoyes: Envoyes,
 ): TypeRappel[] {
   const { date, minutes } = heureLocale(maintenant, fuseau);
-  return (["quotidien", "soir", "esprit"] as const).filter((type) => {
+  // Le jour de la semaine de la date locale (0 = dimanche).
+  const dimanche = new Date(date + "T00:00:00Z").getUTCDay() === 0;
+  return (["quotidien", "soir", "esprit", "recap"] as const).filter((type) => {
     const r = reglages[type];
     if (!r?.actif || envoyes[type] === date) return false;
+    if (type === "recap" && !dimanche) return false;
     const [h, m] = r.heure.split(":").map(Number);
     const retard = minutes - (h * 60 + m);
     return retard >= 0 && retard < TOLERANCE_MIN;

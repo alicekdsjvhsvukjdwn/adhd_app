@@ -26,7 +26,10 @@ export type Entree = {
   ressenti: number | null;
   tache_id: number | null;
   points: number;
-  origine: "saisie" | "tache" | "recopie";
+  origine: "saisie" | "tache" | "recopie" | "auto";
+  /** Entrée auto : d'où elle vient (lib/journal-auto-regles.ts), null pour mes notes. */
+  source: string | null;
+  source_id: string | null;
 };
 
 type Db = Awaited<ReturnType<typeof getDatabase>>;
@@ -60,12 +63,13 @@ export async function modifierZone(cle: CleZone, champs: Partial<Pick<Zone, "lib
   if (champs.active !== undefined) await db.runAsync("UPDATE zones SET active = ? WHERE cle = ?", champs.active ? 1 : 0, cle);
 }
 
-const COLONNES = "id, jour, cree_le, moment, zone, texte, duree_min, ressenti, tache_id, points, origine";
+const COLONNES = "id, jour, cree_le, moment, zone, texte, duree_min, ressenti, tache_id, points, origine, source, source_id";
 
+/** Les entrées masquées (auto) restent en base mais ne comptent nulle part. */
 export async function entreesDu(jour: string): Promise<Entree[]> {
   const db = await getDatabase();
   return db.getAllAsync<Entree>(
-    `SELECT ${COLONNES} FROM journal WHERE jour = ?
+    `SELECT ${COLONNES} FROM journal WHERE jour = ? AND masque = 0
      ORDER BY CASE moment WHEN 'matin' THEN 0 WHEN 'midi' THEN 1 WHEN 'apres_midi' THEN 2 ELSE 3 END, id`,
     jour,
   );
@@ -74,13 +78,13 @@ export async function entreesDu(jour: string): Promise<Entree[]> {
 /** Entrées de plusieurs jours consécutifs (semaine, 30 jours). */
 export async function entreesEntre(debut: string, fin: string): Promise<Entree[]> {
   const db = await getDatabase();
-  return db.getAllAsync<Entree>(`SELECT ${COLONNES} FROM journal WHERE jour BETWEEN ? AND ? ORDER BY jour, id`, debut, fin);
+  return db.getAllAsync<Entree>(`SELECT ${COLONNES} FROM journal WHERE jour BETWEEN ? AND ? AND masque = 0 ORDER BY jour, id`, debut, fin);
 }
 
 /** Jours qui ont au moins une entrée : les points de la bande des jours. */
 export async function joursAvecEntrees(): Promise<Set<string>> {
   const db = await getDatabase();
-  const r = await db.getAllAsync<{ jour: string }>("SELECT DISTINCT jour FROM journal");
+  const r = await db.getAllAsync<{ jour: string }>("SELECT DISTINCT jour FROM journal WHERE masque = 0");
   return new Set(r.map((x) => x.jour));
 }
 
@@ -88,7 +92,7 @@ export async function joursAvecEntrees(): Promise<Set<string>> {
 export async function textesPasses(): Promise<{ texte: string; zone: string; n: number }[]> {
   const db = await getDatabase();
   return db.getAllAsync(
-    `SELECT texte, zone, COUNT(*) AS n FROM journal WHERE jour >= ?
+    `SELECT texte, zone, COUNT(*) AS n FROM journal WHERE jour >= ? AND origine != 'auto'
      GROUP BY texte, zone ORDER BY n DESC LIMIT 400`,
     decalerJours(getAujourdhui(), -183),
   );
@@ -132,7 +136,8 @@ export async function modifierEntree(
   champs: Partial<Pick<Entree, "texte" | "zone" | "moment" | "duree_min" | "ressenti">>,
 ): Promise<void> {
   const db = await getDatabase();
-  if (champs.texte !== undefined && champs.texte.trim()) await db.runAsync("UPDATE journal SET texte = ? WHERE id = ?", champs.texte.trim(), id);
+  // texte_perso : une entrée auto réécrite garde mon texte.
+  if (champs.texte !== undefined && champs.texte.trim()) await db.runAsync("UPDATE journal SET texte = ?, texte_perso = 1 WHERE id = ?", champs.texte.trim(), id);
   if (champs.zone !== undefined) await db.runAsync("UPDATE journal SET zone = ? WHERE id = ?", champs.zone, id);
   if (champs.moment !== undefined) await db.runAsync("UPDATE journal SET moment = ? WHERE id = ?", champs.moment, id);
   if ("duree_min" in champs || "ressenti" in champs) {
@@ -161,7 +166,7 @@ export async function restaurerEntree(e: Entree): Promise<void> {
   const db = await getDatabase();
   if (e.points) await addPoints(e.points);
   await db.runAsync(
-    `INSERT INTO journal (${COLONNES}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO journal (${COLONNES}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     e.id,
     e.jour,
     e.cree_le,
@@ -173,6 +178,8 @@ export async function restaurerEntree(e: Entree): Promise<void> {
     e.tache_id,
     e.points,
     e.origine,
+    e.source ?? null,
+    e.source_id ?? null,
   );
 }
 
@@ -181,7 +188,7 @@ export async function restaurerEntree(e: Entree): Promise<void> {
 /** Le bonus des 4 zones, une fois par jour : true s'il vient d'être gagné. */
 export async function verifierBonus(jour: string): Promise<boolean> {
   const db = await getDatabase();
-  const n = (await db.getFirstAsync<{ n: number }>("SELECT COUNT(DISTINCT zone) AS n FROM journal WHERE jour = ?", jour))?.n ?? 0;
+  const n = (await db.getFirstAsync<{ n: number }>("SELECT COUNT(DISTINCT zone) AS n FROM journal WHERE jour = ? AND masque = 0", jour))?.n ?? 0;
   const deja = !!(await db.getFirstAsync("SELECT 1 FROM journal_bonus WHERE jour = ?", jour));
   if (!gagneBonus(n, deja)) return false;
   await db.runAsync("INSERT OR IGNORE INTO journal_bonus (jour) VALUES (?)", jour);
